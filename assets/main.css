@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --color-feather-50: #fffce5;
+  --color-feather-100: #fff8c2;
+  --color-feather-200: #fef47a;
+  --color-feather-300: #fdec4d;
+  --color-feather-400: #f8dc1c;
+  --color-feather-500: #fef47a;
+  --color-feather-600: #c9b800;
+  --color-feather-700: #998c00;
+  --color-feather-800: #6e6500;
+  --color-feather-900: #443f00;
+  --color-feather-950: #2a2700;
+}
+
+:root {
+  --ui-primary: var(--ui-color-primary-500);
+}
+
+html,
+body {
+  background-color: #141413;
+  color: #fafafa;
+}
