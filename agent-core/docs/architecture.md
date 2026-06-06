@@ -5,8 +5,9 @@ that depends only on a small set of **extension seams** (interfaces). Built-in
 implementations satisfy those seams; consumers plug in their own. Nothing in the
 core is bound to a specific LLM provider or storage.
 
-> Renders on GitHub. For an interactive page open [`architecture.html`](./architecture.html),
-> or paste any block into <https://mermaid.live>.
+> The Mermaid below renders on GitHub and is the source of truth. For an
+> **interactive, node-based** version, run the docs app (`npm run dev`) and open
+> [`/architecture`](http://localhost:3000/architecture) — built with Vue Flow.
 
 ## SDK architecture (layered)
 

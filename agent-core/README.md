@@ -17,8 +17,8 @@ The loop (`runAgent`) only ever depends on these interfaces. Models **stream by
 default** — `ModelClient.stream()` returns an async iterable of `StreamEvent`s.
 
 > **Architecture diagram:** see [`docs/architecture.md`](./docs/architecture.md)
-> (Mermaid class diagram, renders on GitHub) or open
-> [`docs/architecture.html`](./docs/architecture.html) as an interactive page.
+> (Mermaid, renders on GitHub), or run the docs app (`npm run dev`) and open
+> `/architecture` for the interactive Vue Flow version.
 
 ## The loop
 
