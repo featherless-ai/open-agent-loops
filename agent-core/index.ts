@@ -1,13 +1,15 @@
 /**
  * Public surface of the lightweight agent core. Import from here:
  *
- *   import { runAgent, InMemoryStore, FakeModelClient, defineTool } from "~/server/agent";
+ *   import { runAgent, InMemoryStore, FakeModelClient, defineTool } from "~/agent-core";
  *
- * Every exported piece sits behind an interface so it can be swapped:
- *   ModelClient  - the LLM boundary (FakeModelClient ships; add real ones)
- *   Memory       - conversation storage (InMemoryStore ships)
- *   Tool         - a callable capability
- *   StopCondition- when to end a run
+ * Composition over inheritance: every piece sits behind an interface and is
+ * built from a plain function/object (define*) or wrapped by a decorator
+ * (with*) — never subclassed.
+ *   ModelClient  - the LLM boundary (FakeModelClient ships; or defineModel)
+ *   Memory       - conversation storage (InMemoryStore ships; or defineMemory)
+ *   Tool         - a callable capability (defineTool)
+ *   StopCondition- when to end a run (compose with any / all / not)
  */
 
 export type {
@@ -39,8 +41,15 @@ export {
 } from "./tools";
 export type { Tool, ToolContext, ToolResult } from "./tools";
 
-export { any, maxSteps, whenToolCalled } from "./stop";
+export { all, any, maxSteps, not, whenToolCalled } from "./stop";
 export type { StopCondition, StopContext } from "./stop";
+
+export {
+  defineMemory,
+  defineModel,
+  withMemoryNamespace,
+  withModelObserver,
+} from "./compose";
 
 export { runAgent } from "./loop";
 export type { Hooks, RunAgentOptions, RunResult } from "./loop";

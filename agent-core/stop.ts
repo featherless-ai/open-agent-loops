@@ -39,3 +39,18 @@ export function any(...conditions: StopCondition[]): StopCondition {
     return false;
   };
 }
+
+/** Combine conditions: stop only if ALL of them say so (empty = never). */
+export function all(...conditions: StopCondition[]): StopCondition {
+  return async (ctx) => {
+    for (const condition of conditions) {
+      if (!(await condition(ctx))) return false;
+    }
+    return conditions.length > 0;
+  };
+}
+
+/** Invert a condition. */
+export function not(condition: StopCondition): StopCondition {
+  return async (ctx) => !(await condition(ctx));
+}

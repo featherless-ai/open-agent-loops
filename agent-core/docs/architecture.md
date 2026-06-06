@@ -71,6 +71,41 @@ flowchart TB
 layer. v1 ships `FakeModelClient` + `InMemoryStore`; future providers/stores are
 just new implementations of the same seams — the core never changes.
 
+## Composition over inheritance
+
+There is **no inheritance** in the SDK — no `extends`, no `super`, no abstract
+base classes. You add capability by **building**, **wrapping**, and **injecting**
+plain functions/objects, never by subclassing.
+
+```mermaid
+flowchart LR
+    subgraph Build["1 - build a seam (no class needed)"]
+        FN["plain function / object"] --> DEF["defineModel / defineMemory / defineTool"]
+    end
+    subgraph Wrap["2 - wrap to add behavior (decorator, not subclass)"]
+        DEF --> DEC["withModelObserver / withMemoryNamespace"]
+    end
+    subgraph Combine["2b - combine predicates"]
+        SC["StopCondition"] --> CMB["any / all / not"]
+    end
+    subgraph Inject["3 - inject (compose into options)"]
+        DEC --> OPT["RunAgentOptions"]
+        CMB --> OPT
+        TOOLS["Tool[]"] --> OPT
+        OPT --> RUN["runAgent()"]
+    end
+```
+
+- **Build** — `defineModel(fn)` / `defineMemory(obj)` / `defineTool(obj)` turn a
+  plain function or object into a seam. You never need to write a class.
+- **Wrap** — decorators like `withModelObserver` / `withMemoryNamespace` add
+  behavior by *enclosing* an existing seam and forwarding to it. Want logging +
+  namespacing? Wrap twice. (Classes such as `FakeModelClient` implement an
+  interface — `..|>` — but extend nothing.)
+- **Combine** — stop conditions compose with `any` / `all` / `not`.
+- **Inject** — everything meets at `RunAgentOptions`, the single composition
+  point handed to `runAgent`.
+
 ## Runtime flow
 
 ```mermaid
