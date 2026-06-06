@@ -23,7 +23,7 @@
       }
       header h1 { font-size: 16px; margin: 0 0 4px; }
       header p { margin: 0; font-size: 13px; color: #8b949e; }
-      .tabs { display: flex; gap: 8px; padding: 12px 24px 0; }
+      .tabs { display: flex; gap: 8px; padding: 12px 24px 0; flex-wrap: wrap; }
       .tab {
         padding: 6px 14px; border: 1px solid #30363d; border-bottom: none;
         border-radius: 8px 8px 0 0; cursor: pointer; font-size: 13px;
@@ -39,16 +39,90 @@
   </head>
   <body>
     <header>
-      <h1>agent-core — OOP architecture</h1>
-      <p>Every dependency points at an interface, which is what makes each piece plug-and-play.</p>
+      <h1>agent-core — a lightweight agent SDK</h1>
+      <p>One thin core engine that depends only on a few extension seams. Plug in your own model / memory / tools.</p>
     </header>
 
     <div class="tabs">
-      <button class="tab active" data-target="oop">Class diagram (OOP)</button>
+      <button class="tab active" data-target="arch">SDK architecture</button>
       <button class="tab" data-target="flow">Runtime flow</button>
+      <button class="tab" data-target="oop">Class diagram</button>
     </div>
 
-    <section class="panel" id="oop">
+    <section class="panel" id="arch">
+      <pre class="mermaid">
+flowchart TB
+    subgraph Consumer["Consumer application"]
+        APP["your code (Nuxt route, service, CLI...)"]
+    end
+
+    subgraph SDK["agent-core · lightweight SDK"]
+        direction TB
+
+        subgraph API["Public API — index.ts"]
+            RUN["runAgent()"]
+            DEF["defineTool()"]
+            STOPS["stop: maxSteps / whenToolCalled / any"]
+        end
+
+        subgraph CORE["Core engine — loop.ts"]
+            LOOP["agent loop: stream then run tools then persist then check stop"]
+            EVT["event sink (observability / UI streaming)"]
+        end
+
+        subgraph SEAMS["Extension seams — interfaces"]
+            MC["ModelClient (streams)"]
+            MEM["Memory"]
+            TOOL["Tool"]
+            STOP["StopCondition"]
+            HOOK["Hooks"]
+        end
+
+        subgraph BUILTIN["Built-in implementations — v1"]
+            FAKE["FakeModelClient (streaming, scriptable)"]
+            INMEM["InMemoryStore"]
+        end
+    end
+
+    subgraph PLUG["Pluggable later — not in v1"]
+        OAI["OpenAI-compatible model"]
+        ANTH["Anthropic / other models"]
+        DUR["JSONL / Redis / Vector memory"]
+    end
+
+    APP --> RUN
+    APP --> DEF
+    RUN --> LOOP
+    LOOP --> EVT
+    LOOP --> MC
+    LOOP --> MEM
+    LOOP --> TOOL
+    LOOP --> STOP
+    LOOP --> HOOK
+
+    FAKE -. implements .-> MC
+    INMEM -. implements .-> MEM
+    OAI -. implements .-> MC
+    ANTH -. implements .-> MC
+    DUR -. implements .-> MEM
+      </pre>
+    </section>
+
+    <section class="panel" id="flow" hidden>
+      <pre class="mermaid">
+flowchart LR
+    A["prompt"] --> B["memory.load"]
+    B --> C{"stream assistant via ModelClient"}
+    C -->|no tool calls| F["final answer"]
+    C -->|tool calls| D["validate then run Tools (parallel / sequential)"]
+    D --> E["append results to Memory"]
+    E --> G{"stop? terminate / stopWhen / maxSteps"}
+    G -->|no| C
+    G -->|yes| F
+      </pre>
+    </section>
+
+    <section class="panel" id="oop" hidden>
       <pre class="mermaid">
 classDiagram
     direction LR
@@ -84,7 +158,6 @@ classDiagram
 
     class FakeModelClient {
         +List~ModelRequest~ requests
-        -Script script
         +stream(req) ModelStream
     }
     class InMemoryStore {
@@ -98,101 +171,29 @@ classDiagram
         &lt;&lt;function&gt;&gt;
         +runAgent(options) RunResult
     }
-
     class RunAgentOptions {
         +ModelClient model
         +Memory memory
-        +string sessionId
-        +Prompt prompt
         +List~Tool~ tools
-        +number maxSteps
         +StopCondition stopWhen
         +Hooks hooks
     }
     class RunResult {
         +List~Message~ messages
-        +List~Message~ newMessages
         +number steps
-    }
-
-    class Message {
-        +Role role
-        +string content
-        +List~ToolCall~ toolCalls
-        +string toolCallId
-        +bool isError
-    }
-    class ToolCall {
-        +string id
-        +string name
-        +object arguments
-    }
-    class ToolResult {
-        +string content
-        +unknown details
-        +bool terminate
-    }
-    class ModelRequest {
-        +string system
-        +List~Message~ messages
-        +List~ToolSpec~ tools
-    }
-    class StreamEvent {
-        &lt;&lt;union&gt;&gt;
-        +text_delta
-        +tool_call
-        +done
-        +error
-    }
-    class AgentEvent {
-        &lt;&lt;union&gt;&gt;
-        +agent_start
-        +turn_start
-        +message
-        +tool_start
-        +tool_end
-        +agent_end
     }
 
     FakeModelClient ..|> ModelClient
     InMemoryStore ..|> Memory
-
     runAgent ..> ModelClient : streams
     runAgent ..> Memory : load / append
     runAgent ..> Tool : dispatches
     runAgent ..> StopCondition : evaluates
     runAgent ..> Hooks : invokes
-    runAgent ..> RunAgentOptions : input
-    runAgent ..> RunResult : output
-    runAgent ..> AgentEvent : emits
-
+    runAgent ..> RunResult : returns
     RunAgentOptions o-- ModelClient
     RunAgentOptions o-- Memory
     RunAgentOptions o-- Tool
-    RunAgentOptions o-- Hooks
-    RunAgentOptions o-- StopCondition
-
-    ModelClient ..> ModelRequest : consumes
-    ModelClient ..> StreamEvent : yields
-    Memory ..> Message : stores
-    Tool ..> ToolResult : returns
-    Tool ..> ToolCall : validates
-    Message o-- ToolCall
-    RunResult o-- Message
-      </pre>
-    </section>
-
-    <section class="panel" id="flow" hidden>
-      <pre class="mermaid">
-flowchart LR
-    A[prompt] --> B[memory.load]
-    B --> C{stream assistant<br/>via ModelClient}
-    C -->|no tool calls| F[final answer]
-    C -->|tool calls| D[validate + run Tools<br/>parallel / sequential]
-    D --> E[append results to Memory]
-    E --> G{stop?<br/>terminate / stopWhen / maxSteps}
-    G -->|no| C
-    G -->|yes| F
       </pre>
     </section>
 
@@ -204,7 +205,7 @@ flowchart LR
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
       mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
 
-      // Simple tab switching; render the flow panel lazily the first time.
+      // Tab switching; render a panel's diagram lazily the first time it shows.
       const tabs = document.querySelectorAll(".tab");
       tabs.forEach((tab) => {
         tab.addEventListener("click", async () => {
