@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agent-core — architecture</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #30363d;
+        position: sticky;
+        top: 0;
+        background: #0d1117;
+        z-index: 1;
+      }
+      header h1 { font-size: 16px; margin: 0 0 4px; }
+      header p { margin: 0; font-size: 13px; color: #8b949e; }
+      .tabs { display: flex; gap: 8px; padding: 12px 24px 0; }
+      .tab {
+        padding: 6px 14px; border: 1px solid #30363d; border-bottom: none;
+        border-radius: 8px 8px 0 0; cursor: pointer; font-size: 13px;
+        background: #161b22; color: #8b949e;
+      }
+      .tab.active { background: #0d1117; color: #e6edf3; border-color: #444c56; }
+      .panel { padding: 24px; overflow: auto; }
+      .panel[hidden] { display: none; }
+      .mermaid { background: transparent; }
+      footer { padding: 12px 24px 28px; font-size: 12px; color: #6e7681; }
+      code { background: #161b22; padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>agent-core — OOP architecture</h1>
+      <p>Every dependency points at an interface, which is what makes each piece plug-and-play.</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-target="oop">Class diagram (OOP)</button>
+      <button class="tab" data-target="flow">Runtime flow</button>
+    </div>
+
+    <section class="panel" id="oop">
+      <pre class="mermaid">
+classDiagram
+    direction LR
+
+    class ModelClient {
+        &lt;&lt;interface&gt;&gt;
+        +stream(req) ModelStream
+    }
+    class Memory {
+        &lt;&lt;interface&gt;&gt;
+        +load(sessionId) List~Message~
+        +append(sessionId, messages)
+        +clear(sessionId)
+    }
+    class Tool~S~ {
+        &lt;&lt;interface&gt;&gt;
+        +string name
+        +string description
+        +ZodType parameters
+        +string executionMode
+        +execute(args, ctx) ToolResult
+    }
+    class StopCondition {
+        &lt;&lt;type&gt;&gt;
+        +call(ctx) boolean
+    }
+    class Hooks {
+        &lt;&lt;interface&gt;&gt;
+        +transformContext(messages) List~Message~
+        +beforeToolCall(info) Decision
+        +afterToolCall(info) Override
+    }
+
+    class FakeModelClient {
+        +List~ModelRequest~ requests
+        -Script script
+        +stream(req) ModelStream
+    }
+    class InMemoryStore {
+        -Map sessions
+        +load(sessionId) List~Message~
+        +append(sessionId, messages)
+        +clear(sessionId)
+    }
+
+    class runAgent {
+        &lt;&lt;function&gt;&gt;
+        +runAgent(options) RunResult
+    }
+
+    class RunAgentOptions {
+        +ModelClient model
+        +Memory memory
+        +string sessionId
+        +Prompt prompt
+        +List~Tool~ tools
+        +number maxSteps
+        +StopCondition stopWhen
+        +Hooks hooks
+    }
+    class RunResult {
+        +List~Message~ messages
+        +List~Message~ newMessages
+        +number steps
+    }
+
+    class Message {
+        +Role role
+        +string content
+        +List~ToolCall~ toolCalls
+        +string toolCallId
+        +bool isError
+    }
+    class ToolCall {
+        +string id
+        +string name
+        +object arguments
+    }
+    class ToolResult {
+        +string content
+        +unknown details
+        +bool terminate
+    }
+    class ModelRequest {
+        +string system
+        +List~Message~ messages
+        +List~ToolSpec~ tools
+    }
+    class StreamEvent {
+        &lt;&lt;union&gt;&gt;
+        +text_delta
+        +tool_call
+        +done
+        +error
+    }
+    class AgentEvent {
+        &lt;&lt;union&gt;&gt;
+        +agent_start
+        +turn_start
+        +message
+        +tool_start
+        +tool_end
+        +agent_end
+    }
+
+    FakeModelClient ..|> ModelClient
+    InMemoryStore ..|> Memory
+
+    runAgent ..> ModelClient : streams
+    runAgent ..> Memory : load / append
+    runAgent ..> Tool : dispatches
+    runAgent ..> StopCondition : evaluates
+    runAgent ..> Hooks : invokes
+    runAgent ..> RunAgentOptions : input
+    runAgent ..> RunResult : output
+    runAgent ..> AgentEvent : emits
+
+    RunAgentOptions o-- ModelClient
+    RunAgentOptions o-- Memory
+    RunAgentOptions o-- Tool
+    RunAgentOptions o-- Hooks
+    RunAgentOptions o-- StopCondition
+
+    ModelClient ..> ModelRequest : consumes
+    ModelClient ..> StreamEvent : yields
+    Memory ..> Message : stores
+    Tool ..> ToolResult : returns
+    Tool ..> ToolCall : validates
+    Message o-- ToolCall
+    RunResult o-- Message
+      </pre>
+    </section>
+
+    <section class="panel" id="flow" hidden>
+      <pre class="mermaid">
+flowchart LR
+    A[prompt] --> B[memory.load]
+    B --> C{stream assistant<br/>via ModelClient}
+    C -->|no tool calls| F[final answer]
+    C -->|tool calls| D[validate + run Tools<br/>parallel / sequential]
+    D --> E[append results to Memory]
+    E --> G{stop?<br/>terminate / stopWhen / maxSteps}
+    G -->|no| C
+    G -->|yes| F
+      </pre>
+    </section>
+
+    <footer>
+      Source: <code>agent-core/docs/architecture.md</code> &middot; rendered with Mermaid.
+    </footer>
+
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+
+      // Simple tab switching; render the flow panel lazily the first time.
+      const tabs = document.querySelectorAll(".tab");
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", async () => {
+          tabs.forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          document.querySelectorAll(".panel").forEach((p) => (p.hidden = true));
+          const panel = document.getElementById(tab.dataset.target);
+          panel.hidden = false;
+          await mermaid.run({ nodes: panel.querySelectorAll(".mermaid:not([data-processed])") });
+        });
+      });
+    </script>
+  </body>
+</html>

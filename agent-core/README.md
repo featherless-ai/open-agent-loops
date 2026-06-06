@@ -16,6 +16,10 @@ package is to make the **core things plug-and-play and independently testable**.
 The loop (`runAgent`) only ever depends on these interfaces. Models **stream by
 default** — `ModelClient.stream()` returns an async iterable of `StreamEvent`s.
 
+> **Architecture diagram:** see [`docs/architecture.md`](./docs/architecture.md)
+> (Mermaid class diagram, renders on GitHub) or open
+> [`docs/architecture.html`](./docs/architecture.html) as an interactive page.
+
 ## The loop
 
 ```
@@ -29,7 +33,7 @@ load history → append prompt → ┌─ stream assistant turn
 ## Usage
 
 ```ts
-import { runAgent, InMemoryStore, FakeModelClient, defineTool } from "~/server/agent";
+import { runAgent, InMemoryStore, FakeModelClient, defineTool } from "~/agent-core";
 import { z } from "zod";
 
 const weather = defineTool({
@@ -65,7 +69,7 @@ Implement the one method. Sketch over the deps already in this repo
 ```ts
 import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { ModelClient, ModelRequest, StreamEvent } from "~/server/agent";
+import type { ModelClient, ModelRequest, StreamEvent } from "~/agent-core";
 
 export class FeatherlessModel implements ModelClient {
   async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
@@ -78,7 +82,7 @@ export class FeatherlessModel implements ModelClient {
 ## Tests
 
 ```bash
-bun test server/agent      # or: bun run test
+bun test agent-core      # or: bun run test
 ```
 
 Every suite covers a base case plus edge cases. The loop, memory, tools, and

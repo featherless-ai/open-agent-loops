@@ -9,7 +9,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
-    "test": "bun test server/agent"
+    "test": "bun test agent-core"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2",
