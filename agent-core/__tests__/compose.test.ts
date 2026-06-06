@@ -1,23 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { defineMemory, defineModel, withMemoryNamespace, withModelObserver } from "../compose";
+import { withMemoryNamespace, withModelObserver } from "../compose";
 import { InMemoryStore } from "../memory";
 import { runAgent } from "../loop";
-import type { ModelRequest, StreamEvent } from "../model";
+import type { ModelClient, StreamEvent } from "../model";
+import type { Memory } from "../memory";
 import type { Message } from "../types";
 
-/** A tiny streaming function used to build models without any class. */
-const helloStream = (_req: ModelRequest) =>
-  (async function* (): AsyncGenerator<StreamEvent> {
-    yield { type: "text_delta", text: "hi" };
-    yield { type: "done", message: { role: "assistant", content: "hi" } as Message };
-  })();
+/**
+ * A ModelClient implemented as a plain object — no factory, no class. This is
+ * the "implement the interface inline" pattern the SDK favors.
+ */
+const helloModel: ModelClient = {
+  stream: () =>
+    (async function* (): AsyncGenerator<StreamEvent> {
+      yield { type: "text_delta", text: "hi" };
+      yield { type: "done", message: { role: "assistant", content: "hi" } };
+    })(),
+};
 
-describe("defineModel", () => {
-  // Base case: a plain function becomes a working ModelClient (no class).
-  test("base: builds a ModelClient from a function and runs", async () => {
-    const model = defineModel(helloStream);
+describe("plain-object seams (no factory needed)", () => {
+  // Base case: an inline ModelClient object drives a run.
+  test("base: an inline ModelClient object works with runAgent", async () => {
     const result = await runAgent({
-      model,
+      model: helloModel,
       memory: new InMemoryStore(),
       sessionId: "s",
       prompt: "q",
@@ -25,29 +30,14 @@ describe("defineModel", () => {
     expect(result.messages.at(-1)?.content).toBe("hi");
   });
 
-  // Edge: the function receives the request it was given.
-  test("edge: the stream function sees the request", async () => {
-    let seen: ModelRequest | undefined;
-    const model = defineModel((req) => {
-      seen = req;
-      return helloStream(req);
-    });
-    await runAgent({ model, memory: new InMemoryStore(), sessionId: "s", prompt: "ping" });
-    expect(seen?.messages[0]?.content).toBe("ping");
-  });
-});
-
-describe("defineMemory", () => {
-  // Base case: a plain object of functions works as Memory.
-  test("base: builds a Memory from functions", async () => {
+  // Base case: an inline Memory object works too.
+  test("base: an inline Memory object satisfies the seam", async () => {
     const map = new Map<string, Message[]>();
-    const memory = defineMemory({
+    const memory: Memory = {
       load: async (id) => map.get(id) ?? [],
-      append: async (id, msgs) => {
-        map.set(id, [...(map.get(id) ?? []), ...msgs]);
-      },
+      append: async (id, msgs) => void map.set(id, [...(map.get(id) ?? []), ...msgs]),
       clear: async (id) => void map.delete(id),
-    });
+    };
     await memory.append("s", [{ role: "user", content: "x" }]);
     expect((await memory.load("s")).map((m) => m.content)).toEqual(["x"]);
   });
@@ -57,7 +47,7 @@ describe("withModelObserver", () => {
   // Base case: the observer sees every event the inner model emits.
   test("base: observes all stream events", async () => {
     const seen: string[] = [];
-    const model = withModelObserver(defineModel(helloStream), (e) => seen.push(e.type));
+    const model = withModelObserver(helloModel, (e) => seen.push(e.type));
     await runAgent({ model, memory: new InMemoryStore(), sessionId: "s", prompt: "q" });
     expect(seen).toContain("text_delta");
     expect(seen).toContain("done");
@@ -66,18 +56,31 @@ describe("withModelObserver", () => {
   // Edge: the decorator is transparent — output is unchanged.
   test("edge: wrapping does not alter the result", async () => {
     const plain = await runAgent({
-      model: defineModel(helloStream),
+      model: helloModel,
       memory: new InMemoryStore(),
       sessionId: "s",
       prompt: "q",
     });
     const wrapped = await runAgent({
-      model: withModelObserver(defineModel(helloStream), () => {}),
+      model: withModelObserver(helloModel, () => {}),
       memory: new InMemoryStore(),
       sessionId: "s",
       prompt: "q",
     });
     expect(wrapped.messages.at(-1)?.content).toBe(plain.messages.at(-1)?.content);
+  });
+
+  // Edge: decorators stack — wrapping twice runs both observers.
+  test("edge: observers compose when stacked", async () => {
+    const a: string[] = [];
+    const b: string[] = [];
+    const model = withModelObserver(
+      withModelObserver(helloModel, (e) => a.push(e.type)),
+      (e) => b.push(e.type),
+    );
+    await runAgent({ model, memory: new InMemoryStore(), sessionId: "s", prompt: "q" });
+    expect(a).toEqual(b);
+    expect(a.length).toBeGreaterThan(0);
   });
 });
 
@@ -88,7 +91,6 @@ describe("withMemoryNamespace", () => {
     const ns = withMemoryNamespace(base, "tenantA");
     await ns.append("s", [{ role: "user", content: "hello" }]);
 
-    // The logical id "s" is stored under "tenantA:s" in the base store.
     expect((await base.load("tenantA:s")).map((m) => m.content)).toEqual(["hello"]);
     expect(await base.load("s")).toEqual([]);
   });

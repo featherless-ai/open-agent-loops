@@ -3,12 +3,12 @@
  *
  *   import { runAgent, InMemoryStore, FakeModelClient, defineTool } from "~/agent-core";
  *
- * Composition over inheritance: every piece sits behind an interface and is
- * built from a plain function/object (define*) or wrapped by a decorator
+ * Composition over inheritance: every piece sits behind an interface that you
+ * satisfy with a plain object/function, then optionally wrap with a decorator
  * (with*) — never subclassed.
- *   ModelClient  - the LLM boundary (FakeModelClient ships; or defineModel)
- *   Memory       - conversation storage (InMemoryStore ships; or defineMemory)
- *   Tool         - a callable capability (defineTool)
+ *   ModelClient  - the LLM boundary (use FakeModelClient, or `{ stream }`)
+ *   Memory       - conversation storage (use InMemoryStore, or `{ load, ... }`)
+ *   Tool         - a callable capability (defineTool: infers Zod arg types)
  *   StopCondition- when to end a run (compose with any / all / not)
  */
 
@@ -44,12 +44,7 @@ export type { Tool, ToolContext, ToolResult } from "./tools";
 export { all, any, maxSteps, not, whenToolCalled } from "./stop";
 export type { StopCondition, StopContext } from "./stop";
 
-export {
-  defineMemory,
-  defineModel,
-  withMemoryNamespace,
-  withModelObserver,
-} from "./compose";
+export { withMemoryNamespace, withModelObserver } from "./compose";
 
 export { runAgent } from "./loop";
 export type { Hooks, RunAgentOptions, RunResult } from "./loop";

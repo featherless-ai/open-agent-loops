@@ -112,17 +112,20 @@ flowchart TB
     <section class="panel" id="compose" hidden>
       <pre class="mermaid">
 flowchart LR
-    subgraph Build["1 - build a seam (no class needed)"]
-        FN["plain function / object"] --> DEF["defineModel / defineMemory / defineTool"]
+    subgraph Implement["1 - implement a seam inline (no class, no factory)"]
+        FN["const model: ModelClient = { stream }"]
+        OBJ["const memory: Memory = { load, append, clear }"]
     end
     subgraph Wrap["2 - wrap to add behavior (decorator, not subclass)"]
-        DEF --> DEC["withModelObserver / withMemoryNamespace"]
+        FN --> DEC["withModelObserver"]
+        OBJ --> DEC2["withMemoryNamespace"]
     end
     subgraph Combine["2b - combine predicates"]
         SC["StopCondition"] --> CMB["any / all / not"]
     end
     subgraph Inject["3 - inject (compose into options)"]
         DEC --> OPT["RunAgentOptions"]
+        DEC2 --> OPT
         CMB --> OPT
         TOOLS["Tool[]"] --> OPT
         OPT --> RUN["runAgent()"]

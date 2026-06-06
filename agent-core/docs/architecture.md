@@ -79,25 +79,30 @@ plain functions/objects, never by subclassing.
 
 ```mermaid
 flowchart LR
-    subgraph Build["1 - build a seam (no class needed)"]
-        FN["plain function / object"] --> DEF["defineModel / defineMemory / defineTool"]
+    subgraph Implement["1 - implement a seam inline (no class, no factory)"]
+        FN["const model: ModelClient = { stream }"]
+        OBJ["const memory: Memory = { load, append, clear }"]
     end
     subgraph Wrap["2 - wrap to add behavior (decorator, not subclass)"]
-        DEF --> DEC["withModelObserver / withMemoryNamespace"]
+        FN --> DEC["withModelObserver"]
+        OBJ --> DEC2["withMemoryNamespace"]
     end
     subgraph Combine["2b - combine predicates"]
         SC["StopCondition"] --> CMB["any / all / not"]
     end
     subgraph Inject["3 - inject (compose into options)"]
         DEC --> OPT["RunAgentOptions"]
+        DEC2 --> OPT
         CMB --> OPT
         TOOLS["Tool[]"] --> OPT
         OPT --> RUN["runAgent()"]
     end
 ```
 
-- **Build** — `defineModel(fn)` / `defineMemory(obj)` / `defineTool(obj)` turn a
-  plain function or object into a seam. You never need to write a class.
+- **Implement** — a seam is just an object/function that satisfies the
+  interface (`{ stream }`, `{ load, append, clear }`). No base class, no factory
+  wrapper. (`defineTool` is the one helper kept — purely so TypeScript infers
+  the Zod schema into `execute`'s args, the same role as `defineConfig`.)
 - **Wrap** — decorators like `withModelObserver` / `withMemoryNamespace` add
   behavior by *enclosing* an existing seam and forwarding to it. Want logging +
   namespacing? Wrap twice. (Classes such as `FakeModelClient` implement an
