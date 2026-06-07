@@ -1,0 +1,13 @@
+# next
+.next/
+out/
+next-env.d.ts
+# fumadocs-mdx generated source
+.source/
+# deps
+node_modules/
+# generated API reference (regenerated from source at build time)
+content/docs/api/
+# env / os
+.env*
+.DS_Store

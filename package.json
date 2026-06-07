@@ -16,7 +16,9 @@
     "typecheck": "tsc --noEmit",
     "docs": "bun run docs:html && bun run docs:md",
     "docs:html": "typedoc --out docs/api",
-    "docs:md": "typedoc --plugin typedoc-plugin-markdown --out docs/api-md"
+    "docs:md": "typedoc --plugin typedoc-plugin-markdown --out docs/api-md",
+    "docs:site": "cd docs-fuma && bun run dev",
+    "docs:site:build": "cd docs-fuma && bun run build"
   },
   "dependencies": {
     "zod": "^4"

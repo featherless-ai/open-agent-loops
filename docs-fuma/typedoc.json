@@ -1,0 +1,33 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../agent-core/index.ts"],
+  "tsconfig": "../tsconfig.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "content/docs/api",
+  "excludeInternal": true,
+  "readme": "none",
+  "entryFileName": "index",
+  "hidePageTitle": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "expandObjects": true,
+  "parametersFormat": "table",
+  "propertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "typeDeclarationFormat": "table",
+  "indexFormat": "table",
+  "groupOrder": [
+    "Core",
+    "Messages & Events",
+    "Model",
+    "Tools",
+    "Memory",
+    "Stop Conditions",
+    "Permissions",
+    "Credentials",
+    "Composition",
+    "Workflow",
+    "Testing",
+    "*"
+  ]
+}
