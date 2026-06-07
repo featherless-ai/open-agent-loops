@@ -1,0 +1,20 @@
+{
+  "name": "agent-core-docs",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --bun astro dev",
+    "build": "bun --bun astro build",
+    "preview": "bun --bun astro preview",
+    "sidebar": "node scripts/gen-api-sidebar.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.39.3",
+    "astro": "^6.4.4",
+    "sharp": "^0.34.5",
+    "starlight-theme-rapide": "^0.5.2",
+    "starlight-typedoc": "^0.23.0",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.12.0"
+  }
+}

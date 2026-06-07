@@ -1,0 +1,324 @@
+[
+  {
+    "label": "Core",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "GateDecision",
+        "link": "/api/interfaces/gatedecision/"
+      },
+      {
+        "label": "Hooks",
+        "link": "/api/interfaces/hooks/"
+      },
+      {
+        "label": "prepareRequestMessages",
+        "link": "/api/functions/preparerequestmessages/"
+      },
+      {
+        "label": "runAgent",
+        "link": "/api/functions/runagent/"
+      },
+      {
+        "label": "RunAgentOptions",
+        "link": "/api/interfaces/runagentoptions/"
+      },
+      {
+        "label": "RunResult",
+        "link": "/api/interfaces/runresult/"
+      },
+      {
+        "label": "ToolCallDecision",
+        "link": "/api/interfaces/toolcalldecision/"
+      },
+      {
+        "label": "ToolGateRequest",
+        "link": "/api/interfaces/toolgaterequest/"
+      },
+      {
+        "label": "ToolResultOverride",
+        "link": "/api/interfaces/toolresultoverride/"
+      }
+    ]
+  },
+  {
+    "label": "Messages & Events",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "AgentEvent",
+        "link": "/api/type-aliases/agentevent/"
+      },
+      {
+        "label": "AgentEventBody",
+        "link": "/api/type-aliases/agenteventbody/"
+      },
+      {
+        "label": "AgentEventType",
+        "link": "/api/enumerations/agenteventtype/"
+      },
+      {
+        "label": "EventSink",
+        "link": "/api/type-aliases/eventsink/"
+      },
+      {
+        "label": "Message",
+        "link": "/api/interfaces/message/"
+      },
+      {
+        "label": "Role",
+        "link": "/api/enumerations/role/"
+      },
+      {
+        "label": "ToolArguments",
+        "link": "/api/type-aliases/toolarguments/"
+      },
+      {
+        "label": "ToolCall",
+        "link": "/api/interfaces/toolcall/"
+      },
+      {
+        "label": "ToolCallType",
+        "link": "/api/enumerations/toolcalltype/"
+      }
+    ]
+  },
+  {
+    "label": "Model",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "ModelClient",
+        "link": "/api/interfaces/modelclient/"
+      },
+      {
+        "label": "ModelRequest",
+        "link": "/api/interfaces/modelrequest/"
+      },
+      {
+        "label": "ModelStream",
+        "link": "/api/type-aliases/modelstream/"
+      },
+      {
+        "label": "StreamEvent",
+        "link": "/api/type-aliases/streamevent/"
+      },
+      {
+        "label": "StreamEventType",
+        "link": "/api/enumerations/streameventtype/"
+      },
+      {
+        "label": "ToolSpec",
+        "link": "/api/interfaces/toolspec/"
+      }
+    ]
+  },
+  {
+    "label": "Tools",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "defineTool",
+        "link": "/api/functions/definetool/"
+      },
+      {
+        "label": "ExecutionMode",
+        "link": "/api/enumerations/executionmode/"
+      },
+      {
+        "label": "formatSearchResults",
+        "link": "/api/functions/formatsearchresults/"
+      },
+      {
+        "label": "formatShellResult",
+        "link": "/api/functions/formatshellresult/"
+      },
+      {
+        "label": "SearchBackend",
+        "link": "/api/interfaces/searchbackend/"
+      },
+      {
+        "label": "SearchMatch",
+        "link": "/api/interfaces/searchmatch/"
+      },
+      {
+        "label": "SearchQuery",
+        "link": "/api/interfaces/searchquery/"
+      },
+      {
+        "label": "searchTool",
+        "link": "/api/functions/searchtool/"
+      },
+      {
+        "label": "ShellBackend",
+        "link": "/api/interfaces/shellbackend/"
+      },
+      {
+        "label": "ShellResult",
+        "link": "/api/interfaces/shellresult/"
+      },
+      {
+        "label": "shellTool",
+        "link": "/api/functions/shelltool/"
+      },
+      {
+        "label": "Tool",
+        "link": "/api/interfaces/tool/"
+      },
+      {
+        "label": "ToolContext",
+        "link": "/api/interfaces/toolcontext/"
+      },
+      {
+        "label": "ToolRegistry",
+        "link": "/api/classes/toolregistry/"
+      },
+      {
+        "label": "ToolResult",
+        "link": "/api/interfaces/toolresult/"
+      },
+      {
+        "label": "toToolSpec",
+        "link": "/api/functions/totoolspec/"
+      },
+      {
+        "label": "validateToolArguments",
+        "link": "/api/functions/validatetoolarguments/"
+      }
+    ]
+  },
+  {
+    "label": "Memory",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "Memory",
+        "link": "/api/interfaces/memory/"
+      },
+      {
+        "label": "MemoryListener",
+        "link": "/api/interfaces/memorylistener/"
+      },
+      {
+        "label": "SessionMemoryStore",
+        "link": "/api/classes/sessionmemorystore/"
+      }
+    ]
+  },
+  {
+    "label": "Stop Conditions",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "all",
+        "link": "/api/functions/all/"
+      },
+      {
+        "label": "any",
+        "link": "/api/functions/any/"
+      },
+      {
+        "label": "maxSteps",
+        "link": "/api/functions/maxsteps/"
+      },
+      {
+        "label": "not",
+        "link": "/api/functions/not/"
+      },
+      {
+        "label": "StopCondition",
+        "link": "/api/type-aliases/stopcondition/"
+      },
+      {
+        "label": "StopContext",
+        "link": "/api/interfaces/stopcontext/"
+      },
+      {
+        "label": "whenToolCalled",
+        "link": "/api/functions/whentoolcalled/"
+      }
+    ]
+  },
+  {
+    "label": "Permissions",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "ApprovalChoice",
+        "link": "/api/enumerations/approvalchoice/"
+      },
+      {
+        "label": "ApprovalPrompter",
+        "link": "/api/interfaces/approvalprompter/"
+      },
+      {
+        "label": "ApprovalRequest",
+        "link": "/api/interfaces/approvalrequest/"
+      },
+      {
+        "label": "InMemoryPermissionStore",
+        "link": "/api/classes/inmemorypermissionstore/"
+      },
+      {
+        "label": "InMemoryPermissionStoreOptions",
+        "link": "/api/interfaces/inmemorypermissionstoreoptions/"
+      },
+      {
+        "label": "permissionGate",
+        "link": "/api/functions/permissiongate/"
+      },
+      {
+        "label": "PermissionPolicy",
+        "link": "/api/enumerations/permissionpolicy/"
+      },
+      {
+        "label": "PermissionStore",
+        "link": "/api/interfaces/permissionstore/"
+      },
+      {
+        "label": "SettablePolicy",
+        "link": "/api/type-aliases/settablepolicy/"
+      }
+    ]
+  },
+  {
+    "label": "Credentials",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "CredentialStore",
+        "link": "/api/interfaces/credentialstore/"
+      },
+      {
+        "label": "InMemoryCredentialStore",
+        "link": "/api/classes/inmemorycredentialstore/"
+      },
+      {
+        "label": "InMemoryCredentialStoreOptions",
+        "link": "/api/interfaces/inmemorycredentialstoreoptions/"
+      },
+      {
+        "label": "withCredentials",
+        "link": "/api/functions/withcredentials/"
+      }
+    ]
+  },
+  {
+    "label": "Composition",
+    "collapsed": true,
+    "items": [
+      {
+        "label": "withMemoryListeners",
+        "link": "/api/functions/withmemorylisteners/"
+      },
+      {
+        "label": "withMemoryNamespace",
+        "link": "/api/functions/withmemorynamespace/"
+      },
+      {
+        "label": "withModelObserver",
+        "link": "/api/functions/withmodelobserver/"
+      }
+    ]
+  }
+]
