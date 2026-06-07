@@ -17,11 +17,14 @@ const jsonFile = join(root, ".api.json");
 
 const GROUP_ORDER = [
   "Core",
+  "Hooks & Gating",
   "Messages & Events",
   "Model",
-  "Tools",
-  "Memory",
+  "Defining Tools",
+  "Tool Registry",
+  "Built-in Tools",
   "Stop Conditions",
+  "Memory",
   "Permissions",
   "Credentials",
   "Composition",

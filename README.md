@@ -1,4 +1,4 @@
-# agent-core
+# Open Agent OS
 
 A minimal, provider-agnostic **agentic loop**. The whole point of this package
 is to make the core pieces of an agent **plug-and-play and independently
