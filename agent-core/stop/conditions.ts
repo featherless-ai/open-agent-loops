@@ -1,12 +1,12 @@
 /**
  * Built-in stop conditions and combinators for the stop seam (interface in
- * `./stop.types`). Conditions decide when the loop should end early,
+ * `./conditions.types`). Conditions decide when the loop should end early,
  * independent of the natural stop (the model produces a turn with no tool
  * calls) and the hard `maxSteps` safety cap. They compose, so callers can mix
  * several with `any` / `all` / `not`.
  */
 
-import type { StopCondition } from "./stop.types";
+import type { StopCondition } from "./conditions.types";
 
 /** Stop once `step` reaches `n` turns. */
 export function maxSteps(n: number): StopCondition {

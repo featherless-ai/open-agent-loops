@@ -26,7 +26,7 @@ flowchart TB
             STOPS["stop: maxSteps / whenToolCalled / any"]
         end
 
-        subgraph CORE["Core engine — loop.ts"]
+        subgraph CORE["Core engine — primitives/loop.ts"]
             LOOP["agent loop: stream then run tools then persist then check stop"]
             EVT["event sink (observability / UI streaming)"]
         end

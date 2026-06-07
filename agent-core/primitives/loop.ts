@@ -11,12 +11,12 @@
  * `maxSteps` safety cap is hit (prevents runaway loops).
  */
 
-import type { AgentEvent, EventSink, Message, ToolCall } from "./types";
-import type { ModelClient, ModelRequest } from "./model";
-import type { Memory } from "./memory.types";
-import type { Tool, ToolResult } from "./tools.types";
-import { toToolSpec, validateToolArguments } from "./tools";
-import type { StopCondition } from "./stop.types";
+import type { AgentEvent, EventSink, Message, ToolCall } from "../types";
+import type { ModelClient, ModelRequest } from "../model.types";
+import type { Memory } from "../memory/memory.types";
+import type { Tool, ToolResult } from "../tools/tools.types";
+import { toToolSpec, validateToolArguments } from "../tools/tools";
+import type { StopCondition } from "../stop/conditions.types";
 
 /** Lifecycle hooks for guardrails and context shaping. */
 export interface Hooks {

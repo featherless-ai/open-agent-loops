@@ -6,8 +6,8 @@
  */
 
 import { z } from "zod";
-import type { ToolCall } from "./types";
-import type { ToolSpec } from "./model";
+import type { ToolCall } from "../types";
+import type { ToolSpec } from "../model.types";
 import type { Tool } from "./tools.types";
 
 /** Identity helper that preserves the schema's inferred type for `execute`. */

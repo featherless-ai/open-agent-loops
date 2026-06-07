@@ -29,22 +29,22 @@ export type {
   ModelStream,
   StreamEvent,
   ToolSpec,
-} from "./model";
+} from "./model.types";
 
-export { InMemoryStore } from "./memory";
-export type { Memory, MemoryListener } from "./memory.types";
+export { InMemoryStore } from "./memory/memory";
+export type { Memory, MemoryListener } from "./memory/memory.types";
 
 export {
   defineTool,
   toToolSpec,
   validateToolArguments,
-} from "./tools";
-export type { Tool, ToolContext, ToolResult } from "./tools.types";
+} from "./tools/tools";
+export type { Tool, ToolContext, ToolResult } from "./tools/tools.types";
 
-export { all, any, maxSteps, not, whenToolCalled } from "./stop";
-export type { StopCondition, StopContext } from "./stop.types";
+export { all, any, maxSteps, not, whenToolCalled } from "./stop/conditions";
+export type { StopCondition, StopContext } from "./stop/conditions.types";
 
 export { withMemoryListeners, withMemoryNamespace, withModelObserver } from "./compose";
 
-export { prepareRequestMessages, runAgent } from "./loop";
-export type { Hooks, RunAgentOptions, RunResult } from "./loop";
+export { prepareRequestMessages, runAgent } from "./primitives/loop";
+export type { Hooks, RunAgentOptions, RunResult } from "./primitives/loop";

@@ -12,8 +12,8 @@
  * alternative to subclassing a base class. Wrap as many times as you like.
  */
 
-import type { ModelClient, StreamEvent } from "./model";
-import type { Memory, MemoryListener } from "./memory.types";
+import type { ModelClient, StreamEvent } from "./model.types";
+import type { Memory, MemoryListener } from "./memory/memory.types";
 
 /**
  * Wrap a ModelClient to observe every stream event as it flows through.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { all, any, maxSteps, not, whenToolCalled } from "../stop";
-import type { StopContext } from "../stop.types";
+import { all, any, maxSteps, not, whenToolCalled } from "../stop/conditions";
+import type { StopContext } from "../stop/conditions.types";
 import type { Message } from "../types";
 
 /** Build a StopContext with sensible defaults for pure-function testing. */

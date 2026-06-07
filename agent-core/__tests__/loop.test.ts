@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { prepareRequestMessages, runAgent } from "../loop";
+import { prepareRequestMessages, runAgent } from "../primitives/loop";
 import { FakeModelClient } from "../mocks/fake-model";
-import { InMemoryStore } from "../memory";
-import { defineTool } from "../tools";
-import { whenToolCalled } from "../stop";
+import { InMemoryStore } from "../memory/memory";
+import { defineTool } from "../tools/tools";
+import { whenToolCalled } from "../stop/conditions";
 import type { AgentEvent } from "../types";
 
 /** A no-op echo tool used to exercise the tool path. */

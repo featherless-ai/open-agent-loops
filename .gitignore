@@ -3,3 +3,7 @@ node_modules
 .DS_Store
 .env
 .env.local
+
+# Generated API docs (run `bun run docs`)
+docs/api
+docs/api-md

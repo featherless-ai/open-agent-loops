@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InMemoryStore } from "../memory";
+import { InMemoryStore } from "../memory/memory";
 import type { Message } from "../types";
 
 const msg = (content: string): Message => ({ role: "user", content });
@@ -43,6 +43,23 @@ describe("InMemoryStore", () => {
     const loaded = await store.load("s");
     loaded[0]!.content = "hacked";
     expect((await store.load("s"))[0]!.content).toBe("orig");
+  });
+
+  // Edge: the copy is deep — mutating nested tool-call arguments is isolated.
+  test("edge: defensive copy reaches nested tool-call arguments", async () => {
+    const store = new InMemoryStore();
+    const assistant: Message = {
+      role: "assistant",
+      content: "",
+      toolCalls: [{ id: "1", name: "search", arguments: { filter: { city: "Paris" } } }],
+    };
+    await store.append("s", [assistant]);
+
+    const loaded = await store.load("s");
+    (loaded[0]!.toolCalls![0]!.arguments.filter as { city: string }).city = "London";
+
+    const reloaded = await store.load("s");
+    expect((reloaded[0]!.toolCalls![0]!.arguments.filter as { city: string }).city).toBe("Paris");
   });
 
   // Edge: clear removes history for a session.

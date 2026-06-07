@@ -1,0 +1,11 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["agent-core/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "readme": "agent-core/README.md",
+  "name": "agent-core",
+  "includeVersion": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "sort": ["source-order"]
+}

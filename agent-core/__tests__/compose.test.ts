@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { withMemoryListeners, withMemoryNamespace, withModelObserver } from "../compose";
-import { InMemoryStore } from "../memory";
-import { runAgent } from "../loop";
-import type { ModelClient, StreamEvent } from "../model";
-import type { Memory } from "../memory.types";
+import { InMemoryStore } from "../memory/memory";
+import { runAgent } from "../primitives/loop";
+import type { ModelClient, StreamEvent } from "../model.types";
+import type { Memory } from "../memory/memory.types";
 import type { Message } from "../types";
 
 /**

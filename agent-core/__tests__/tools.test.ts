@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { defineTool, toToolSpec, validateToolArguments } from "../tools";
+import { defineTool, toToolSpec, validateToolArguments } from "../tools/tools";
 import type { ToolCall } from "../types";
 
 const adder = defineTool({

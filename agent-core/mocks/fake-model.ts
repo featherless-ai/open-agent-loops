@@ -9,7 +9,7 @@
  */
 
 import type { Message, ToolCall } from "../types";
-import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "../model";
+import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "../model.types";
 
 /** One scripted assistant turn: some text and/or some tool calls. */
 export interface ScriptedTurn {

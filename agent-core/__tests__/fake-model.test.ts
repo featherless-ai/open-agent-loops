@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { FakeModelClient } from "../mocks/fake-model";
-import type { ModelRequest, StreamEvent } from "../model";
+import type { ModelRequest, StreamEvent } from "../model.types";
 
 const req: ModelRequest = { messages: [{ role: "user", content: "hi" }] };
 

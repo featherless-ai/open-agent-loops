@@ -13,13 +13,18 @@
   ],
   "scripts": {
     "test": "bun test agent-core",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "docs": "bun run docs:html && bun run docs:md",
+    "docs:html": "typedoc --out docs/api",
+    "docs:md": "typedoc --plugin typedoc-plugin-markdown --out docs/api-md"
   },
   "dependencies": {
     "zod": "^4"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "^5"
   }
 }

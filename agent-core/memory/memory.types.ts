@@ -9,7 +9,7 @@
  * interface.
  */
 
-import type { Message } from "./types";
+import type { Message } from "../types";
 
 export interface Memory {
   /** Return the full message history for a session (oldest first). */
@@ -23,7 +23,7 @@ export interface Memory {
 /**
  * Observe a `Memory` without changing its behavior. Each callback fires *after*
  * the underlying operation succeeds, so it sees exactly what happened. Attach
- * with `withMemoryListeners` (in `./compose`) — pure composition, no
+ * with `withMemoryListeners` (in `../compose`) — pure composition, no
  * subclassing. Listeners react (log, meter, warm caches); they cannot alter
  * results — for that, wrap the seam with a transforming decorator instead.
  */

@@ -8,7 +8,7 @@
  * (serializing) backend would give for free.
  */
 
-import type { Message } from "./types";
+import type { Message } from "../types";
 import type { Memory } from "./memory.types";
 
 export class InMemoryStore implements Memory {
@@ -30,13 +30,12 @@ export class InMemoryStore implements Memory {
   }
 }
 
-/** Shallow-deep clone good enough for plain message objects. */
+/**
+ * Deep clone a message so stored history can't be mutated through a returned
+ * reference — including nested values inside a tool call's `arguments`. Message
+ * data is plain JSON (model-emitted), so structuredClone handles it fully; this
+ * is the structured-clone algorithm a serializing backend would apply for free.
+ */
 function cloneMessage(message: Message): Message {
-  return {
-    ...message,
-    toolCalls: message.toolCalls?.map((call) => ({
-      ...call,
-      arguments: { ...call.arguments },
-    })),
-  };
+  return structuredClone(message);
 }
