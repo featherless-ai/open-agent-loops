@@ -1,8 +1,11 @@
 /**
- * Capability seams for the built-in tools. These follow the same rule as
- * `ModelClient` and `Memory`: the SDK owns the *contract* (the tool's name, Zod
- * schema, and how its result folds back into the loop), and leaves a hole the
- * consumer MUST implement. "You can call it, you must implement it."
+ * Capability seams for the built-in tools.
+ *
+ * @remarks
+ * These follow the same rule as `ModelClient` and `Memory`: the SDK owns the
+ * *contract* (the tool's name, Zod schema, and how its result folds back into
+ * the loop), and leaves a hole the consumer MUST implement. "You can call it,
+ * you must implement it."
  *
  * Why a seam and not a shipped implementation? A real `exec` or file search
  * binds to a host (a process runtime, a filesystem, an OS) and is the most
@@ -11,11 +14,17 @@
  * forcing the consumer to provide it is the correct boundary, not a limitation.
  * Test doubles live in `../../mocks` (`MockShellBackend`, `MockSearchBackend`),
  * the same way `MockModelClient` stands in for a real model in tests.
+ *
+ * @module
  */
 
 import type { ToolContext } from "../tools.types";
 
-/** The outcome of running one shell command. */
+/**
+ * The outcome of running one shell command.
+ *
+ * @group Built-in Tools
+ */
 export interface ShellResult {
   /** Standard output captured from the command. */
   stdout: string;
@@ -26,20 +35,38 @@ export interface ShellResult {
 }
 
 /**
- * The shell capability seam — implement this against your host (e.g. Node's
- * `child_process`, a container, a remote sandbox). The `ctx.signal` is forwarded
- * from the loop so a cooperating backend can abort an in-flight command.
+ * The shell capability seam — implement this against your host.
+ *
+ * @remarks
+ * Wire it to e.g. Node's `child_process`, a container, or a remote sandbox. The
+ * `ctx.signal` is forwarded from the loop so a cooperating backend can abort an
+ * in-flight command.
  *
  * SECURITY: this runs arbitrary commands on whatever host you wire up. There is
  * no sandbox here — that is the backend's responsibility. Route the resulting
  * tool through the permission gate (`../../permissions`) before granting it to a
  * model you do not fully trust.
+ *
+ * @see {@link ShellResult}
+ * @see {@link shellTool} which wraps this seam in a model-facing tool.
+ * @group Built-in Tools
  */
 export interface ShellBackend {
+  /**
+   * Execute a shell command and capture its output.
+   *
+   * @param command - The shell command to run.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the command.
+   * @returns The command's stdout, stderr, and exit code.
+   */
   exec(command: string, ctx: ToolContext): Promise<ShellResult>;
 }
 
-/** A single content match from a regex search. */
+/**
+ * A single content match from a regex search.
+ *
+ * @group Built-in Tools
+ */
 export interface SearchMatch {
   /** Path of the file the match was found in. */
   path: string;
@@ -49,7 +76,11 @@ export interface SearchMatch {
   text: string;
 }
 
-/** A regex search request handed to the backend. */
+/**
+ * A regex search request handed to the backend.
+ *
+ * @group Built-in Tools
+ */
 export interface SearchQuery {
   /** A regular expression matched against file contents. */
   pattern: string;
@@ -62,11 +93,26 @@ export interface SearchQuery {
 }
 
 /**
- * The regex-search capability seam — implement this against your host (e.g.
- * ripgrep, a filesystem walk, an index). Read-only by nature, so it is far less
- * dangerous than {@link ShellBackend}, but it still touches a filesystem the
- * core knows nothing about, hence a seam rather than a shipped implementation.
+ * The regex-search capability seam — implement this against your host.
+ *
+ * @remarks
+ * Wire it to e.g. ripgrep, a filesystem walk, or an index. Read-only by nature,
+ * so it is far less dangerous than {@link ShellBackend}, but it still touches a
+ * filesystem the core knows nothing about, hence a seam rather than a shipped
+ * implementation.
+ *
+ * @see {@link SearchQuery}
+ * @see {@link SearchMatch}
+ * @see {@link searchTool} which wraps this seam in a model-facing tool.
+ * @group Built-in Tools
  */
 export interface SearchBackend {
+  /**
+   * Run a regex search and return the matching lines.
+   *
+   * @param query - The search request (pattern, optional path, flags).
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the search.
+   * @returns The matching lines found.
+   */
   search(query: SearchQuery, ctx: ToolContext): Promise<SearchMatch[]>;
 }

@@ -8,7 +8,7 @@ package is to make the **core things plug-and-play and independently testable**.
 
 | Seam          | Interface      | v1 implementation        | Swap in later                   |
 | ------------- | -------------- | ------------------------ | ------------------------------- |
-| LLM boundary  | `ModelClient`  | `FakeModelClient`        | OpenAI-compatible / Anthropic   |
+| LLM boundary  | `ModelClient`  | `MockModelClient`        | OpenAI-compatible / Anthropic   |
 | Memory        | `Memory`       | `SessionMemoryStore`     | JSONL file / Redis / vector     |
 | Capabilities  | `Tool`         | `defineTool(...)`        | any tool you write              |
 | Stopping      | `StopCondition`| `maxSteps`, `whenToolCalled` | custom predicates          |
@@ -33,8 +33,8 @@ load history → append prompt → ┌─ stream assistant turn
 
 ```ts
 import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
-// FakeModelClient is a test double, not part of the public surface:
-import { FakeModelClient } from "~/agent-core/mocks/fake-model";
+// MockModelClient is a test double, not part of the public surface:
+import { MockModelClient } from "~/agent-core/mocks/mock-model";
 import { z } from "zod";
 
 const weather = defineTool({
@@ -45,7 +45,7 @@ const weather = defineTool({
 });
 
 // In production, pass your own ModelClient instead of this test double.
-const model = new FakeModelClient([
+const model = new MockModelClient([
   { toolCalls: [{ name: "weather", arguments: { city: "Paris" } }] },
   { text: "It's sunny in Paris." },
 ]);
@@ -77,19 +77,26 @@ choices are persisted) and an `ApprovalPrompter` (how you ask the user when the
 policy is "ask").
 
 ```ts
-import { runAgent, permissionGate, InMemoryPermissionStore } from "~/agent-core";
+import {
+  runAgent,
+  permissionGate,
+  InMemoryPermissionStore,
+  PermissionPolicy,
+  ApprovalChoice,
+} from "~/agent-core";
 import type { ApprovalPrompter } from "~/agent-core";
 
-// Config: read tool policies from anywhere. "ask" means prompt the user.
+// Config: read tool policies from anywhere. Ask means prompt the user.
 const store = new InMemoryPermissionStore({
-  fallback: "ask",
-  rules: { read_file: "allow", deploy: "deny" },
+  fallback: PermissionPolicy.Ask,
+  rules: { read_file: PermissionPolicy.Allow, deploy: PermissionPolicy.Deny },
 });
 
 // CLI prompter: present the pending calls and return a choice each.
 const prompter: ApprovalPrompter = {
   async ask(batch) {
-    return batch.map(() => "allow_once"); // allow_once | allow_always | deny_once | deny_always
+    // ApprovalChoice: AllowOnce | AllowAlways | DenyOnce | DenyAlways
+    return batch.map(() => ApprovalChoice.AllowOnce);
   },
 };
 
@@ -128,5 +135,5 @@ bun test agent-core      # or: bun run test
 ```
 
 Every suite covers a base case plus edge cases. The loop, memory, tools, and
-stop conditions are all verified with the streaming `FakeModelClient` — zero
+stop conditions are all verified with the streaming `MockModelClient` — zero
 network, fully deterministic.

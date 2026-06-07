@@ -12,7 +12,7 @@ hand-written TypeScript.
 
 | Seam           | Interface       | v1 implementation             | Swap in later                 |
 | -------------- | --------------- | ----------------------------- | ----------------------------- |
-| LLM boundary   | `ModelClient`   | `FakeModelClient`             | OpenAI-compatible / Anthropic |
+| LLM boundary   | `ModelClient`   | `MockModelClient`             | OpenAI-compatible / Anthropic |
 | Memory         | `Memory`        | `SessionMemoryStore`          | JSONL file / Redis / vector   |
 | Capabilities   | `Tool`          | `defineTool(...)`             | any tool you write            |
 | Stopping       | `StopCondition` | `maxSteps`, `whenToolCalled`  | custom predicates             |
@@ -32,8 +32,8 @@ load history → append prompt → ┌─ stream assistant turn
 
 ```ts
 import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
-// FakeModelClient is a test double, not part of the public surface:
-import { FakeModelClient } from "~/agent-core/mocks/fake-model";
+// MockModelClient is a test double, not part of the public surface:
+import { MockModelClient } from "~/agent-core/mocks/mock-model";
 import { z } from "zod";
 
 const weather = defineTool({
@@ -44,7 +44,7 @@ const weather = defineTool({
 });
 
 // In production, pass your own ModelClient instead of this test double.
-const model = new FakeModelClient([
+const model = new MockModelClient([
   { toolCalls: [{ name: "weather", arguments: { city: "Paris" } }] },
   { text: "It's sunny in Paris." },
 ]);
@@ -87,5 +87,5 @@ bun run typecheck
 ```
 
 The loop, memory, tools, and stop conditions are all verified against the
-streaming `FakeModelClient` — see [`agent-core/`](./agent-core) and its
+streaming `MockModelClient` — see [`agent-core/`](./agent-core) and its
 [README](./agent-core/README.md) / [architecture docs](./agent-core/docs/architecture.md).

@@ -1,19 +1,52 @@
 /**
- * `permissionGate` — turns a PermissionStore + ApprovalPrompter into a
- * `gateToolCalls` hook (pass the result as `hooks.gateToolCalls`). Per call:
- * consult the store; "allow"/"deny" decide silently; "ask" prompts the user, and
- * "always" choices are persisted back to the store so the next run — even a
- * fresh process reading a JSON-file store — won't ask again.
+ * `permissionGate` — turns a {@link PermissionStore} + {@link ApprovalPrompter}
+ * into a `gateToolCalls` hook (pass the result as `hooks.gateToolCalls`).
+ *
+ * @remarks
+ * Per call: consult the store; "allow"/"deny" decide silently; "ask" prompts the
+ * user, and "always" choices are persisted back to the store so the next run —
+ * even a fresh process reading a JSON-file store — won't ask again.
  *
  * Composition over inheritance: a function over two interfaces, not a base
  * class. The whole "ask" subset is sent to the prompter in one round-trip, so a
  * CLI can present every pending approval at once.
+ *
+ * @module
  */
 
 import type { GateDecision, ToolGateRequest } from "../primitives/loop";
 import type { ApprovalPrompter, PermissionStore } from "./permissions.types";
 import { ApprovalChoice, PermissionPolicy } from "./permissions.types";
 
+/**
+ * Build a `gateToolCalls` hook from a permission store and an approval prompter.
+ *
+ * @remarks
+ * The returned function evaluates a batch of pending calls: {@link
+ * PermissionPolicy.Allow} and {@link PermissionPolicy.Deny} resolve silently,
+ * while {@link PermissionPolicy.Ask} calls are collected and sent to the
+ * prompter in a single round-trip. "Always" choices
+ * ({@link ApprovalChoice.AllowAlways} / {@link ApprovalChoice.DenyAlways}) are
+ * persisted back to the store via {@link PermissionStore.set}. A missing choice
+ * defaults to {@link ApprovalChoice.DenyOnce} (fail closed).
+ *
+ * @param store - The {@link PermissionStore} consulted for each call's policy.
+ * @param prompter - The {@link ApprovalPrompter} asked about "ask" calls.
+ * @returns A function suitable for `hooks.gateToolCalls`: maps a batch of
+ *   {@link ToolGateRequest}s to index-aligned {@link GateDecision}s.
+ *
+ * @example
+ * ```ts
+ * const store = new InMemoryPermissionStore({ fallback: PermissionPolicy.Ask });
+ * const gate = permissionGate(store, cliPrompter);
+ * const decisions = await runLoop(messages, model, tools, {
+ *   hooks: { gateToolCalls: gate },
+ * });
+ * ```
+ *
+ * @see {@link PermissionStore} and {@link ApprovalPrompter} for the two seams.
+ * @group Permissions
+ */
 export function permissionGate(
   store: PermissionStore,
   prompter: ApprovalPrompter,

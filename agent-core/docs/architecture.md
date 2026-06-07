@@ -40,7 +40,7 @@ flowchart TB
         end
 
         subgraph BUILTIN["Built-in implementations — v1"]
-            FAKE["FakeModelClient (streaming, scriptable)"]
+            FAKE["MockModelClient (streaming, scriptable)"]
             INMEM["SessionMemoryStore"]
         end
     end
@@ -69,7 +69,7 @@ flowchart TB
 ```
 
 **Reading it:** the core engine only ever calls the **interfaces** in the seams
-layer. v1 ships `FakeModelClient` + `SessionMemoryStore`; future providers/stores are
+layer. v1 ships `MockModelClient` + `SessionMemoryStore`; future providers/stores are
 just new implementations of the same seams — the core never changes.
 
 ## Composition over inheritance
@@ -106,7 +106,7 @@ flowchart LR
   the Zod schema into `execute`'s args, the same role as `defineConfig`.)
 - **Wrap** — decorators like `withModelObserver` / `withMemoryNamespace` add
   behavior by *enclosing* an existing seam and forwarding to it. Want logging +
-  namespacing? Wrap twice. (Classes such as `FakeModelClient` implement an
+  namespacing? Wrap twice. (Classes such as `MockModelClient` implement an
   interface — `..|>` — but extend nothing.)
 - **Combine** — stop conditions compose with `any` / `all` / `not`.
 - **Inject** — everything meets at `RunAgentOptions`, the single composition
@@ -161,7 +161,7 @@ classDiagram
         +afterToolCall(info) Override
     }
 
-    class FakeModelClient {
+    class MockModelClient {
         +List~ModelRequest~ requests
         +stream(req) ModelStream
     }
@@ -188,7 +188,7 @@ classDiagram
         +number steps
     }
 
-    FakeModelClient ..|> ModelClient
+    MockModelClient ..|> ModelClient
     SessionMemoryStore ..|> Memory
     runAgent ..> ModelClient : streams
     runAgent ..> Memory : load / append

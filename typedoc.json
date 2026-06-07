@@ -6,6 +6,25 @@
   "name": "agent-core",
   "includeVersion": true,
   "excludeInternal": true,
-  "categorizeByGroup": true,
-  "sort": ["source-order"]
+  "groupOrder": [
+    "Core",
+    "Messages & Events",
+    "Model",
+    "Tools",
+    "Memory",
+    "Stop Conditions",
+    "Permissions",
+    "Credentials",
+    "Composition",
+    "Workflow",
+    "Testing",
+    "*"
+  ],
+  "sort": ["source-order"],
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "rewrittenLink": true,
+    "notDocumented": true
+  }
 }

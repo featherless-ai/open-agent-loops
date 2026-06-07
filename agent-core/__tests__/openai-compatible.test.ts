@@ -104,6 +104,48 @@ describe("OpenAICompatibleModel", () => {
     expect((events.at(-1) as any).message.content).toBe("hi");
   });
 
+  // Edge: chatTemplateKwargs is forwarded in the request body when set.
+  test("edge: forwards chat_template_kwargs when configured", async () => {
+    let sent: any;
+    const fakeClient = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            sent = params;
+            return stream(chunk({ content: "hi" }));
+          },
+        },
+      },
+    } as unknown as OpenAI;
+
+    const model = new OpenAICompatibleModel({
+      model: "m",
+      client: fakeClient,
+      chatTemplateKwargs: { enable_thinking: true, clear_thinking: false },
+    });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect(sent.chat_template_kwargs).toEqual({ enable_thinking: true, clear_thinking: false });
+  });
+
+  // Edge: without the option, no chat_template_kwargs leaks into the request.
+  test("edge: omits chat_template_kwargs when not configured", async () => {
+    let sent: any;
+    const fakeClient = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            sent = params;
+            return stream(chunk({ content: "hi" }));
+          },
+        },
+      },
+    } as unknown as OpenAI;
+
+    const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect("chat_template_kwargs" in sent).toBe(false);
+  });
+
   // Edge: a create() failure surfaces as an error event, not a throw.
   test("edge: a create failure becomes an error event", async () => {
     const fakeClient = {

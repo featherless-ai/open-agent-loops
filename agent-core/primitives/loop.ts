@@ -1,7 +1,8 @@
 /**
  * The agentic loop — the fundamental thing. Everything it touches is an
- * interface (ModelClient, Memory, Tool, StopCondition), so the loop itself is
- * provider-, storage-, and tool-agnostic.
+ * interface ({@link ModelClient}, {@link Memory}, {@link Tool},
+ * {@link StopCondition}), so the loop itself is provider-, storage-, and
+ * tool-agnostic.
  *
  * One run:
  *   load history -> append prompt -> [ stream assistant -> run tools ]* -> done
@@ -9,6 +10,10 @@
  * It stops when the model returns a turn with no tool calls (a final answer),
  * when a tool sets `terminate`, when a `stopWhen` condition fires, or when the
  * `maxSteps` safety cap is hit (prevents runaway loops).
+ *
+ * @see {@link runAgent}
+ *
+ * @module
  */
 
 import type { AgentEventBody, EventSink, Message, ToolArguments, ToolCall } from "../types";
@@ -29,89 +34,188 @@ import type { StopCondition } from "../stop/conditions.types";
 /**
  * Internal emit function: call sites build an event body, and this stamps the
  * timestamp before handing the finished {@link AgentEvent} to the public sink.
+ *
+ * @internal
  */
 type Emit = (event: AgentEventBody) => Promise<void>;
 
-/** One tool call presented to the gate, with its validated arguments. */
+/**
+ * One tool call presented to the gate, with its validated arguments.
+ *
+ * @group Core
+ * @see {@link Hooks.gateToolCalls}
+ */
 export interface ToolGateRequest {
+  /** The model's tool call, in its raw wire shape. */
   toolCall: ToolCall;
+  /** The call's arguments, already JSON-parsed and schema-validated. */
   args: ToolArguments;
 }
 
-/** The gate's verdict for one call: run it, or block it with a reason. */
+/**
+ * The gate's verdict for one call: run it, or block it with a reason.
+ *
+ * @group Core
+ * @see {@link Hooks.gateToolCalls}
+ */
 export interface GateDecision {
+  /** Run the call when `true`; block it when `false`. */
   allow: boolean;
   /** Shown to the model as the error tool-result when `allow` is false. */
   reason?: string;
 }
 
-/** Lifecycle hooks for guardrails and context shaping. */
+/**
+ * What a {@link Hooks.beforeToolCall} hook returns to admit or block a call.
+ *
+ * @remarks
+ * Returning nothing (or `block` falsy) lets the call proceed.
+ *
+ * @see {@link Hooks.beforeToolCall}
+ * @group Core
+ */
+export interface ToolCallDecision {
+  /** When true, block the call instead of executing it. */
+  block?: boolean;
+  /** Optional human-readable reason, surfaced as the blocked call's result. */
+  reason?: string;
+}
+
+/**
+ * What a {@link Hooks.afterToolCall} hook returns to override a result.
+ *
+ * @remarks
+ * Returning nothing keeps the original result and error flag unchanged.
+ *
+ * @see {@link Hooks.afterToolCall}
+ * @group Core
+ */
+export interface ToolResultOverride {
+  /** Replacement tool result; omit to keep the original. */
+  result?: ToolResult;
+  /** Replacement error flag; omit to keep the original. */
+  isError?: boolean;
+}
+
+/**
+ * Lifecycle hooks for guardrails and context shaping.
+ *
+ * @remarks
+ * Every hook is optional and may be sync or async. They run at fixed points in
+ * a turn: {@link Hooks.transformContext | transformContext} just before the
+ * model call, {@link Hooks.gateToolCalls | gateToolCalls} once per turn ahead of
+ * execution, then {@link Hooks.beforeToolCall | beforeToolCall} /
+ * {@link Hooks.afterToolCall | afterToolCall} around each individual call.
+ *
+ * @group Core
+ */
 export interface Hooks {
   /**
-   * Reshape history right before it's sent to the model. This is the seam for
-   * long-horizon context management — compaction (summarize, then restart from
-   * the summary), structured note-taking, and tool-result clearing — that keeps
-   * a long-running agent inside its context window.
+   * Reshape history right before it's sent to the model.
+   *
+   * @remarks
+   * This is the seam for long-horizon context management — compaction
+   * (summarize, then restart from the summary), structured note-taking, and
+   * tool-result clearing — that keeps a long-running agent inside its context
+   * window.
+   *
    * Sources of truth:
-   *   - Anthropic, effective context engineering for AI agents:
-   *     https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
-   *   - Anthropic, effective harnesses for long-running agents:
-   *     https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+   * - Anthropic, effective context engineering for AI agents:
+   *   https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+   * - Anthropic, effective harnesses for long-running agents:
+   *   https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+   *
+   * @param messages - The current working history about to be sent.
+   * @returns The (possibly reshaped) messages to send to the model.
    */
   transformContext?(messages: Message[]): Message[] | Promise<Message[]>;
   /**
-   * Admit or block tool calls *as a batch*, before any of them execute. The
-   * whole turn's calls arrive together, so this runs once per turn — serially,
-   * ahead of the parallel execution phase — which makes it the right place to
-   * prompt for permission without racing concurrent prompts. Return one decision
-   * per request, index-aligned. Only well-formed calls (known tool + valid args)
-   * are presented; unknown/invalid calls skip the gate and surface as the usual
-   * error results. See `../permissions` for an allow/deny/ask implementation.
+   * Admit or block tool calls *as a batch*, before any of them execute.
+   *
+   * @remarks
+   * The whole turn's calls arrive together, so this runs once per turn —
+   * serially, ahead of the parallel execution phase — which makes it the right
+   * place to prompt for permission without racing concurrent prompts. Only
+   * well-formed calls (known tool + valid args) are presented; unknown/invalid
+   * calls skip the gate and surface as the usual error results. See
+   * `../permissions` for an allow/deny/ask implementation.
+   *
+   * @param batch - The turn's well-formed tool calls with parsed arguments.
+   * @returns One {@link GateDecision} per request, index-aligned with `batch`.
+   * @see {@link GateDecision}
+   * @see {@link ToolGateRequest}
    */
   gateToolCalls?(batch: ToolGateRequest[]): GateDecision[] | Promise<GateDecision[]>;
-  /** Inspect/block a tool call before it executes. */
+  /**
+   * Inspect/block a tool call before it executes.
+   *
+   * @param info - The call and its validated `args`.
+   * @returns Nothing to proceed, or a {@link ToolCallDecision} to block it.
+   */
   beforeToolCall?(info: {
     toolCall: ToolCall;
     args: ToolArguments;
-  }): void | { block?: boolean; reason?: string } | Promise<void | { block?: boolean; reason?: string }>;
-  /** Inspect/override a tool result after it executes. */
+  }): void | ToolCallDecision | Promise<void | ToolCallDecision>;
+  /**
+   * Inspect/override a tool result after it executes.
+   *
+   * @param info - The call, its `args`, the produced `result`, and `isError`.
+   * @returns Nothing to keep the result, or a {@link ToolResultOverride}.
+   */
   afterToolCall?(info: {
     toolCall: ToolCall;
     args: ToolArguments;
     result: ToolResult;
     isError: boolean;
-  }):
-    | void
-    | { result?: ToolResult; isError?: boolean }
-    | Promise<void | { result?: ToolResult; isError?: boolean }>;
+  }): void | ToolResultOverride | Promise<void | ToolResultOverride>;
 }
 
+/**
+ * Inputs for a single {@link runAgent} run.
+ *
+ * @group Core
+ */
 export interface RunAgentOptions {
+  /** The LLM boundary the loop streams turns from. */
   model: ModelClient;
+  /** The history store the run loads from and appends to. */
   memory: Memory;
+  /** Session key used to load/append this conversation's history. */
   sessionId: string;
   /** New input for this run: a string, a single message, or several. */
   prompt: string | Message | Message[];
+  /** Optional system prompt prepended to the request. */
   system?: string;
+  /** Tools the model may call this run. */
   tools?: Tool[];
   /** Hard safety cap on model turns. Default 10. */
   maxSteps?: number;
   /** Optional early-stop predicate, evaluated after each turn's tools run. */
   stopWhen?: StopCondition;
+  /** Lifecycle hooks for guardrails and context shaping. */
   hooks?: Hooks;
   /** Force sequential tool execution regardless of per-tool mode. */
   toolExecution?: ExecutionMode;
+  /** Sink for observability/streaming events emitted during the run. */
   onEvent?: EventSink;
   /**
-   * Cancel the run. Aborting rejects `runAgent` with the signal's reason (an
-   * AbortError), checked before each turn and right after each model stream.
-   * The signal is also forwarded to the model request and every tool's
-   * `execute` context, so a cooperating client/tool can abort in-flight work;
-   * the loop's own checks guarantee it stops even if they don't.
+   * Cancel the run.
+   *
+   * @remarks
+   * Aborting rejects {@link runAgent} with the signal's reason (an AbortError),
+   * checked before each turn and right after each model stream. The signal is
+   * also forwarded to the model request and every tool's `execute` context, so
+   * a cooperating client/tool can abort in-flight work; the loop's own checks
+   * guarantee it stops even if they don't.
    */
   signal?: AbortSignal;
 }
 
+/**
+ * The outcome of a {@link runAgent} run.
+ *
+ * @group Core
+ */
 export interface RunResult {
   /** Full conversation after the run (loaded history + everything added). */
   messages: Message[];
@@ -121,6 +225,39 @@ export interface RunResult {
   steps: number;
 }
 
+/**
+ * Run the agentic loop for one session until it reaches a stopping point.
+ *
+ * @remarks
+ * One run: load history, append the prompt, then repeat `[ stream assistant ->
+ * run tools ]` until a stopping point. It stops when the model returns a turn
+ * with no tool calls (a final answer), when a tool sets `terminate`, when a
+ * {@link RunAgentOptions.stopWhen | stopWhen} condition fires, or when the
+ * {@link RunAgentOptions.maxSteps | maxSteps} safety cap is hit (prevents
+ * runaway loops).
+ *
+ * Everything it touches is an interface ({@link ModelClient}, {@link Memory},
+ * {@link Tool}, {@link StopCondition}), so the loop itself is provider-,
+ * storage-, and tool-agnostic.
+ *
+ * @param options - The model, memory, prompt, and run configuration.
+ * @returns The full and newly-added messages plus the number of turns taken.
+ * @throws The {@link RunAgentOptions.signal | signal}'s reason (an AbortError)
+ *   if the run is cancelled.
+ * @example
+ * ```ts
+ * const result = await runAgent({
+ *   model: new OpenAICompatibleModel({ model: "deepseek-ai/DeepSeek-V3.1" }),
+ *   memory: new SessionMemoryStore(),
+ *   sessionId: "demo",
+ *   prompt: "What is 2 + 2?",
+ * });
+ * console.log(result.messages.at(-1)?.content); // -> "4"
+ * ```
+ * @see {@link RunAgentOptions}
+ * @see {@link RunResult}
+ * @group Core
+ */
 export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const {
     model,
@@ -248,10 +385,17 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 
 /**
  * Prepare working history for sending: drop `reasoning` from assistant turns
- * that did NOT call tools. Reasoning is resent only on tool-call turns —
- * thinking-mode models (e.g. DeepSeek V4) require it there for tool-call
- * continuity and reject the request otherwise, while on plain turns the model
- * ignores it. Returns a fresh array; inputs are never mutated.
+ * that did NOT call tools.
+ *
+ * @remarks
+ * Reasoning is resent only on tool-call turns — thinking-mode models (e.g.
+ * DeepSeek V4) require it there for tool-call continuity and reject the request
+ * otherwise, while on plain turns the model ignores it.
+ *
+ * @param messages - The working history to prepare. Never mutated.
+ * @returns A fresh array with reasoning stripped from non-tool-call turns.
+ * @see {@link Message.reasoning}
+ * @group Core
  */
 export function prepareRequestMessages(messages: Message[]): Message[] {
   return messages.map((message) => {
@@ -264,7 +408,11 @@ export function prepareRequestMessages(messages: Message[]): Message[] {
   });
 }
 
-/** Consume a model stream into one assistant message, emitting deltas. */
+/**
+ * Consume a model stream into one assistant message, emitting deltas.
+ *
+ * @internal
+ */
 async function streamAssistant(
   model: ModelClient,
   request: ModelRequest,
@@ -316,6 +464,8 @@ async function streamAssistant(
  * — unknown or malformed calls are auto-allowed here so they flow on to produce
  * their normal error results in execution, rather than prompting about a call
  * that can't run. With no gate hook, everything is allowed.
+ *
+ * @internal
  */
 async function gateToolBatch(
   toolCalls: ToolCall[],
@@ -343,7 +493,11 @@ async function gateToolBatch(
   return decisions;
 }
 
-/** Emit start/end events and build the error tool-result for a blocked call. */
+/**
+ * Emit start/end events and build the error tool-result for a blocked call.
+ *
+ * @internal
+ */
 async function emitDenied(
   call: ToolCall,
   reason: string | undefined,
@@ -363,13 +517,18 @@ async function emitDenied(
   };
 }
 
+/** @internal */
 interface ToolBatchOutcome {
   results: Message[];
   /** True when every tool in the batch asked to terminate the run. */
   terminate: boolean;
 }
 
-/** Run a batch of tool calls, parallel by default, sequential when required. */
+/**
+ * Run a batch of tool calls, parallel by default, sequential when required.
+ *
+ * @internal
+ */
 async function executeToolCalls(
   toolCalls: ToolCall[],
   toolsByName: Map<string, Tool>,
@@ -402,12 +561,17 @@ async function executeToolCalls(
   };
 }
 
+/** @internal */
 interface FinalizedCall {
   message: Message;
   terminate: boolean;
 }
 
-/** Validate -> beforeToolCall -> execute -> afterToolCall, never throwing. */
+/**
+ * Validate -> beforeToolCall -> execute -> afterToolCall, never throwing.
+ *
+ * @internal
+ */
 async function executeOne(
   call: ToolCall,
   toolsByName: Map<string, Tool>,
@@ -477,7 +641,11 @@ async function executeOne(
   return { message, terminate: result.terminate === true && !isError };
 }
 
-/** Accept a string / single message / array and normalize to Message[]. */
+/**
+ * Accept a string / single message / array and normalize to Message[].
+ *
+ * @internal
+ */
 function normalizePrompt(prompt: string | Message | Message[]): Message[] {
   if (typeof prompt === "string") {
     return [{ role: Role.User, content: prompt, timestamp: Date.now() }];

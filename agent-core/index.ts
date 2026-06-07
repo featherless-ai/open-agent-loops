@@ -1,18 +1,42 @@
 /**
- * Public surface of the lightweight agent core. Import from here:
+ * Public surface of the lightweight agent core — the single entry point you
+ * import from.
  *
- *   import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
- *
+ * @remarks
  * Composition over inheritance: every piece sits behind an interface that you
  * satisfy with a plain object/function, then optionally wrap with a decorator
- * (with*) — never subclassed.
- *   ModelClient  - the LLM boundary (implement `{ stream }`)
- *   Memory       - conversation storage (use SessionMemoryStore, or `{ load, ... }`)
- *   Tool         - a callable capability (defineTool: infers Zod arg types)
- *   StopCondition- when to end a run (compose with any / all / not)
+ * (the `with*` helpers) — never subclassed. The four interfaces you implement or
+ * supply:
  *
- * The streaming test double lives in `./mocks/mock-model` (MockModelClient);
- * it's a testing utility, imported directly by tests, not part of this surface.
+ * - {@link ModelClient} — the LLM boundary (implement `{ stream }`).
+ * - {@link Memory} — conversation storage (use {@link SessionMemoryStore}, or
+ *   your own `{ load, ... }`).
+ * - {@link Tool} — a callable capability (author with {@link defineTool}, which
+ *   infers argument types from the Zod schema).
+ * - {@link StopCondition} — when to end a run (compose with {@link any} /
+ *   {@link all} / {@link not}).
+ *
+ * The streaming test double (`MockModelClient`) lives in `./mocks/mock-model`;
+ * it is a testing utility imported directly by tests, not part of this published
+ * surface.
+ *
+ * @example Minimal run
+ * ```ts
+ * import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
+ *
+ * const result = await runAgent({
+ *   model,                       // your ModelClient
+ *   memory: new SessionMemoryStore(),
+ *   sessionId: "demo",
+ *   tools: [searchTool(backend)],
+ *   prompt: "Find the TODOs in this repo.",
+ * });
+ * console.log(result.newMessages); // messages produced by this run
+ * ```
+ *
+ * @see {@link runAgent} — the loop entry point.
+ * @see {@link ToolRegistry} — build a tool catalog and resolve subsets by name.
+ * @packageDocumentation
  */
 
 export type {
@@ -20,6 +44,7 @@ export type {
   AgentEventBody,
   EventSink,
   Message,
+  ToolArguments,
   ToolCall,
 } from "./types";
 
@@ -51,6 +76,8 @@ export {
 export type { Tool, ToolContext, ToolResult } from "./tools/tools.types";
 export { ExecutionMode } from "./tools/tools.types";
 
+export { ToolRegistry } from "./tools/registry";
+
 // Built-in tools: SDK-owned wiring over capability seams the consumer MUST
 // implement (no host-binding backend is shipped — that is the consumer's, and
 // the correct security boundary). Mocks live in `./mocks`, imported by tests.
@@ -75,12 +102,22 @@ export type {
   Hooks,
   RunAgentOptions,
   RunResult,
+  ToolCallDecision,
   ToolGateRequest,
+  ToolResultOverride,
 } from "./primitives/loop";
+
+export { withCredentials } from "./credentials/with-credentials";
+export { InMemoryCredentialStore } from "./credentials/in-memory-credential-store";
+export type { InMemoryCredentialStoreOptions } from "./credentials/in-memory-credential-store";
+export type { CredentialStore } from "./credentials/credentials.types";
 
 export { permissionGate } from "./permissions/permission-gate";
 export { InMemoryPermissionStore } from "./permissions/in-memory-permission-store";
-export type { InMemoryPermissionStoreOptions } from "./permissions/in-memory-permission-store";
+export type {
+  InMemoryPermissionStoreOptions,
+  SettablePolicy,
+} from "./permissions/in-memory-permission-store";
 export type {
   ApprovalPrompter,
   ApprovalRequest,

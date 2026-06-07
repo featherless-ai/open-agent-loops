@@ -15,9 +15,19 @@
  * assistant turn back we attach `reasoning_content` if present, which DeepSeek
  * thinking mode requires on tool-call turns.
  *
+ * Reasoning field-name asymmetry (verified against Featherless / GLM-5.1):
+ * models emit reasoning on the `reasoning` field but only ACCEPT it back on the
+ * `reasoning_content` field — and only when the chat template is told not to
+ * strip prior thinking. For those models pass
+ * `chatTemplateKwargs: { enable_thinking: true, clear_thinking: false }`; with
+ * the default (or `clear_thinking: true`) the server drops inbound reasoning
+ * before the model sees it, so prior-turn thinking silently fails to round-trip.
+ *
  * Debugging: pass `onRawSSE` to tap every raw line the server streams, before
  * the SDK parses it. See `sseTapFetch` below — it tees the response body, so
  * the tap never steals bytes from the SDK.
+ *
+ * @module
  */
 
 import OpenAI from "openai";
@@ -31,9 +41,18 @@ type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 type ChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
-/** Minimal fetch shape the SDK accepts — narrower than the DOM `typeof fetch`. */
+/**
+ * Minimal fetch shape the SDK accepts — narrower than the DOM `typeof fetch`.
+ *
+ * @internal
+ */
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+/**
+ * Construction options for {@link OpenAICompatibleModel}.
+ *
+ * @group Model
+ */
 export interface OpenAICompatibleOptions {
   /** Model id to call, e.g. "deepseek-ai/DeepSeek-V3.1". */
   model: string;
@@ -55,16 +74,57 @@ export interface OpenAICompatibleOptions {
   onRawSSE?: (line: string) => void;
   /** Extra create params merged into every request (temperature, top_p, ...). */
   params?: Partial<Omit<ChatParams, "model" | "messages" | "tools" | "stream">>;
+  /**
+   * Non-standard `chat_template_kwargs` forwarded in the request body — vLLM /
+   * Featherless render these into the chat template. Use to control thinking
+   * mode on templated reasoning models, e.g.
+   * `{ enable_thinking: true, clear_thinking: false }` so prior-turn reasoning
+   * (resent as `reasoning_content`) actually round-trips. Leave unset for
+   * endpoints that reject unknown body fields (OpenAI proper, Groq).
+   */
+  chatTemplateKwargs?: Record<string, unknown>;
 }
 
+/**
+ * A {@link ModelClient} backed by the official `openai` SDK, pointed at any
+ * OpenAI-compatible endpoint.
+ *
+ * @remarks
+ * Works against Featherless, vLLM, Together, Groq, Fireworks, DeepSeek, and
+ * similar endpoints via {@link OpenAICompatibleOptions.baseURL | baseURL}. The
+ * `openai` package is an OPTIONAL peer dependency — the core loop never imports
+ * this file, so consumers who bring their own {@link ModelClient} never pull the
+ * SDK in.
+ *
+ * @example
+ * ```ts
+ * const model = new OpenAICompatibleModel({
+ *   model: "deepseek-ai/DeepSeek-V3.1",
+ *   baseURL: "https://api.featherless.ai/v1",
+ *   apiKey: process.env.FEATHERLESS_API_KEY,
+ * });
+ * for await (const event of model.stream({ messages: [{ role: Role.User, content: "hi" }] })) {
+ *   if (event.type === StreamEventType.TextDelta) process.stdout.write(event.text);
+ * }
+ * ```
+ * @see {@link OpenAICompatibleOptions}
+ * @group Model
+ */
 export class OpenAICompatibleModel implements ModelClient {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly extra: OpenAICompatibleOptions["params"];
+  private readonly chatTemplateKwargs: OpenAICompatibleOptions["chatTemplateKwargs"];
 
+  /**
+   * Create a model client for an OpenAI-compatible endpoint.
+   *
+   * @param options - Model id, endpoint, credentials, and request extras.
+   */
   constructor(options: OpenAICompatibleOptions) {
     this.model = options.model;
     this.extra = options.params;
+    this.chatTemplateKwargs = options.chatTemplateKwargs;
     this.client =
       options.client ??
       new OpenAI({
@@ -74,12 +134,25 @@ export class OpenAICompatibleModel implements ModelClient {
       });
   }
 
+  /**
+   * Begin a streaming completion against the configured endpoint.
+   *
+   * @param request - The system prompt, history, and tools for this turn.
+   * @returns An async iterable of {@link StreamEvent}s for the assistant turn.
+   */
   stream(request: ModelRequest): ModelStream {
     return this.run(request);
   }
 
+  /**
+   * Build the chat params, open the SDK stream, and translate it to events.
+   *
+   * @internal
+   */
   private async *run(request: ModelRequest): AsyncGenerator<StreamEvent> {
-    const params: ChatParams = {
+    // `chat_template_kwargs` isn't in the SDK's param types — it's a vLLM /
+    // Featherless body extension — so widen the local type to carry it through.
+    const params: ChatParams & { chat_template_kwargs?: Record<string, unknown> } = {
       ...this.extra,
       model: this.model,
       messages: toChatMessages(request),
@@ -87,6 +160,7 @@ export class OpenAICompatibleModel implements ModelClient {
       ...(request.tools && request.tools.length > 0
         ? { tools: request.tools.map(toChatTool) }
         : {}),
+      ...(this.chatTemplateKwargs ? { chat_template_kwargs: this.chatTemplateKwargs } : {}),
     };
 
     let chunks: AsyncIterable<ChatChunk>;
@@ -103,7 +177,13 @@ export class OpenAICompatibleModel implements ModelClient {
 
 // --- pure mapping (exported for testing) -------------------------------------
 
-/** Map a ModelRequest to OpenAI chat messages (system prepended if present). */
+/**
+ * Map a {@link ModelRequest} to OpenAI chat messages (system prepended if present).
+ *
+ * @param request - The request whose system prompt and messages to convert.
+ * @returns The chat messages in OpenAI wire shape.
+ * @group Model
+ */
 export function toChatMessages(request: ModelRequest): ChatMessage[] {
   const messages: ChatMessage[] = [];
   if (request.system) messages.push({ role: "system", content: request.system });
@@ -111,6 +191,11 @@ export function toChatMessages(request: ModelRequest): ChatMessage[] {
   return messages;
 }
 
+/**
+ * Convert one {@link Message} to its OpenAI chat-message wire shape.
+ *
+ * @internal
+ */
 function toChatMessage(message: Message): ChatMessage {
   switch (message.role) {
     case Role.System:
@@ -135,7 +220,13 @@ function toChatMessage(message: Message): ChatMessage {
   }
 }
 
-/** Map a ToolSpec to an OpenAI function tool. */
+/**
+ * Map a {@link ToolSpec} to an OpenAI function tool.
+ *
+ * @param spec - The tool description to convert.
+ * @returns The tool in OpenAI function-tool wire shape.
+ * @group Model
+ */
 export function toChatTool(spec: ToolSpec): ChatTool {
   return {
     type: "function",
@@ -147,6 +238,11 @@ export function toChatTool(spec: ToolSpec): ChatTool {
   };
 }
 
+/**
+ * Accumulator for one tool call whose fields stream across chunks.
+ *
+ * @internal
+ */
 interface ToolDraft {
   id: string;
   name: string;
@@ -154,11 +250,17 @@ interface ToolDraft {
 }
 
 /**
- * Translate the SDK's chunk stream into StreamEvents. Text and reasoning are
- * emitted as deltas the moment they arrive; tool calls (whose arguments stream
- * as string fragments) are accumulated and emitted whole at the end, followed
- * by the assembled `done` message. A mid-stream throw becomes an `error` event
- * carrying whatever was assembled so far.
+ * Translate the SDK's chunk stream into {@link StreamEvent}s.
+ *
+ * @remarks
+ * Text and reasoning are emitted as deltas the moment they arrive; tool calls
+ * (whose arguments stream as string fragments) are accumulated and emitted whole
+ * at the end, followed by the assembled `done` message. A mid-stream throw
+ * becomes an `error` event carrying whatever was assembled so far.
+ *
+ * @param chunks - The SDK's streamed chat-completion chunks.
+ * @returns An async iterable of {@link StreamEvent}s.
+ * @group Model
  */
 export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGenerator<StreamEvent> {
   let content = "";
@@ -197,13 +299,22 @@ export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGe
   yield { type: StreamEventType.Done, message };
 }
 
-/** Read the non-standard reasoning field off a delta (`reasoning` | `reasoning_content`). */
+/**
+ * Read the non-standard reasoning field off a delta (`reasoning` | `reasoning_content`).
+ *
+ * @internal
+ */
 function readReasoning(delta: object): string {
   const record = delta as Record<string, unknown>;
   const value = record.reasoning ?? record.reasoning_content;
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Assemble accumulated content, reasoning, and tool drafts into a Message.
+ *
+ * @internal
+ */
 function assemble(content: string, reasoning: string, drafts: Map<number, ToolDraft>): Message {
   // Keep `arguments` as the raw accumulated JSON string (wire format) — the
   // loop JSON-parses and schema-validates it before the tool runs.
@@ -219,10 +330,20 @@ function assemble(content: string, reasoning: string, drafts: Map<number, ToolDr
   };
 }
 
+/**
+ * An empty assistant message, used when a request fails before streaming.
+ *
+ * @internal
+ */
 function emptyAssistant(): Message {
   return { role: Role.Assistant, content: "", timestamp: Date.now() };
 }
 
+/**
+ * Coerce an unknown thrown value into an Error.
+ *
+ * @internal
+ */
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -231,9 +352,16 @@ function asError(error: unknown): Error {
 
 /**
  * Wrap `fetch` so each non-empty line of the streamed response is handed to
- * `onLine` for inspection — without consuming the body the SDK needs. The
- * response stream is tee'd: one branch feeds the SDK, the other feeds the tap.
- * Logging is best-effort and never surfaces an error to the caller.
+ * `onLine` for inspection — without consuming the body the SDK needs.
+ *
+ * @remarks
+ * The response stream is tee'd: one branch feeds the SDK, the other feeds the
+ * tap. Logging is best-effort and never surfaces an error to the caller.
+ *
+ * @param onLine - Called once per non-empty streamed line.
+ * @returns A `fetch`-compatible function for the OpenAI client.
+ * @see {@link OpenAICompatibleOptions.onRawSSE}
+ * @group Model
  */
 export function sseTapFetch(onLine: (line: string) => void): FetchLike {
   return async (input: string | URL | Request, init?: RequestInit) => {
@@ -249,7 +377,15 @@ export function sseTapFetch(onLine: (line: string) => void): FetchLike {
   };
 }
 
-/** Decode a byte stream into newline-delimited lines, calling `onLine` per non-empty line. */
+/**
+ * Decode a byte stream into newline-delimited lines, calling `onLine` per
+ * non-empty line.
+ *
+ * @param stream - The byte stream to decode (e.g. a tee'd response body).
+ * @param onLine - Called once per non-empty decoded line.
+ * @returns A promise that resolves when the stream is fully drained.
+ * @group Model
+ */
 export async function drainLines(
   stream: ReadableStream<Uint8Array>,
   onLine: (line: string) => void,

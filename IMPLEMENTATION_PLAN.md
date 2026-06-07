@@ -52,3 +52,63 @@ sandbox caveat (default `compile` is `AsyncFunction`, not a real sandbox).
 **Success Criteria**: `import { buildWorkflow, executeWorkflow } from "~/agent-core"`;
 `bun test` + `bun run typecheck` green.
 **Status**: Not Started
+
+---
+
+# Plan: credential substitution layer
+
+**Problem**: When an agent has access to passwords/keys/tokens, the model and the
+conversation transcript must never see the real secret. The model emits opaque
+placeholders (`{{name}}`); at tool-execution time we look the name up in a
+credential store and splice the real value in. On the way out we scrub any
+resolved secret value back to its placeholder so an echoing command can't leak it.
+
+**Design**: A sibling of `agent-core/permissions/` — a `CredentialStore` interface
++ `InMemoryCredentialStore` + a `withCredentials(tool, store)` decorator matching
+the `with*` convention in `compose.ts`. Substitution happens at the generic tool
+seam (`Tool.execute`), so it covers shell, search, and any future credentialed
+tool. Placeholder syntax: `{{name}}` (no collision with shell `$VAR`). Output
+scrubbing: on (scrub the values resolved during this call).
+
+## Stage 1: CredentialStore seam + in-memory implementation
+**Goal**: The lookup table behind an interface.
+**Files**: `agent-core/credentials/credentials.types.ts`,
+`agent-core/credentials/in-memory-credential-store.ts`
+**Success Criteria**: `InMemoryCredentialStore` resolves known names, returns
+undefined for unknown ones; seedable from a `Record` (env at startup).
+**Tests** (`__tests__/credentials.test.ts`): resolve known → value; resolve
+unknown → undefined; seeded from record.
+**Status**: Complete
+
+## Stage 2: substitution + scrub primitives (pure)
+**Goal**: Pure functions: deep-walk args replacing `{{name}}`, and scrub a string
+of resolved secret values. No tool/loop coupling — directly testable.
+**Files**: `agent-core/credentials/substitute.ts`
+**Success Criteria**: substitutes inside nested strings/objects/arrays; records
+resolved (value→name) pairs; unknown placeholder throws a descriptive error;
+scrub replaces every occurrence of each resolved value with its `{{name}}`;
+non-string args untouched.
+**Tests** (`__tests__/credentials.test.ts`): nested substitution; `Bearer {{t}}`
+partial-string; unknown → throws; scrub round-trips value back to placeholder.
+**Status**: Complete
+
+## Stage 3: withCredentials decorator
+**Goal**: Wrap a `Tool` so inbound args are substituted before `execute` and the
+result content (and any thrown error) is scrubbed after.
+**Files**: `agent-core/credentials/with-credentials.ts`
+**Success Criteria**: decorated tool preserves name/description/schema; real value
+reaches `execute`; `ToolResult.content` and thrown-error messages are scrubbed;
+transparent when args carry no placeholders.
+**Tests** (`__tests__/credentials.test.ts`): real value seen by execute; content
+scrubbed; error message scrubbed; no-placeholder passthrough identical.
+**Status**: Complete
+
+## Stage 4: public surface + demo
+**Goal**: Export from `agent-core/index.ts`; show a credentialed tool in `main.ts`.
+**Files**: `agent-core/index.ts`, `main.ts`
+**Success Criteria**: importable from the public surface; demo passes a `{{...}}`
+placeholder that resolves at exec time; `bun test` + `bun run typecheck` green.
+**Status**: Exports done (typecheck + 132 tests green). main.ts demo deferred —
+the war-and-peace counting task has no real secret to inject, so a demo there
+would be contrived. Add a realistic example (e.g. an authenticated `curl`) on
+request.
