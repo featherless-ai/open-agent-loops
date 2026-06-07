@@ -9,8 +9,8 @@
  * dangerous capability an agent has. The core is deliberately environment-
  * agnostic (see `docs/architecture.md`), so it CANNOT safely ship the backend —
  * forcing the consumer to provide it is the correct boundary, not a limitation.
- * Test doubles live in `../../mocks` (`FakeShellBackend`, `FakeSearchBackend`),
- * the same way `FakeModelClient` stands in for a real model in tests.
+ * Test doubles live in `../../mocks` (`MockShellBackend`, `MockSearchBackend`),
+ * the same way `MockModelClient` stands in for a real model in tests.
  */
 
 import type { ToolContext } from "../tools.types";

@@ -1,6 +1,6 @@
 /**
  * The single LLM boundary. The loop never talks to a provider directly — it
- * only depends on `ModelClient`, so any backend (fake, OpenAI-compatible,
+ * only depends on `ModelClient`, so any backend (mock, OpenAI-compatible,
  * Anthropic, raw fetch) can be plugged in by implementing this one interface.
  *
  * Streaming is the default contract: `stream()` returns an async iterable of

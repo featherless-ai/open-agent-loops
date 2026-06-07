@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { prepareRequestMessages, runAgent } from "../primitives/loop";
-import { FakeModelClient } from "../mocks/fake-model";
+import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
@@ -20,7 +20,7 @@ const echo = defineTool({
 describe("runAgent", () => {
   // Base case: a turn with no tool calls is the final answer (one step).
   test("base: single turn with no tools returns the final answer", async () => {
-    const model = new FakeModelClient([{ text: "the answer" }]);
+    const model = new MockModelClient([{ text: "the answer" }]);
     const memory = new SessionMemoryStore();
     const result = await runAgent({ model, memory, sessionId: "s", prompt: "q" });
 
@@ -32,7 +32,7 @@ describe("runAgent", () => {
 
   // Edge: a tool call drives a second turn (call -> result -> final answer).
   test("edge: a tool call produces a result and a follow-up turn", async () => {
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "echo", arguments: { text: "hi" } }] },
       { text: "done" },
     ]);
@@ -53,7 +53,7 @@ describe("runAgent", () => {
   // Edge: a model that loops forever is bounded by maxSteps.
   test("edge: maxSteps caps a runaway loop", async () => {
     // Always asks for a tool, never gives a final answer.
-    const model = new FakeModelClient(() => ({
+    const model = new MockModelClient(() => ({
       toolCalls: [{ name: "echo", arguments: { text: "x" } }],
     }));
     const result = await runAgent({
@@ -75,7 +75,7 @@ describe("runAgent", () => {
       parameters: z.object({}),
       execute: () => ({ content: "final", terminate: true }),
     });
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "finish", arguments: {} }] },
     ]);
     const result = await runAgent({
@@ -91,7 +91,7 @@ describe("runAgent", () => {
 
   // Edge: a stopWhen condition ends the run after its turn.
   test("edge: stopWhen halts after the named tool runs", async () => {
-    const model = new FakeModelClient(() => ({
+    const model = new MockModelClient(() => ({
       toolCalls: [{ name: "echo", arguments: { text: "x" } }],
     }));
     const result = await runAgent({
@@ -107,7 +107,7 @@ describe("runAgent", () => {
 
   // Edge: an unknown tool becomes an error result instead of crashing.
   test("edge: calling a missing tool yields an error tool-result", async () => {
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "nope", arguments: {} }] },
       { text: "recovered" },
     ]);
@@ -133,7 +133,7 @@ describe("runAgent", () => {
         throw new Error("kaboom");
       },
     });
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "boom", arguments: {} }] },
       { text: "ok" },
     ]);
@@ -161,7 +161,7 @@ describe("runAgent", () => {
         return { content: text };
       },
     });
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "echo", arguments: { text: "x" } }] },
       { text: "after" },
     ]);
@@ -181,7 +181,7 @@ describe("runAgent", () => {
 
   // Edge: afterToolCall can rewrite a result.
   test("edge: afterToolCall can override the result", async () => {
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "echo", arguments: { text: "raw" } }] },
       { text: "end" },
     ]);
@@ -211,7 +211,7 @@ describe("runAgent", () => {
           return { content: name };
         },
       });
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       {
         toolCalls: [
           { name: "A", arguments: {} },
@@ -234,7 +234,7 @@ describe("runAgent", () => {
 
   // Edge: transformContext reshapes what the model sees.
   test("edge: transformContext is applied before the model call", async () => {
-    const model = new FakeModelClient([{ text: "ok" }]);
+    const model = new MockModelClient([{ text: "ok" }]);
     await runAgent({
       model,
       memory: new SessionMemoryStore(),
@@ -251,7 +251,7 @@ describe("runAgent", () => {
   // Edge: memory persists across separate runs in the same session.
   test("edge: a second run sees the first run's history", async () => {
     const memory = new SessionMemoryStore();
-    const model = new FakeModelClient([{ text: "first" }, { text: "second" }]);
+    const model = new MockModelClient([{ text: "first" }, { text: "second" }]);
     await runAgent({ model, memory, sessionId: "s", prompt: "one" });
     await runAgent({ model, memory, sessionId: "s", prompt: "two" });
 
@@ -263,7 +263,7 @@ describe("runAgent", () => {
   // Edge: reasoning is accumulated onto the assistant message and streamed.
   test("edge: reasoning_delta is captured on the message and emitted", async () => {
     const reasoningText: string[] = [];
-    const model = new FakeModelClient([{ reasoning: "let me think", text: "the answer" }]);
+    const model = new MockModelClient([{ reasoning: "let me think", text: "the answer" }]);
     const result = await runAgent({
       model,
       memory: new SessionMemoryStore(),
@@ -282,7 +282,7 @@ describe("runAgent", () => {
 
   // Edge: reasoning on a tool-call turn is resent; on a plain turn it is dropped.
   test("edge: conditional resend keeps tool-call reasoning, drops the rest", async () => {
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { reasoning: "must call echo", toolCalls: [{ name: "echo", arguments: { text: "x" } }] },
       { reasoning: "now I can answer", text: "done" },
     ]);
@@ -319,7 +319,7 @@ describe("runAgent", () => {
   // Edge: tool_start hands off parsed object args, not the raw JSON string.
   test("edge: tool_start carries parsed object args", async () => {
     let startArgs: unknown;
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "echo", arguments: { text: "hi" } }] },
       { text: "done" },
     ]);
@@ -338,7 +338,7 @@ describe("runAgent", () => {
 
   // Edge: a pre-aborted signal rejects before any model call.
   test("edge: a pre-aborted signal stops before the first turn", async () => {
-    const model = new FakeModelClient([{ text: "never" }]);
+    const model = new MockModelClient([{ text: "never" }]);
     const controller = new AbortController();
     controller.abort();
     await expect(
@@ -365,7 +365,7 @@ describe("runAgent", () => {
         return { content: "ok" };
       },
     });
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "stop", arguments: {} }] },
       { text: "should not be reached" },
     ]);
@@ -386,7 +386,7 @@ describe("runAgent", () => {
   // Edge: lifecycle events are emitted around the run.
   test("edge: emits agent_start, turn_start, and agent_end", async () => {
     const events: AgentEvent[] = [];
-    const model = new FakeModelClient([{ text: "ok" }]);
+    const model = new MockModelClient([{ text: "ok" }]);
     await runAgent({
       model,
       memory: new SessionMemoryStore(),

@@ -1,6 +1,6 @@
 /**
  * A scriptable SearchBackend for tests — the search counterpart to
- * `FakeModelClient`. It records every query and returns a fixed list of matches,
+ * `MockModelClient`. It records every query and returns a fixed list of matches,
  * or one chosen per query by a function.
  */
 
@@ -10,7 +10,7 @@ import type { SearchBackend, SearchMatch, SearchQuery } from "../tools/builtin/b
 /** Either fixed matches or a function that decides per query. */
 export type SearchResponder = SearchMatch[] | ((query: SearchQuery) => SearchMatch[]);
 
-export class FakeSearchBackend implements SearchBackend {
+export class MockSearchBackend implements SearchBackend {
   /** Every query the tool ran, in order — handy for assertions. */
   readonly queries: SearchQuery[] = [];
 

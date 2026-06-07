@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { runAgent } from "../primitives/loop";
 import type { GateDecision, ToolGateRequest } from "../primitives/loop";
-import { FakeModelClient } from "../mocks/fake-model";
+import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { permissionGate } from "../permissions/permission-gate";
@@ -26,7 +26,7 @@ describe("gateToolCalls (loop integration)", () => {
   // Base case: no gate hook → every call runs as before.
   test("base: no gate hook runs everything", async () => {
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "a", arguments: { x: "1" } }] },
       { text: "done" },
     ]);
@@ -44,7 +44,7 @@ describe("gateToolCalls (loop integration)", () => {
   // the loop keeps going so the model can react to the denial.
   test("edge: a denied call is blocked, reported, and the run continues", async () => {
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "a", arguments: { x: "1" } }] },
       { text: "recovered" },
     ]);
@@ -67,7 +67,7 @@ describe("gateToolCalls (loop integration)", () => {
   // tool-results stay in the original call order.
   test("edge: mixed batch — allowed runs, denied blocked, order preserved", async () => {
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       {
         toolCalls: [
           { name: "a", arguments: { x: "1" } },
@@ -102,7 +102,7 @@ describe("gateToolCalls (loop integration)", () => {
   test("edge: gate sees only well-formed calls; unknown/invalid bypass it", async () => {
     const seen: string[][] = [];
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       {
         toolCalls: [
           { name: "a", arguments: { x: "ok" } }, // well-formed
@@ -134,7 +134,7 @@ describe("gateToolCalls (loop integration)", () => {
   test("edge: gate runs once per turn with the whole batch", async () => {
     let calls = 0;
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       {
         toolCalls: [
           { name: "a", arguments: { x: "1" } },
@@ -163,7 +163,7 @@ describe("gateToolCalls (loop integration)", () => {
   // Integration: permissionGate wired in via the hook blocks a "deny" tool.
   test("integration: permissionGate denies a tool configured as deny", async () => {
     const ran: string[] = [];
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "danger", arguments: { x: "1" } }] },
       { text: "ok" },
     ]);

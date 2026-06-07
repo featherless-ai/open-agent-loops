@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { shellTool, formatShellResult } from "../tools/builtin/shell";
-import { FakeShellBackend } from "../mocks/fake-shell";
+import { MockShellBackend } from "../mocks/mock-shell";
 import { toToolSpec, validateToolArguments } from "../tools/tools";
 import { runAgent } from "../primitives/loop";
-import { FakeModelClient } from "../mocks/fake-model";
+import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import type { ToolCall } from "../types";
 import { Role, ToolCallType } from "../types";
@@ -20,7 +20,7 @@ const call = (args: Record<string, unknown>): ToolCall => ({
 describe("shellTool", () => {
   // Base case: the tool runs the command and returns its stdout.
   test("base: runs the command and returns stdout", async () => {
-    const backend = new FakeShellBackend({ stdout: "hello\n", stderr: "", exitCode: 0 });
+    const backend = new MockShellBackend({ stdout: "hello\n", stderr: "", exitCode: 0 });
     const tool = shellTool(backend);
     const result = await tool.execute({ command: "echo hello" } as never, ctx);
 
@@ -30,7 +30,7 @@ describe("shellTool", () => {
 
   // Edge: a non-zero exit and stderr are surfaced in content, not thrown.
   test("edge: non-zero exit and stderr surface in content (no throw)", async () => {
-    const backend = new FakeShellBackend({ stdout: "", stderr: "boom\n", exitCode: 2 });
+    const backend = new MockShellBackend({ stdout: "", stderr: "boom\n", exitCode: 2 });
     const result = await shellTool(backend).execute({ command: "false" } as never, ctx);
 
     expect(result.content).toContain("[stderr]");
@@ -40,7 +40,7 @@ describe("shellTool", () => {
 
   // Edge: a clean command with no output gives a clear placeholder.
   test("edge: no output yields a placeholder", async () => {
-    const result = await shellTool(new FakeShellBackend()).execute(
+    const result = await shellTool(new MockShellBackend()).execute(
       { command: "true" } as never,
       ctx,
     );
@@ -49,7 +49,7 @@ describe("shellTool", () => {
 
   // Edge: the loop's abort signal is forwarded to the backend.
   test("edge: forwards the abort signal to the backend", async () => {
-    const backend = new FakeShellBackend();
+    const backend = new MockShellBackend();
     const controller = new AbortController();
     await shellTool(backend).execute(
       { command: "sleep 1" } as never,
@@ -60,27 +60,27 @@ describe("shellTool", () => {
 
   // Edge: shell runs sequentially — its commands must never race each other.
   test("edge: executionMode is sequential", () => {
-    expect(shellTool(new FakeShellBackend()).executionMode).toBe(ExecutionMode.Sequential);
+    expect(shellTool(new MockShellBackend()).executionMode).toBe(ExecutionMode.Sequential);
   });
 
   // Edge: the schema requires a command string.
   test("edge: missing command fails validation", () => {
-    expect(() => validateToolArguments(shellTool(new FakeShellBackend()), call({}))).toThrow(
+    expect(() => validateToolArguments(shellTool(new MockShellBackend()), call({}))).toThrow(
       /command/,
     );
   });
 
   // Edge: the model-facing spec advertises the stable name + schema.
   test("edge: toToolSpec advertises name and command param", () => {
-    const spec = toToolSpec(shellTool(new FakeShellBackend()));
+    const spec = toToolSpec(shellTool(new MockShellBackend()));
     expect(spec.name).toBe("shell");
     expect(Object.keys((spec.parameters as any).properties)).toEqual(["command"]);
   });
 
   // Integration: the tool folds into runAgent (call -> result -> final answer).
   test("integration: drives a runAgent tool turn", async () => {
-    const backend = new FakeShellBackend({ stdout: "files\n", stderr: "", exitCode: 0 });
-    const model = new FakeModelClient([
+    const backend = new MockShellBackend({ stdout: "files\n", stderr: "", exitCode: 0 });
+    const model = new MockModelClient([
       { toolCalls: [{ name: "shell", arguments: { command: "ls" } }] },
       { text: "done" },
     ]);

@@ -19,7 +19,7 @@ export interface ScriptedTurn {
   /** Chain-of-thought, streamed as `reasoning_delta` chunks before the text. */
   reasoning?: string;
   /**
-   * Tool calls to emit. Authoring shape (name + an object of args); the fake
+   * Tool calls to emit. Authoring shape (name + an object of args); the mock
    * serializes `arguments` to the wire JSON string for you, so tests stay
    * readable while the emitted ToolCall matches the real wire format.
    */
@@ -33,18 +33,18 @@ export type Script =
   | ScriptedTurn[]
   | ((request: ModelRequest, callIndex: number) => ScriptedTurn);
 
-export interface FakeModelOptions {
+export interface MockModelOptions {
   /** Characters per `text_delta` chunk. Default 8. Use Infinity for one chunk. */
   chunkSize?: number;
 }
 
-export class FakeModelClient implements ModelClient {
+export class MockModelClient implements ModelClient {
   /** Every request the loop made, in order — handy for assertions. */
   readonly requests: ModelRequest[] = [];
   private callIndex = 0;
   private readonly chunkSize: number;
 
-  constructor(private readonly script: Script, options: FakeModelOptions = {}) {
+  constructor(private readonly script: Script, options: MockModelOptions = {}) {
     this.chunkSize = options.chunkSize ?? 8;
   }
 
@@ -62,7 +62,7 @@ export class FakeModelClient implements ModelClient {
     const turn = this.script[index];
     if (!turn) {
       throw new Error(
-        `FakeModelClient: no scripted turn for call #${index} ` +
+        `MockModelClient: no scripted turn for call #${index} ` +
           `(script has ${this.script.length} turn(s))`,
       );
     }

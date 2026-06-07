@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FakeModelClient } from "../mocks/fake-model";
+import { MockModelClient } from "../mocks/mock-model";
 import type { ModelRequest, StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
 import { Role } from "../types";
@@ -13,10 +13,10 @@ async function collect(stream: AsyncIterable<StreamEvent>): Promise<StreamEvent[
   return events;
 }
 
-describe("FakeModelClient", () => {
+describe("MockModelClient", () => {
   // Base case: text streams as multiple deltas and ends with `done`.
   test("base: streams text in chunks by default and finishes with done", async () => {
-    const model = new FakeModelClient([{ text: "hello world" }], { chunkSize: 4 });
+    const model = new MockModelClient([{ text: "hello world" }], { chunkSize: 4 });
     const events = await collect(model.stream(req));
 
     const deltas = events.filter((e) => e.type === StreamEventType.TextDelta);
@@ -30,14 +30,14 @@ describe("FakeModelClient", () => {
 
   // Edge: chunkSize Infinity emits the text as a single delta.
   test("edge: chunkSize Infinity emits one delta", async () => {
-    const model = new FakeModelClient([{ text: "abcdef" }], { chunkSize: Infinity });
+    const model = new MockModelClient([{ text: "abcdef" }], { chunkSize: Infinity });
     const deltas = (await collect(model.stream(req))).filter((e) => e.type === StreamEventType.TextDelta);
     expect(deltas).toHaveLength(1);
   });
 
   // Edge: an empty-text turn emits no deltas but still completes.
   test("edge: empty text yields no deltas but still emits done", async () => {
-    const model = new FakeModelClient([{ text: "" }]);
+    const model = new MockModelClient([{ text: "" }]);
     const events = await collect(model.stream(req));
     expect(events.filter((e) => e.type === StreamEventType.TextDelta)).toHaveLength(0);
     expect(events.at(-1)?.type).toBe(StreamEventType.Done);
@@ -45,7 +45,7 @@ describe("FakeModelClient", () => {
 
   // Edge: scripted reasoning streams as reasoning_delta before the text.
   test("edge: reasoning streams ahead of content and lands on the message", async () => {
-    const model = new FakeModelClient([{ reasoning: "thinking", text: "answer" }], {
+    const model = new MockModelClient([{ reasoning: "thinking", text: "answer" }], {
       chunkSize: 4,
     });
     const events = await collect(model.stream(req));
@@ -64,7 +64,7 @@ describe("FakeModelClient", () => {
 
   // Edge: a turn without reasoning emits no reasoning_delta and omits the field.
   test("edge: no reasoning means no reasoning_delta and no field", async () => {
-    const model = new FakeModelClient([{ text: "plain" }]);
+    const model = new MockModelClient([{ text: "plain" }]);
     const events = await collect(model.stream(req));
     expect(events.some((e) => e.type === StreamEventType.ReasoningDelta)).toBe(false);
     expect((events.at(-1) as any).message.reasoning).toBeUndefined();
@@ -72,7 +72,7 @@ describe("FakeModelClient", () => {
 
   // Edge: tool calls are streamed and missing ids are auto-assigned.
   test("edge: tool calls are emitted with auto-generated ids", async () => {
-    const model = new FakeModelClient([
+    const model = new MockModelClient([
       { toolCalls: [{ name: "search", arguments: { q: "x" } }] },
     ]);
     const events = await collect(model.stream(req));
@@ -84,7 +84,7 @@ describe("FakeModelClient", () => {
 
   // Edge: the function form can branch on the request and call index.
   test("edge: function script can react to the request", async () => {
-    const model = new FakeModelClient((request, index) => ({
+    const model = new MockModelClient((request, index) => ({
       text: `call ${index} saw ${request.messages.length} msg(s)`,
     }));
     const done = (await collect(model.stream(req))).at(-1) as any;
@@ -93,7 +93,7 @@ describe("FakeModelClient", () => {
 
   // Edge: an error turn surfaces an `error` event instead of `done`.
   test("edge: error turns emit an error event", async () => {
-    const model = new FakeModelClient([{ text: "partial", error: "boom" }]);
+    const model = new MockModelClient([{ text: "partial", error: "boom" }]);
     const events = await collect(model.stream(req));
     const last = events.at(-1) as any;
     expect(last.type).toBe(StreamEventType.Error);
@@ -103,14 +103,14 @@ describe("FakeModelClient", () => {
 
   // Edge: running past the end of an array script throws a clear error.
   test("edge: exhausting the script throws", async () => {
-    const model = new FakeModelClient([{ text: "only one" }]);
+    const model = new MockModelClient([{ text: "only one" }]);
     await collect(model.stream(req));
     expect(() => model.stream(req)).toThrow(/no scripted turn/);
   });
 
   // Edge: every request is captured for assertions.
   test("edge: requests are recorded in order", async () => {
-    const model = new FakeModelClient([{ text: "a" }, { text: "b" }]);
+    const model = new MockModelClient([{ text: "a" }, { text: "b" }]);
     await collect(model.stream({ messages: [{ role: Role.User, content: "first" }] }));
     await collect(model.stream({ messages: [{ role: Role.User, content: "second" }] }));
     expect(model.requests).toHaveLength(2);

@@ -1,6 +1,6 @@
 /**
  * A scriptable ShellBackend for tests — the shell counterpart to
- * `FakeModelClient`. It records every command (and the context it ran with, so
+ * `MockModelClient`. It records every command (and the context it ran with, so
  * tests can assert the loop forwarded the abort signal) and returns a fixed
  * result, or one chosen per command by a function.
  */
@@ -13,7 +13,7 @@ export type ShellResponder = ShellResult | ((command: string) => ShellResult);
 
 const OK: ShellResult = { stdout: "", stderr: "", exitCode: 0 };
 
-export class FakeShellBackend implements ShellBackend {
+export class MockShellBackend implements ShellBackend {
   /** Every (command, ctx) the tool ran, in order — handy for assertions. */
   readonly calls: Array<{ command: string; ctx: ToolContext }> = [];
 

@@ -11,7 +11,7 @@
  *   Tool         - a callable capability (defineTool: infers Zod arg types)
  *   StopCondition- when to end a run (compose with any / all / not)
  *
- * The streaming test double lives in `./mocks/fake-model` (FakeModelClient);
+ * The streaming test double lives in `./mocks/mock-model` (MockModelClient);
  * it's a testing utility, imported directly by tests, not part of this surface.
  */
 
@@ -53,7 +53,7 @@ export { ExecutionMode } from "./tools/tools.types";
 
 // Built-in tools: SDK-owned wiring over capability seams the consumer MUST
 // implement (no host-binding backend is shipped — that is the consumer's, and
-// the correct security boundary). Fakes live in `./mocks`, imported by tests.
+// the correct security boundary). Mocks live in `./mocks`, imported by tests.
 export { formatShellResult, shellTool } from "./tools/builtin/shell";
 export { formatSearchResults, searchTool } from "./tools/builtin/search";
 export type {
