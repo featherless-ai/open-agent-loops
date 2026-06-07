@@ -8,12 +8,14 @@
  * shot for the rare test that wants a non-streamed turn.
  */
 
-import type { Message, ToolCall } from "./types";
-import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "./model";
+import type { Message, ToolCall } from "../types";
+import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "../model";
 
 /** One scripted assistant turn: some text and/or some tool calls. */
 export interface ScriptedTurn {
   text?: string;
+  /** Chain-of-thought, streamed as `reasoning_delta` chunks before the text. */
+  reasoning?: string;
   toolCalls?: Array<Omit<ToolCall, "id"> & { id?: string }>;
   /** Force this turn to stream as an error after emitting its content. */
   error?: string;
@@ -62,14 +64,21 @@ export class FakeModelClient implements ModelClient {
 
   /** Produce the event stream for a single turn. */
   private async *run(turn: ScriptedTurn): AsyncGenerator<StreamEvent> {
+    const reasoning = turn.reasoning ?? "";
     const text = turn.text ?? "";
 
-    // 1. Stream the text content as chunks (the "all models stream" default).
+    // 1. Stream chain-of-thought (if any) before the answer, as chunks — the
+    //    same separate channel reasoning models emit ahead of the content.
+    for (const chunk of chunkText(reasoning, this.chunkSize)) {
+      yield { type: "reasoning_delta", text: chunk };
+    }
+
+    // 2. Stream the text content as chunks (the "all models stream" default).
     for (const chunk of chunkText(text, this.chunkSize)) {
       yield { type: "text_delta", text: chunk };
     }
 
-    // 2. Emit any tool calls, assigning ids when the script omitted them.
+    // 3. Emit any tool calls, assigning ids when the script omitted them.
     const toolCalls: ToolCall[] = (turn.toolCalls ?? []).map((call, i) => ({
       id: call.id ?? `call_${this.callIndex}_${i}`,
       name: call.name,
@@ -79,10 +88,11 @@ export class FakeModelClient implements ModelClient {
       yield { type: "tool_call", toolCall };
     }
 
-    // 3. Assemble the final assistant message and emit the terminal event.
+    // 4. Assemble the final assistant message and emit the terminal event.
     const message: Message = {
       role: "assistant",
       content: text,
+      ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
       timestamp: Date.now(),
     };

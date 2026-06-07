@@ -1,40 +1,14 @@
 /**
- * Tools are the second plug-and-play seam. A tool bundles a name, a
- * description, a Zod schema for its arguments, and an `execute` handler. The
- * loop validates arguments against the schema before calling `execute`, so
- * handlers can trust their input.
+ * Helpers for the tool seam (interfaces in `./tools.types`): `defineTool` to
+ * author a tool with inferred argument types, plus the loop's `toToolSpec` and
+ * `validateToolArguments`. The loop validates arguments against the schema
+ * before calling `execute`, so handlers can trust their input.
  */
 
 import { z } from "zod";
 import type { ToolCall } from "./types";
 import type { ToolSpec } from "./model";
-
-/** What a tool hands back to the loop. */
-export interface ToolResult {
-  /** Text content folded back into the conversation as the tool result. */
-  content: string;
-  /** Optional structured payload (not sent to the model, useful for hooks). */
-  details?: unknown;
-  /** When true, the loop stops after this tool result (a "final answer" tool). */
-  terminate?: boolean;
-}
-
-export interface ToolContext {
-  toolCallId: string;
-  signal?: AbortSignal;
-}
-
-export interface Tool<S extends z.ZodType = z.ZodType> {
-  name: string;
-  description: string;
-  parameters: S;
-  execute(args: z.infer<S>, ctx: ToolContext): ToolResult | Promise<ToolResult>;
-  /**
-   * "parallel" (default) lets the loop run this alongside sibling calls.
-   * "sequential" forces the whole batch to run one-at-a-time.
-   */
-  executionMode?: "parallel" | "sequential";
-}
+import type { Tool } from "./tools.types";
 
 /** Identity helper that preserves the schema's inferred type for `execute`. */
 export function defineTool<S extends z.ZodType>(tool: Tool<S>): Tool<S> {

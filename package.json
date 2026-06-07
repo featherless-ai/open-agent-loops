@@ -1,29 +1,25 @@
 {
-  "name": "advance-agent",
+  "name": "agent-core",
   "version": "0.0.1",
-  "private": true,
+  "description": "A minimal, provider-agnostic agentic loop. Plug-and-play seams behind interfaces.",
   "type": "module",
+  "module": "agent-core/index.ts",
+  "types": "agent-core/index.ts",
+  "exports": {
+    ".": "./agent-core/index.ts"
+  },
+  "files": [
+    "agent-core"
+  ],
   "scripts": {
-    "dev": "nuxt dev",
-    "build": "nuxt build",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck",
-    "test": "bun test agent-core"
+    "test": "bun test agent-core",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2",
-    "@nuxt/ui": "^4",
-    "@vue-flow/core": "^1.48.2",
-    "ai": "^6",
-    "nuxt": "^4",
-    "vue": "^3.5",
     "zod": "^4"
   },
   "devDependencies": {
-    "@iconify-json/lucide": "^1",
     "@types/bun": "^1.3.14",
-    "@types/node": "^22",
     "typescript": "^5"
   }
 }

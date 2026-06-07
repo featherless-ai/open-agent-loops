@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FakeModelClient } from "../fake-model";
+import { FakeModelClient } from "../mocks/fake-model";
 import type { ModelRequest, StreamEvent } from "../model";
 
 const req: ModelRequest = { messages: [{ role: "user", content: "hi" }] };
@@ -39,6 +39,33 @@ describe("FakeModelClient", () => {
     const events = await collect(model.stream(req));
     expect(events.filter((e) => e.type === "text_delta")).toHaveLength(0);
     expect(events.at(-1)?.type).toBe("done");
+  });
+
+  // Edge: scripted reasoning streams as reasoning_delta before the text.
+  test("edge: reasoning streams ahead of content and lands on the message", async () => {
+    const model = new FakeModelClient([{ reasoning: "thinking", text: "answer" }], {
+      chunkSize: 4,
+    });
+    const events = await collect(model.stream(req));
+
+    const reasoningDeltas = events.filter((e) => e.type === "reasoning_delta");
+    expect(reasoningDeltas.length).toBeGreaterThan(1); // streamed in chunks
+    expect(reasoningDeltas.map((e) => (e as any).text).join("")).toBe("thinking");
+
+    // All reasoning is emitted before any text delta.
+    const firstText = events.findIndex((e) => e.type === "text_delta");
+    const lastReasoning = events.map((e) => e.type).lastIndexOf("reasoning_delta");
+    expect(lastReasoning).toBeLessThan(firstText);
+
+    expect((events.at(-1) as any).message.reasoning).toBe("thinking");
+  });
+
+  // Edge: a turn without reasoning emits no reasoning_delta and omits the field.
+  test("edge: no reasoning means no reasoning_delta and no field", async () => {
+    const model = new FakeModelClient([{ text: "plain" }]);
+    const events = await collect(model.stream(req));
+    expect(events.some((e) => e.type === "reasoning_delta")).toBe(false);
+    expect((events.at(-1) as any).message.reasoning).toBeUndefined();
   });
 
   // Edge: tool calls are streamed and missing ids are auto-assigned.

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { withMemoryNamespace, withModelObserver } from "../compose";
+import { withMemoryListeners, withMemoryNamespace, withModelObserver } from "../compose";
 import { InMemoryStore } from "../memory";
 import { runAgent } from "../loop";
 import type { ModelClient, StreamEvent } from "../model";
-import type { Memory } from "../memory";
+import type { Memory } from "../memory.types";
 import type { Message } from "../types";
 
 /**
@@ -113,5 +113,68 @@ describe("withMemoryNamespace", () => {
     await a.append("s", [{ role: "user", content: "x" }]);
     await a.clear("s");
     expect(await a.load("s")).toEqual([]);
+  });
+});
+
+describe("withMemoryListeners", () => {
+  // Base case: each callback fires after its operation, seeing what happened.
+  test("base: notifies the listener after load / append / clear", async () => {
+    const events: string[] = [];
+    const mem = withMemoryListeners(new InMemoryStore(), {
+      onAppend: (id, msgs) => void events.push(`append:${id}:${msgs.length}`),
+      onLoad: (id, msgs) => void events.push(`load:${id}:${msgs.length}`),
+      onClear: (id) => void events.push(`clear:${id}`),
+    });
+
+    await mem.append("s", [{ role: "user", content: "hi" }]);
+    await mem.load("s");
+    await mem.clear("s");
+
+    expect(events).toEqual(["append:s:1", "load:s:1", "clear:s"]);
+  });
+
+  // Edge: the decorator is transparent — stored data is unchanged.
+  test("edge: listening does not alter what is stored", async () => {
+    const base = new InMemoryStore();
+    const mem = withMemoryListeners(base, { onAppend: () => "ignored" as never });
+    await mem.append("s", [{ role: "user", content: "x" }]);
+    expect((await base.load("s")).map((m) => m.content)).toEqual(["x"]);
+  });
+
+  // Edge: a listener may omit callbacks it doesn't care about.
+  test("edge: partial listeners are fine", async () => {
+    let loads = 0;
+    const mem = withMemoryListeners(new InMemoryStore(), {
+      onLoad: () => void (loads += 1),
+    });
+    await mem.append("s", [{ role: "user", content: "x" }]); // no onAppend — no throw
+    await mem.load("s");
+    expect(loads).toBe(1);
+  });
+
+  // Edge: wrapping twice runs both listeners (composition stacks).
+  test("edge: listeners compose when stacked", async () => {
+    const seen: string[] = [];
+    const mem = withMemoryListeners(
+      withMemoryListeners(new InMemoryStore(), {
+        onAppend: () => void seen.push("inner"),
+      }),
+      { onAppend: () => void seen.push("outer") },
+    );
+    await mem.append("s", [{ role: "user", content: "x" }]);
+    expect(seen).toEqual(["inner", "outer"]);
+  });
+
+  // Edge: async listeners are awaited before the operation resolves.
+  test("edge: async listener callbacks are awaited", async () => {
+    let done = false;
+    const mem = withMemoryListeners(new InMemoryStore(), {
+      onAppend: async () => {
+        await Promise.resolve();
+        done = true;
+      },
+    });
+    await mem.append("s", [{ role: "user", content: "x" }]);
+    expect(done).toBe(true);
   });
 });

@@ -28,12 +28,15 @@ export interface ModelRequest {
 
 /**
  * Incremental output from the model.
+ * - `reasoning_delta`  partial chain-of-thought (provider field `reasoning` /
+ *                      `reasoning_content`); a separate channel from `text`
  * - `text_delta`  partial assistant text (streamed token-by-token / chunked)
  * - `tool_call`   a fully-formed tool invocation the model wants to make
  * - `done`        terminal event carrying the assembled assistant message
  * - `error`       the model failed; `message` holds whatever was assembled
  */
 export type StreamEvent =
+  | { type: "reasoning_delta"; text: string }
   | { type: "text_delta"; text: string }
   | { type: "tool_call"; toolCall: ToolCall }
   | { type: "done"; message: Message }

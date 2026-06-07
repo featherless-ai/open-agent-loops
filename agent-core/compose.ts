@@ -13,7 +13,7 @@
  */
 
 import type { ModelClient, StreamEvent } from "./model";
-import type { Memory } from "./memory";
+import type { Memory, MemoryListener } from "./memory.types";
 
 /**
  * Wrap a ModelClient to observe every stream event as it flows through.
@@ -48,5 +48,32 @@ export function withMemoryNamespace(memory: Memory, prefix: string): Memory {
     load: (id) => memory.load(key(id)),
     append: (id, messages) => memory.append(key(id), messages),
     clear: (id) => memory.clear(key(id)),
+  };
+}
+
+/**
+ * Wrap a Memory so a `MemoryListener` is notified after each operation. This is
+ * the observer/listener seam for storage — the counterpart to
+ * `withModelObserver` for the model. Listeners only *react* (logging, metrics,
+ * cache warming); each callback runs after the underlying op succeeds and its
+ * return value is ignored, so the result the loop sees is never altered.
+ *
+ * Attach more than one listener by wrapping more than once — wrappers stack.
+ */
+export function withMemoryListeners(memory: Memory, listener: MemoryListener): Memory {
+  return {
+    async load(id) {
+      const messages = await memory.load(id);
+      await listener.onLoad?.(id, messages);
+      return messages;
+    },
+    async append(id, messages) {
+      await memory.append(id, messages);
+      await listener.onAppend?.(id, messages);
+    },
+    async clear(id) {
+      await memory.clear(id);
+      await listener.onClear?.(id);
+    },
   };
 }

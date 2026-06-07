@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { runAgent } from "../loop";
-import { FakeModelClient } from "../fake-model";
+import { prepareRequestMessages, runAgent } from "../loop";
+import { FakeModelClient } from "../mocks/fake-model";
 import { InMemoryStore } from "../memory";
 import { defineTool } from "../tools";
 import { whenToolCalled } from "../stop";
@@ -256,6 +256,62 @@ describe("runAgent", () => {
     // The 2nd model call should have been handed the full prior history.
     const secondCall = model.requests[1]!.messages.map((m) => m.content);
     expect(secondCall).toEqual(["one", "first", "two"]);
+  });
+
+  // Edge: reasoning is accumulated onto the assistant message and streamed.
+  test("edge: reasoning_delta is captured on the message and emitted", async () => {
+    const reasoningText: string[] = [];
+    const model = new FakeModelClient([{ reasoning: "let me think", text: "the answer" }]);
+    const result = await runAgent({
+      model,
+      memory: new InMemoryStore(),
+      sessionId: "s",
+      prompt: "q",
+      onEvent: (e) => {
+        if (e.type === "reasoning_delta") reasoningText.push(e.text);
+      },
+    });
+    const assistant = result.messages.at(-1);
+    expect(assistant?.reasoning).toBe("let me think");
+    expect(assistant?.content).toBe("the answer");
+    // The reasoning was also streamed as deltas, distinct from the content.
+    expect(reasoningText.join("")).toBe("let me think");
+  });
+
+  // Edge: reasoning on a tool-call turn is resent; on a plain turn it is dropped.
+  test("edge: conditional resend keeps tool-call reasoning, drops the rest", async () => {
+    const model = new FakeModelClient([
+      { reasoning: "must call echo", toolCalls: [{ name: "echo", arguments: { text: "x" } }] },
+      { reasoning: "now I can answer", text: "done" },
+    ]);
+    await runAgent({
+      model,
+      memory: new InMemoryStore(),
+      sessionId: "s",
+      prompt: "go",
+      tools: [echo],
+    });
+
+    // The 2nd request carries the prior tool-call assistant turn — with its
+    // reasoning preserved (required for tool-call continuity).
+    const secondReqAssistant = model.requests[1]!.messages.find(
+      (m) => m.role === "assistant",
+    );
+    expect(secondReqAssistant?.reasoning).toBe("must call echo");
+  });
+
+  // Edge: prepareRequestMessages applies the resend rule purely, no mutation.
+  test("edge: prepareRequestMessages strips only no-tool reasoning", () => {
+    const input = [
+      { role: "assistant" as const, content: "a", reasoning: "kept", toolCalls: [{ id: "1", name: "t", arguments: {} }] },
+      { role: "assistant" as const, content: "b", reasoning: "dropped" },
+      { role: "user" as const, content: "c" },
+    ];
+    const out = prepareRequestMessages(input);
+    expect(out[0]!.reasoning).toBe("kept");
+    expect(out[1]!.reasoning).toBeUndefined();
+    // Inputs are not mutated.
+    expect(input[1]!.reasoning).toBe("dropped");
   });
 
   // Edge: lifecycle events are emitted around the run.

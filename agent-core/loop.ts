@@ -13,13 +13,24 @@
 
 import type { AgentEvent, EventSink, Message, ToolCall } from "./types";
 import type { ModelClient, ModelRequest } from "./model";
-import type { Memory } from "./memory";
-import { type Tool, type ToolResult, toToolSpec, validateToolArguments } from "./tools";
-import type { StopCondition } from "./stop";
+import type { Memory } from "./memory.types";
+import type { Tool, ToolResult } from "./tools.types";
+import { toToolSpec, validateToolArguments } from "./tools";
+import type { StopCondition } from "./stop.types";
 
 /** Lifecycle hooks for guardrails and context shaping. */
 export interface Hooks {
-  /** Reshape history right before it's sent to the model. */
+  /**
+   * Reshape history right before it's sent to the model. This is the seam for
+   * long-horizon context management — compaction (summarize, then restart from
+   * the summary), structured note-taking, and tool-result clearing — that keeps
+   * a long-running agent inside its context window.
+   * Sources of truth:
+   *   - Anthropic, effective context engineering for AI agents:
+   *     https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+   *   - Anthropic, effective harnesses for long-running agents:
+   *     https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+   */
   transformContext?(messages: Message[]): Message[] | Promise<Message[]>;
   /** Inspect/block a tool call before it executes. */
   beforeToolCall?(info: {
@@ -110,9 +121,9 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
       : messages;
     const request: ModelRequest = {
       system,
-      // Snapshot: the model gets a stable view that won't change as the loop
-      // keeps mutating its working `messages` array on later turns.
-      messages: [...contextMessages],
+      // prepareRequestMessages returns a fresh array, so this doubles as the
+      // snapshot the model sees — stable as the loop mutates `messages` later.
+      messages: prepareRequestMessages(contextMessages),
       tools: toolSpecs,
       signal,
     };
@@ -162,6 +173,24 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   return { messages, newMessages, steps };
 }
 
+/**
+ * Prepare working history for sending: drop `reasoning` from assistant turns
+ * that did NOT call tools. Reasoning is resent only on tool-call turns —
+ * thinking-mode models (e.g. DeepSeek V4) require it there for tool-call
+ * continuity and reject the request otherwise, while on plain turns the model
+ * ignores it. Returns a fresh array; inputs are never mutated.
+ */
+export function prepareRequestMessages(messages: Message[]): Message[] {
+  return messages.map((message) => {
+    const isToolCallTurn = (message.toolCalls?.length ?? 0) > 0;
+    if (message.role === "assistant" && message.reasoning !== undefined && !isToolCallTurn) {
+      const { reasoning: _dropped, ...rest } = message;
+      return rest;
+    }
+    return message;
+  });
+}
+
 /** Consume a model stream into one assistant message, emitting deltas. */
 async function streamAssistant(
   model: ModelClient,
@@ -169,11 +198,16 @@ async function streamAssistant(
   emit: EventSink,
 ): Promise<Message> {
   let text = "";
+  let reasoning = "";
   const toolCalls: ToolCall[] = [];
   let finalMessage: Message | undefined;
 
   for await (const event of model.stream(request)) {
     switch (event.type) {
+      case "reasoning_delta":
+        reasoning += event.text;
+        await emit({ type: "reasoning_delta", text: event.text });
+        break;
       case "text_delta":
         text += event.text;
         await emit({ type: "text_delta", text: event.text });
@@ -196,6 +230,7 @@ async function streamAssistant(
     finalMessage ?? {
       role: "assistant",
       content: text,
+      ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
       timestamp: Date.now(),
     }

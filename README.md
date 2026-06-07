@@ -1,76 +1,91 @@
-# Advance Agent
+# agent-core
 
-Minimal Nuxt 3 + Vercel AI SDK starter for shipping an interactive
-internal-app to the Featherless app store. Boots a chat UI that streams
-from any OpenAI-compatible endpoint (defaults to
-`api.featherless.ai/v1`).
+A minimal, provider-agnostic **agentic loop**. The whole point of this package
+is to make the core pieces of an agent **plug-and-play and independently
+testable** — every fundamental thing sits behind an interface, so it can be
+swapped without touching the loop.
 
-## What's in here
+One runtime dependency (`zod`, for tool schemas). Everything else is plain
+hand-written TypeScript.
 
-| Layer | Files |
-|---|---|
-| Platform | `app.yaml`, `Dockerfile`, `entrypoint.sh`, `.gitlab-ci.yml`, `app-icon.svg` |
-| Nuxt | `package.json`, `nuxt.config.ts`, `tsconfig.json`, `.gitignore` |
-| App code | `app.vue`, `pages/index.vue`, `server/api/chat.post.ts`, `server/api/health.get.ts` |
-| Bootstrap | `platform_scripts/bootstrap.sh` (rewrite slug/name when forking) |
+## The seams
 
-## Local dev
+| Seam           | Interface       | v1 implementation             | Swap in later                 |
+| -------------- | --------------- | ----------------------------- | ----------------------------- |
+| LLM boundary   | `ModelClient`   | `FakeModelClient`             | OpenAI-compatible / Anthropic |
+| Memory         | `Memory`        | `InMemoryStore`               | JSONL file / Redis / vector   |
+| Capabilities   | `Tool`          | `defineTool(...)`             | any tool you write            |
+| Stopping       | `StopCondition` | `maxSteps`, `whenToolCalled`  | custom predicates             |
+
+The loop (`runAgent`) only ever depends on these interfaces. Models **stream by
+default** — `ModelClient.stream()` returns an async iterable of `StreamEvent`s.
+
+```
+load history → append prompt → ┌─ stream assistant turn
+                               │   any tool calls? ─ no → final answer ✓
+                               │        │ yes
+                               │   run tools → append results
+                               └── repeat (until terminate / stopWhen / maxSteps)
+```
+
+## Usage
+
+```ts
+import { runAgent, InMemoryStore, defineTool } from "~/agent-core";
+// FakeModelClient is a test double, not part of the public surface:
+import { FakeModelClient } from "~/agent-core/mocks/fake-model";
+import { z } from "zod";
+
+const weather = defineTool({
+  name: "weather",
+  description: "Get weather for a city",
+  parameters: z.object({ city: z.string() }),
+  execute: ({ city }) => ({ content: `Sunny in ${city}` }),
+});
+
+// In production, pass your own ModelClient instead of this test double.
+const model = new FakeModelClient([
+  { toolCalls: [{ name: "weather", arguments: { city: "Paris" } }] },
+  { text: "It's sunny in Paris." },
+]);
+
+const result = await runAgent({
+  model,
+  memory: new InMemoryStore(),
+  sessionId: "demo",
+  prompt: "What's the weather in Paris?",
+  tools: [weather],
+  onEvent: (e) => console.log(e.type),
+});
+
+console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
+```
+
+## Adding a real model client
+
+Implement the one method — `stream()`. Map `req.messages`/`req.tools` to your
+provider's API, then translate its chunks into `StreamEvent`s (`text_delta` /
+`tool_call` / `done`). No new package is required to do this against any
+OpenAI-compatible endpoint.
+
+```ts
+import type { ModelClient, ModelRequest, StreamEvent } from "~/agent-core";
+
+export class MyModel implements ModelClient {
+  async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
+    // call your provider, then yield { type: "text_delta" | "tool_call" | "done" }
+  }
+}
+```
+
+## Develop
 
 ```sh
-cp .env.example .env  # fill in your FEATHERLESS_API_KEY
 bun install
-bun run dev
-# → http://localhost:3000
+bun test         # run the suite (deterministic, zero network)
+bun run typecheck
 ```
 
-## Forking this as a new app
-
-```sh
-gh repo create my-org/my-app --template featherless-ai/advance-agent --clone
-cd my-app
-./platform_scripts/bootstrap.sh --slug my-app --name "My Cool App"
-git push origin main
-```
-
-Then add the app via the Featherless admin form, supplying the GitLab
-project path. CI will build and publish
-`docker.io/featherlessai/my-app:0.0.1` on the first `v0.0.1` tag.
-
-## Production build
-
-The Dockerfile produces a Nitro server output at
-`.output/server/index.mjs`. `entrypoint.sh` binds it to
-`$SANDBOX_SERVICE_PORT` (the port the Featherless platform proxies; 3000
-in practice). For local container runs:
-
-```sh
-docker build -t advance-agent:dev .
-docker run -e FEATHERLESS_API_KEY=rc_... \
-           -e SANDBOX_SERVICE_PORT=3000 \
-           -p 3000:3000 \
-           advance-agent:dev
-```
-
-## How env vars reach the app
-
-`app.yaml` declares three fields the admin form captures
-(`featherlessModel`, `featherlessApiKey`, `featherlessApiBaseUrl`) and
-maps them via `envTemplate` to `FEATHERLESS_MODEL`,
-`FEATHERLESS_API_KEY`, `FEATHERLESS_API_BASE_URL`. The platform injects
-these into the running container at boot, and Nuxt's
-`useRuntimeConfig()` reads them server-side at request time. No
-client-side env-var bundling, no `/runtime-config` bridge needed.
-
-## Releasing
-
-The standard `release.sh` from feather-agent works here — drop it in
-`platform_scripts/` after forking, or invoke manually:
-
-```sh
-git tag -a v0.0.2 -m "Bug fix"
-# bump appVersion in app.yaml to 0.0.2 in the same commit
-git push origin main v0.0.2
-```
-
-GitLab CI builds + publishes the image. The Featherless platform pulls
-the new image on next sandbox launch.
+The loop, memory, tools, and stop conditions are all verified against the
+streaming `FakeModelClient` — see [`agent-core/`](./agent-core) and its
+[README](./agent-core/README.md) / [architecture docs](./agent-core/docs/architecture.md).
