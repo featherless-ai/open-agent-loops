@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug current test file",
+      "program": "${file}",
+      "runtime": "bun",
+      "runtimeArgs": ["test"],
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "watchMode": false
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug all tests",
+      "program": "agent-core",
+      "runtime": "bun",
+      "runtimeArgs": ["test"],
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "watchMode": false
+    }
+  ]
+}

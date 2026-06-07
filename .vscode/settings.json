@@ -1,0 +1,4 @@
+{
+  "bun.test.enabled": true,
+  "bun.runtime": "bun"
+}
