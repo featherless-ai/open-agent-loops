@@ -23,6 +23,16 @@ export interface ToolCall {
 }
 
 /**
+ * Tool-call arguments *parsed* into an object — the form handed off to
+ * observers, hooks, and the gate (the wire form on `ToolCall.function.arguments`
+ * is a JSON string). Always an object: function-calling schemas are JSON Schema
+ * objects, so parsed arguments are keyed values. The value types aren't known at
+ * the loop level (each tool has its own schema), hence `unknown` per key — a
+ * tool's own `execute` gets them fully typed as `z.infer<schema>`.
+ */
+export type ToolArguments = Record<string, unknown>;
+
+/**
  * A single conversation message. The base shape mirrors the OpenAI
  * chat-completions message format (`role`, `content`, `tool_calls`,
  * `tool_call_id`); the remaining fields are EXTENSIONS — not in that spec, but
@@ -104,7 +114,7 @@ export type AgentEvent =
   | { type: "reasoning_delta"; text: string }
   | { type: "text_delta"; text: string }
   | { type: "message"; message: Message }
-  | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
+  | { type: "tool_start"; toolCallId: string; toolName: string; args: ToolArguments }
   | {
       type: "tool_end";
       toolCallId: string;

@@ -11,17 +11,22 @@
  * `maxSteps` safety cap is hit (prevents runaway loops).
  */
 
-import type { AgentEvent, EventSink, Message, ToolCall } from "../types";
+import type { AgentEvent, EventSink, Message, ToolArguments, ToolCall } from "../types";
 import type { ModelClient, ModelRequest } from "../model.types";
 import type { Memory } from "../memory/memory.types";
 import type { Tool, ToolResult } from "../tools/tools.types";
-import { toToolSpec, tryValidateToolArguments, validateToolArguments } from "../tools/tools";
+import {
+  parseToolArguments,
+  toToolSpec,
+  tryValidateToolArguments,
+  validateToolArguments,
+} from "../tools/tools";
 import type { StopCondition } from "../stop/conditions.types";
 
 /** One tool call presented to the gate, with its validated arguments. */
 export interface ToolGateRequest {
   toolCall: ToolCall;
-  args: unknown;
+  args: ToolArguments;
 }
 
 /** The gate's verdict for one call: run it, or block it with a reason. */
@@ -58,12 +63,12 @@ export interface Hooks {
   /** Inspect/block a tool call before it executes. */
   beforeToolCall?(info: {
     toolCall: ToolCall;
-    args: unknown;
+    args: ToolArguments;
   }): void | { block?: boolean; reason?: string } | Promise<void | { block?: boolean; reason?: string }>;
   /** Inspect/override a tool result after it executes. */
   afterToolCall?(info: {
     toolCall: ToolCall;
-    args: unknown;
+    args: ToolArguments;
     result: ToolResult;
     isError: boolean;
   }):
@@ -88,6 +93,13 @@ export interface RunAgentOptions {
   /** Force sequential tool execution regardless of per-tool mode. */
   toolExecution?: "parallel" | "sequential";
   onEvent?: EventSink;
+  /**
+   * Cancel the run. Aborting rejects `runAgent` with the signal's reason (an
+   * AbortError), checked before each turn and right after each model stream.
+   * The signal is also forwarded to the model request and every tool's
+   * `execute` context, so a cooperating client/tool can abort in-flight work;
+   * the loop's own checks guarantee it stops even if they don't.
+   */
   signal?: AbortSignal;
 }
 
@@ -135,6 +147,10 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 
   let steps = 0;
   while (true) {
+    // Cancellation: stop promptly on abort — before any model call, and so a
+    // post-tool abort ends here instead of spending one more turn. Throws the
+    // signal's reason (an AbortError), rejecting runAgent.
+    signal?.throwIfAborted();
     steps += 1;
     await emit({ type: "turn_start", step: steps });
 
@@ -152,6 +168,10 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     };
 
     const assistant = await streamAssistant(model, request, emit);
+    // If the stream was aborted, stop here rather than recording a partial,
+    // interrupted assistant turn (a cooperating client turns abort into an
+    // error event; this makes the run reject instead of returning it).
+    signal?.throwIfAborted();
     messages.push(assistant);
     newMessages.push(assistant);
     await memory.append(sessionId, [assistant]);
@@ -322,7 +342,7 @@ async function emitDenied(
 ): Promise<Message> {
   const content = reason ?? "Tool execution denied";
   const name = call.function.name;
-  await emit({ type: "tool_start", toolCallId: call.id, toolName: name, args: call.function.arguments });
+  await emit({ type: "tool_start", toolCallId: call.id, toolName: name, args: parseToolArguments(call) });
   await emit({ type: "tool_end", toolCallId: call.id, toolName: name, result: content, isError: true });
   return {
     role: "tool",
@@ -391,7 +411,7 @@ async function executeOne(
     type: "tool_start",
     toolCallId: call.id,
     toolName: name,
-    args: call.function.arguments,
+    args: parseToolArguments(call),
   });
 
   let result: ToolResult;

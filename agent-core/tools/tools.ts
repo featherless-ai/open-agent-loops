@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import type { ToolCall } from "../types";
+import type { ToolArguments, ToolCall } from "../types";
 import type { ToolSpec } from "../model.types";
 import type { Tool } from "./tools.types";
 
@@ -31,7 +31,7 @@ export function toToolSpec(tool: Tool): ToolSpec {
  * mismatch; the loop converts that into an error tool-result rather than
  * crashing the run.
  */
-export function validateToolArguments(tool: Tool, call: ToolCall): unknown {
+export function validateToolArguments(tool: Tool, call: ToolCall): ToolArguments {
   let raw: unknown;
   try {
     raw = parseArgumentsJson(call.function.arguments);
@@ -47,7 +47,8 @@ export function validateToolArguments(tool: Tool, call: ToolCall): unknown {
       .join("; ");
     throw new Error(`Invalid arguments for tool "${tool.name}": ${issues}`);
   }
-  return parsed.data;
+  // Object by construction: function-calling schemas are JSON Schema objects.
+  return parsed.data as ToolArguments;
 }
 
 /**
@@ -58,7 +59,7 @@ export function validateToolArguments(tool: Tool, call: ToolCall): unknown {
 export function tryValidateToolArguments(
   tool: Tool,
   call: ToolCall,
-): { ok: true; value: unknown } | { ok: false } {
+): { ok: true; value: ToolArguments } | { ok: false } {
   let raw: unknown;
   try {
     raw = parseArgumentsJson(call.function.arguments);
@@ -66,7 +67,25 @@ export function tryValidateToolArguments(
     return { ok: false };
   }
   const parsed = tool.parameters.safeParse(raw);
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
+  return parsed.success ? { ok: true, value: parsed.data as ToolArguments } : { ok: false };
+}
+
+/**
+ * Best-effort parse of a call's wire arguments into an object, for observation
+ * (the `tool_start` event) — independent of any tool/schema, so it works even
+ * for an unknown tool. Malformed or non-object JSON yields `{}`; shape enforcement
+ * is `validateToolArguments`' job, just before the tool runs.
+ */
+export function parseToolArguments(call: ToolCall): ToolArguments {
+  let raw: unknown;
+  try {
+    raw = parseArgumentsJson(call.function.arguments);
+  } catch {
+    return {};
+  }
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as ToolArguments)
+    : {};
 }
 
 /** Parse a tool call's JSON-string arguments; empty string means no arguments. */

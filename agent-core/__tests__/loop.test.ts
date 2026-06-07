@@ -314,6 +314,73 @@ describe("runAgent", () => {
     expect(input[1]!.reasoning).toBe("dropped");
   });
 
+  // Edge: tool_start hands off parsed object args, not the raw JSON string.
+  test("edge: tool_start carries parsed object args", async () => {
+    let startArgs: unknown;
+    const model = new FakeModelClient([
+      { toolCalls: [{ name: "echo", arguments: { text: "hi" } }] },
+      { text: "done" },
+    ]);
+    await runAgent({
+      model,
+      memory: new SessionMemoryStore(),
+      sessionId: "s",
+      prompt: "go",
+      tools: [echo],
+      onEvent: (e) => {
+        if (e.type === "tool_start") startArgs = e.args;
+      },
+    });
+    expect(startArgs).toEqual({ text: "hi" }); // a structured object, not '{"text":"hi"}'
+  });
+
+  // Edge: a pre-aborted signal rejects before any model call.
+  test("edge: a pre-aborted signal stops before the first turn", async () => {
+    const model = new FakeModelClient([{ text: "never" }]);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      runAgent({
+        model,
+        memory: new SessionMemoryStore(),
+        sessionId: "s",
+        prompt: "go",
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    expect(model.requests).toHaveLength(0); // never reached the model
+  });
+
+  // Edge: aborting during a tool halts the run before the next model call.
+  test("edge: aborting during a tool stops the run", async () => {
+    const controller = new AbortController();
+    const stop = defineTool({
+      name: "stop",
+      description: "Aborts the run",
+      parameters: z.object({}),
+      execute: () => {
+        controller.abort();
+        return { content: "ok" };
+      },
+    });
+    const model = new FakeModelClient([
+      { toolCalls: [{ name: "stop", arguments: {} }] },
+      { text: "should not be reached" },
+    ]);
+    await expect(
+      runAgent({
+        model,
+        memory: new SessionMemoryStore(),
+        sessionId: "s",
+        prompt: "go",
+        tools: [stop],
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    // Only the first turn ran; the abort prevented a second model call.
+    expect(model.requests).toHaveLength(1);
+  });
+
   // Edge: lifecycle events are emitted around the run.
   test("edge: emits agent_start, turn_start, and agent_end", async () => {
     const events: AgentEvent[] = [];
