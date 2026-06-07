@@ -45,21 +45,21 @@ describe("SessionMemoryStore", () => {
     expect((await store.load("s"))[0]!.content).toBe("orig");
   });
 
-  // Edge: the copy is deep — mutating nested tool-call arguments is isolated.
-  test("edge: defensive copy reaches nested tool-call arguments", async () => {
+  // Edge: the copy is deep — mutating a nested tool-call field is isolated.
+  test("edge: defensive copy reaches nested tool-call fields", async () => {
     const store = new SessionMemoryStore();
     const assistant: Message = {
       role: "assistant",
       content: "",
-      toolCalls: [{ id: "1", name: "search", arguments: { filter: { city: "Paris" } } }],
+      tool_calls: [{ id: "1", type: "function", function: { name: "search", arguments: '{"q":"x"}' } }],
     };
     await store.append("s", [assistant]);
 
     const loaded = await store.load("s");
-    (loaded[0]!.toolCalls![0]!.arguments.filter as { city: string }).city = "London";
+    loaded[0]!.tool_calls![0]!.function.name = "hacked";
 
     const reloaded = await store.load("s");
-    expect((reloaded[0]!.toolCalls![0]!.arguments.filter as { city: string }).city).toBe("Paris");
+    expect(reloaded[0]!.tool_calls![0]!.function.name).toBe("search");
   });
 
   // Edge: clear removes history for a session.

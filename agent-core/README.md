@@ -62,6 +62,48 @@ const result = await runAgent({
 console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
 ```
 
+## Gating tool calls (permissions)
+
+The whole turn's tool calls arrive together, so admission is a **batch** concern.
+The `gateToolCalls` hook runs once per turn — serially, *before* the parallel
+execution phase — and returns one decision per call. Denied calls never run; they
+become error tool-results the model can react to. Because gating happens in this
+single up-front phase, an interactive permission prompt never races the parallel
+tool execution.
+
+`permissionGate` implements the hook as an allow / deny / **ask** policy from two
+small seams: a `PermissionStore` (the config the loop reads, and where "always"
+choices are persisted) and an `ApprovalPrompter` (how you ask the user when the
+policy is "ask").
+
+```ts
+import { runAgent, permissionGate, InMemoryPermissionStore } from "~/agent-core";
+import type { ApprovalPrompter } from "~/agent-core";
+
+// Config: read tool policies from anywhere. "ask" means prompt the user.
+const store = new InMemoryPermissionStore({
+  fallback: "ask",
+  rules: { read_file: "allow", deploy: "deny" },
+});
+
+// CLI prompter: present the pending calls and return a choice each.
+const prompter: ApprovalPrompter = {
+  async ask(batch) {
+    return batch.map(() => "allow_once"); // allow_once | allow_always | deny_once | deny_always
+  },
+};
+
+await runAgent({
+  /* model, memory, sessionId, prompt, tools, */
+  hooks: { gateToolCalls: permissionGate(store, prompter) },
+});
+```
+
+An `allow_always` / `deny_always` choice is written back to the store, so the
+next run — even a fresh CLI process backed by a JSON-file store — won't ask
+again. Swap `InMemoryPermissionStore` for a file-backed store to make decisions
+durable across runs.
+
 ## Adding a real model client
 
 Implement the one method — `stream()`. Map `req.messages`/`req.tools` to your

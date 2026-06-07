@@ -6,26 +6,45 @@
 
 export type Role = "system" | "user" | "assistant" | "tool";
 
-/** A tool invocation requested by the model. */
+/**
+ * A tool invocation requested by the model — the OpenAI chat-completions wire
+ * shape verbatim: `{ id, type, function: { name, arguments } }`, where
+ * `arguments` is a JSON *string* (not a parsed object). The loop JSON-parses
+ * and schema-validates it before the tool runs.
+ */
 export interface ToolCall {
   id: string;
-  name: string;
-  arguments: Record<string, unknown>;
+  type: "function";
+  function: {
+    name: string;
+    /** Arguments as a JSON string, exactly as the model emitted them. */
+    arguments: string;
+  };
 }
 
 /**
- * A single conversation message. One shape covers user/assistant/tool turns:
- * - assistant turns may carry `reasoning` and/or `toolCalls`
- * - tool-result turns set `toolCallId` / `toolName` / `isError`
+ * A single conversation message. The base shape mirrors the OpenAI
+ * chat-completions message format (`role`, `content`, `tool_calls`,
+ * `tool_call_id`); the remaining fields are EXTENSIONS — not in that spec, but
+ * kept deliberately for agent engineering (`reasoning`, `toolName`, `isError`,
+ * `timestamp`), each marked below. One shape covers user/assistant/tool turns:
+ * - assistant turns may carry `reasoning` and/or `tool_calls`
+ * - tool-result turns set `tool_call_id` / `toolName` / `isError`
  */
 export interface Message {
   role: Role;
   content: string;
   /**
    * The model's reasoning / chain-of-thought for this turn — a channel
-   * distinct from `content`. Set on assistant turns from reasoning models.
-   * Providers expose it as `reasoning` (current vLLM / OpenAI-style) or
-   * `reasoning_content` (DeepSeek's first-party API, legacy vLLM).
+   * distinct from `content`, set on assistant turns from reasoning models.
+   *
+   * A deliberate, NON-STANDARD extension to the OpenAI chat-completions
+   * format. That standard covers text + tool calls; reasoning is an addition
+   * every reasoning provider bolts on under its own field name — `reasoning`
+   * (current vLLM / OpenAI-style) or `reasoning_content` (DeepSeek's
+   * first-party API, legacy vLLM). Adding a field on top of the standard is
+   * normal and expected; it's called out here so the divergence is explicit
+   * rather than hidden.
    *
    * Provider-agnostic: this holds whatever reasoning channel a model emits.
    * Models known to emit one (via a vLLM reasoning parser or a native API):
@@ -56,10 +75,25 @@ export interface Message {
    *     https://platform.openai.com/docs/guides/reasoning
    */
   reasoning?: string;
-  toolCalls?: ToolCall[];
-  toolCallId?: string;
+
+  /** Standard wire field: tool calls the assistant wants to make (assistant turns). */
+  tool_calls?: ToolCall[];
+  /** Standard wire field: the id of the tool call a tool-role message answers (tool turns). */
+  tool_call_id?: string;
+
+  /**
+   * [extension — not in the OpenAI spec] The function name a tool-role message
+   * answers. Lets the loop route results and lets stop conditions match on tool
+   * name without re-deriving it from `tool_call_id`; OpenAI tool messages omit it.
+   */
   toolName?: string;
+  /**
+   * [extension — not in the OpenAI spec] Marks a tool result as an error, so
+   * hooks and UIs can treat a failed call differently from a normal one; the
+   * wire format carries only plain `content`.
+   */
   isError?: boolean;
+  /** [extension — not in the OpenAI spec] Creation time (ms since epoch), for ordering. */
   timestamp?: number;
 }
 

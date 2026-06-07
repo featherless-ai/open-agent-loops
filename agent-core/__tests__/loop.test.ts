@@ -303,7 +303,7 @@ describe("runAgent", () => {
   // Edge: prepareRequestMessages applies the resend rule purely, no mutation.
   test("edge: prepareRequestMessages strips only no-tool reasoning", () => {
     const input = [
-      { role: "assistant" as const, content: "a", reasoning: "kept", toolCalls: [{ id: "1", name: "t", arguments: {} }] },
+      { role: "assistant" as const, content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: "function" as const, function: { name: "t", arguments: "{}" } }] },
       { role: "assistant" as const, content: "b", reasoning: "dropped" },
       { role: "user" as const, content: "c" },
     ];

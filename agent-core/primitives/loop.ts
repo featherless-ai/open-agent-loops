@@ -15,8 +15,21 @@ import type { AgentEvent, EventSink, Message, ToolCall } from "../types";
 import type { ModelClient, ModelRequest } from "../model.types";
 import type { Memory } from "../memory/memory.types";
 import type { Tool, ToolResult } from "../tools/tools.types";
-import { toToolSpec, validateToolArguments } from "../tools/tools";
+import { toToolSpec, tryValidateToolArguments, validateToolArguments } from "../tools/tools";
 import type { StopCondition } from "../stop/conditions.types";
+
+/** One tool call presented to the gate, with its validated arguments. */
+export interface ToolGateRequest {
+  toolCall: ToolCall;
+  args: unknown;
+}
+
+/** The gate's verdict for one call: run it, or block it with a reason. */
+export interface GateDecision {
+  allow: boolean;
+  /** Shown to the model as the error tool-result when `allow` is false. */
+  reason?: string;
+}
 
 /** Lifecycle hooks for guardrails and context shaping. */
 export interface Hooks {
@@ -32,6 +45,16 @@ export interface Hooks {
    *     https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
    */
   transformContext?(messages: Message[]): Message[] | Promise<Message[]>;
+  /**
+   * Admit or block tool calls *as a batch*, before any of them execute. The
+   * whole turn's calls arrive together, so this runs once per turn — serially,
+   * ahead of the parallel execution phase — which makes it the right place to
+   * prompt for permission without racing concurrent prompts. Return one decision
+   * per request, index-aligned. Only well-formed calls (known tool + valid args)
+   * are presented; unknown/invalid calls skip the gate and surface as the usual
+   * error results. See `../permissions` for an allow/deny/ask implementation.
+   */
+  gateToolCalls?(batch: ToolGateRequest[]): GateDecision[] | Promise<GateDecision[]>;
   /** Inspect/block a tool call before it executes. */
   beforeToolCall?(info: {
     toolCall: ToolCall;
@@ -134,22 +157,43 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     await memory.append(sessionId, [assistant]);
     await emit({ type: "message", message: assistant });
 
-    const toolCalls = assistant.toolCalls ?? [];
+    const toolCalls = assistant.tool_calls ?? [];
 
     // Natural stop: a turn with no tool calls is the final answer.
     if (toolCalls.length === 0) {
       break;
     }
 
-    // --- run the requested tools -----------------------------------------
-    const { results, terminate } = await executeToolCalls(
-      toolCalls,
+    // --- phase 1: gate the whole batch up front (serial) -----------------
+    // Decide admission before anything runs, so a permission prompt happens
+    // once, ahead of execution, and never races the parallel phase below.
+    const gate = await gateToolBatch(toolCalls, toolsByName, hooks);
+
+    const approved: ToolCall[] = [];
+    const deniedResults: Message[] = [];
+    for (let i = 0; i < toolCalls.length; i += 1) {
+      if (gate[i]!.allow) approved.push(toolCalls[i]!);
+      else deniedResults.push(await emitDenied(toolCalls[i]!, gate[i]!.reason, emit));
+    }
+
+    // --- phase 2: execute the approved calls (parallel by default) -------
+    const { results: executed, terminate } = await executeToolCalls(
+      approved,
       toolsByName,
       hooks,
       toolExecution,
       emit,
       signal,
     );
+
+    // Reassemble results in the original call order (approved + denied), so the
+    // model sees one tool-result per call in the order it requested them.
+    let ai = 0;
+    let di = 0;
+    const results = toolCalls.map((_, i) =>
+      gate[i]!.allow ? executed[ai++]! : deniedResults[di++]!,
+    );
+
     for (const result of results) {
       messages.push(result);
       newMessages.push(result);
@@ -182,7 +226,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
  */
 export function prepareRequestMessages(messages: Message[]): Message[] {
   return messages.map((message) => {
-    const isToolCallTurn = (message.toolCalls?.length ?? 0) > 0;
+    const isToolCallTurn = (message.tool_calls?.length ?? 0) > 0;
     if (message.role === "assistant" && message.reasoning !== undefined && !isToolCallTurn) {
       const { reasoning: _dropped, ...rest } = message;
       return rest;
@@ -231,10 +275,63 @@ async function streamAssistant(
       role: "assistant",
       content: text,
       ...(reasoning ? { reasoning } : {}),
-      ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       timestamp: Date.now(),
     }
   );
+}
+
+/**
+ * Phase 1 of tool handling: ask the gate hook to admit/block the batch before
+ * anything runs. Only well-formed calls (known tool + valid args) are presented
+ * — unknown or malformed calls are auto-allowed here so they flow on to produce
+ * their normal error results in execution, rather than prompting about a call
+ * that can't run. With no gate hook, everything is allowed.
+ */
+async function gateToolBatch(
+  toolCalls: ToolCall[],
+  toolsByName: Map<string, Tool>,
+  hooks: Hooks,
+): Promise<GateDecision[]> {
+  const decisions: GateDecision[] = toolCalls.map(() => ({ allow: true }));
+  if (!hooks.gateToolCalls) return decisions;
+
+  // Present only well-formed calls; remember each one's original position.
+  const gateable: Array<{ index: number; request: ToolGateRequest }> = [];
+  toolCalls.forEach((toolCall, index) => {
+    const tool = toolsByName.get(toolCall.function.name);
+    if (!tool) return;
+    const parsed = tryValidateToolArguments(tool, toolCall);
+    if (!parsed.ok) return;
+    gateable.push({ index, request: { toolCall, args: parsed.value } });
+  });
+  if (gateable.length === 0) return decisions;
+
+  const verdicts = await hooks.gateToolCalls(gateable.map((g) => g.request));
+  gateable.forEach((g, k) => {
+    decisions[g.index] = verdicts[k] ?? { allow: true };
+  });
+  return decisions;
+}
+
+/** Emit start/end events and build the error tool-result for a blocked call. */
+async function emitDenied(
+  call: ToolCall,
+  reason: string | undefined,
+  emit: EventSink,
+): Promise<Message> {
+  const content = reason ?? "Tool execution denied";
+  const name = call.function.name;
+  await emit({ type: "tool_start", toolCallId: call.id, toolName: name, args: call.function.arguments });
+  await emit({ type: "tool_end", toolCallId: call.id, toolName: name, result: content, isError: true });
+  return {
+    role: "tool",
+    content,
+    tool_call_id: call.id,
+    toolName: name,
+    isError: true,
+    timestamp: Date.now(),
+  };
 }
 
 interface ToolBatchOutcome {
@@ -253,7 +350,7 @@ async function executeToolCalls(
   signal: AbortSignal | undefined,
 ): Promise<ToolBatchOutcome> {
   const hasSequentialTool = toolCalls.some(
-    (call) => toolsByName.get(call.name)?.executionMode === "sequential",
+    (call) => toolsByName.get(call.function.name)?.executionMode === "sequential",
   );
   const sequential = mode === "sequential" || hasSequentialTool;
 
@@ -289,19 +386,20 @@ async function executeOne(
   emit: EventSink,
   signal: AbortSignal | undefined,
 ): Promise<FinalizedCall> {
+  const name = call.function.name;
   await emit({
     type: "tool_start",
     toolCallId: call.id,
-    toolName: call.name,
-    args: call.arguments,
+    toolName: name,
+    args: call.function.arguments,
   });
 
   let result: ToolResult;
   let isError = false;
 
-  const tool = toolsByName.get(call.name);
+  const tool = toolsByName.get(name);
   if (!tool) {
-    result = { content: `Tool "${call.name}" not found` };
+    result = { content: `Tool "${name}" not found` };
     isError = true;
   } else {
     try {
@@ -334,7 +432,7 @@ async function executeOne(
   await emit({
     type: "tool_end",
     toolCallId: call.id,
-    toolName: call.name,
+    toolName: name,
     result: result.content,
     isError,
   });
@@ -342,8 +440,8 @@ async function executeOne(
   const message: Message = {
     role: "tool",
     content: result.content,
-    toolCallId: call.id,
-    toolName: call.name,
+    tool_call_id: call.id,
+    toolName: name,
     isError,
     timestamp: Date.now(),
   };

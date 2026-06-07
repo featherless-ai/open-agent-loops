@@ -16,7 +16,12 @@ export interface ScriptedTurn {
   text?: string;
   /** Chain-of-thought, streamed as `reasoning_delta` chunks before the text. */
   reasoning?: string;
-  toolCalls?: Array<Omit<ToolCall, "id"> & { id?: string }>;
+  /**
+   * Tool calls to emit. Authoring shape (name + an object of args); the fake
+   * serializes `arguments` to the wire JSON string for you, so tests stay
+   * readable while the emitted ToolCall matches the real wire format.
+   */
+  toolCalls?: Array<{ id?: string; name: string; arguments?: Record<string, unknown> }>;
   /** Force this turn to stream as an error after emitting its content. */
   error?: string;
 }
@@ -78,11 +83,15 @@ export class FakeModelClient implements ModelClient {
       yield { type: "text_delta", text: chunk };
     }
 
-    // 3. Emit any tool calls, assigning ids when the script omitted them.
+    // 3. Emit any tool calls, assigning ids when the script omitted them and
+    //    serializing object args to the wire JSON string.
     const toolCalls: ToolCall[] = (turn.toolCalls ?? []).map((call, i) => ({
       id: call.id ?? `call_${this.callIndex}_${i}`,
-      name: call.name,
-      arguments: call.arguments,
+      type: "function",
+      function: {
+        name: call.name,
+        arguments: JSON.stringify(call.arguments ?? {}),
+      },
     }));
     for (const toolCall of toolCalls) {
       yield { type: "tool_call", toolCall };
@@ -93,7 +102,7 @@ export class FakeModelClient implements ModelClient {
       role: "assistant",
       content: text,
       ...(reasoning ? { reasoning } : {}),
-      ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       timestamp: Date.now(),
     };
 

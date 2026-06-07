@@ -25,12 +25,22 @@ export function toToolSpec(tool: Tool): ToolSpec {
 }
 
 /**
- * Validate a tool call's raw arguments against the tool's schema.
- * Throws a descriptive Error on failure; the loop converts that into an
- * error tool-result rather than crashing the run.
+ * Validate a tool call against the tool's schema. The call carries its
+ * arguments as a JSON *string* (the OpenAI wire format), so we JSON-parse it
+ * first, then schema-check. Throws a descriptive Error on bad JSON or a schema
+ * mismatch; the loop converts that into an error tool-result rather than
+ * crashing the run.
  */
 export function validateToolArguments(tool: Tool, call: ToolCall): unknown {
-  const parsed = tool.parameters.safeParse(call.arguments);
+  let raw: unknown;
+  try {
+    raw = parseArgumentsJson(call.function.arguments);
+  } catch {
+    throw new Error(
+      `Arguments for tool "${call.function.name}" are not valid JSON: ${call.function.arguments}`,
+    );
+  }
+  const parsed = tool.parameters.safeParse(raw);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
@@ -38,4 +48,28 @@ export function validateToolArguments(tool: Tool, call: ToolCall): unknown {
     throw new Error(`Invalid arguments for tool "${tool.name}": ${issues}`);
   }
   return parsed.data;
+}
+
+/**
+ * Non-throwing counterpart of `validateToolArguments`: parse + schema-check and
+ * report success without raising. Used to decide whether a call is well-formed
+ * (e.g. before presenting it to the permission gate).
+ */
+export function tryValidateToolArguments(
+  tool: Tool,
+  call: ToolCall,
+): { ok: true; value: unknown } | { ok: false } {
+  let raw: unknown;
+  try {
+    raw = parseArgumentsJson(call.function.arguments);
+  } catch {
+    return { ok: false };
+  }
+  const parsed = tool.parameters.safeParse(raw);
+  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
+}
+
+/** Parse a tool call's JSON-string arguments; empty string means no arguments. */
+function parseArgumentsJson(raw: string): unknown {
+  return raw ? JSON.parse(raw) : {};
 }

@@ -47,4 +47,21 @@ export type { StopCondition, StopContext } from "./stop/conditions.types";
 export { withMemoryListeners, withMemoryNamespace, withModelObserver } from "./compose";
 
 export { prepareRequestMessages, runAgent } from "./primitives/loop";
-export type { Hooks, RunAgentOptions, RunResult } from "./primitives/loop";
+export type {
+  GateDecision,
+  Hooks,
+  RunAgentOptions,
+  RunResult,
+  ToolGateRequest,
+} from "./primitives/loop";
+
+export { permissionGate } from "./permissions/permission-gate";
+export { InMemoryPermissionStore } from "./permissions/in-memory-permission-store";
+export type { InMemoryPermissionStoreOptions } from "./permissions/in-memory-permission-store";
+export type {
+  ApprovalChoice,
+  ApprovalPrompter,
+  ApprovalRequest,
+  PermissionPolicy,
+  PermissionStore,
+} from "./permissions/permissions.types";

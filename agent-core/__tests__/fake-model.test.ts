@@ -75,7 +75,7 @@ describe("FakeModelClient", () => {
     ]);
     const events = await collect(model.stream(req));
     const toolCall = events.find((e) => e.type === "tool_call") as any;
-    expect(toolCall.toolCall.name).toBe("search");
+    expect(toolCall.toolCall.function.name).toBe("search");
     expect(typeof toolCall.toolCall.id).toBe("string");
     expect(toolCall.toolCall.id.length).toBeGreaterThan(0);
   });

@@ -12,8 +12,15 @@ const adder = defineTool({
 
 const call = (args: Record<string, unknown>): ToolCall => ({
   id: "c1",
-  name: "add",
-  arguments: args,
+  type: "function",
+  function: { name: "add", arguments: JSON.stringify(args) },
+});
+
+/** A call whose wire arguments are a raw (possibly malformed) JSON string. */
+const rawCall = (argsJson: string): ToolCall => ({
+  id: "c1",
+  type: "function",
+  function: { name: "add", arguments: argsJson },
 });
 
 describe("tools", () => {
@@ -32,6 +39,22 @@ describe("tools", () => {
   // Edge: missing required fields are rejected.
   test("edge: missing required arguments throw", () => {
     expect(() => validateToolArguments(adder, call({ a: 1 }))).toThrow(/add/);
+  });
+
+  // Edge: malformed JSON in the wire arguments throws before schema-checking.
+  test("edge: non-JSON arguments throw a JSON error", () => {
+    expect(() => validateToolArguments(adder, rawCall("{not json"))).toThrow(/not valid JSON/);
+  });
+
+  // Edge: an empty arguments string is treated as no arguments ({}).
+  test("edge: empty arguments string means no args", () => {
+    const noArgTool = defineTool({
+      name: "noop",
+      description: "no args",
+      parameters: z.object({}),
+      execute: () => ({ content: "ok" }),
+    });
+    expect(validateToolArguments(noArgTool, rawCall(""))).toEqual({});
   });
 
   // Edge: Zod coercion/stripping behavior — unknown keys are dropped, not kept.
