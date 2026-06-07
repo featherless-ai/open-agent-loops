@@ -42,7 +42,7 @@ type Emit = (event: AgentEventBody) => Promise<void>;
 /**
  * One tool call presented to the gate, with its validated arguments.
  *
- * @group Core
+ * @group Hooks & Gating
  * @see {@link Hooks.gateToolCalls}
  */
 export interface ToolGateRequest {
@@ -55,7 +55,7 @@ export interface ToolGateRequest {
 /**
  * The gate's verdict for one call: run it, or block it with a reason.
  *
- * @group Core
+ * @group Hooks & Gating
  * @see {@link Hooks.gateToolCalls}
  */
 export interface GateDecision {
@@ -72,7 +72,7 @@ export interface GateDecision {
  * Returning nothing (or `block` falsy) lets the call proceed.
  *
  * @see {@link Hooks.beforeToolCall}
- * @group Core
+ * @group Hooks & Gating
  */
 export interface ToolCallDecision {
   /** When true, block the call instead of executing it. */
@@ -88,7 +88,7 @@ export interface ToolCallDecision {
  * Returning nothing keeps the original result and error flag unchanged.
  *
  * @see {@link Hooks.afterToolCall}
- * @group Core
+ * @group Hooks & Gating
  */
 export interface ToolResultOverride {
   /** Replacement tool result; omit to keep the original. */
@@ -107,7 +107,7 @@ export interface ToolResultOverride {
  * execution, then {@link Hooks.beforeToolCall | beforeToolCall} /
  * {@link Hooks.afterToolCall | afterToolCall} around each individual call.
  *
- * @group Core
+ * @group Hooks & Gating
  */
 export interface Hooks {
   /**
