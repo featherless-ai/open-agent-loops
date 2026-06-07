@@ -72,6 +72,19 @@ export interface OpenAICompatibleOptions {
    * only — it cannot change what the loop receives.
    */
   onRawSSE?: (line: string) => void;
+  /**
+   * Per-request timeout in milliseconds. A request that exceeds this aborts and
+   * surfaces as an {@link StreamEventType.Error} event (the SDK throws
+   * `APIConnectionTimeoutError`, which the stream catches). Defaults to 5
+   * minutes when omitted. Ignored when {@link client} is set.
+   */
+  timeout?: number;
+  /**
+   * Max automatic retries on connection errors / timeouts / 408 / 409 / 429 /
+   * 5xx, with exponential backoff (SDK behavior). Defaults to the SDK default
+   * (2) when omitted. Ignored when {@link client} is set.
+   */
+  maxRetries?: number;
   /** Extra create params merged into every request (temperature, top_p, ...). */
   params?: Partial<Omit<ChatParams, "model" | "messages" | "tools" | "stream">>;
   /**
@@ -130,6 +143,8 @@ export class OpenAICompatibleModel implements ModelClient {
       new OpenAI({
         apiKey: options.apiKey,
         baseURL: options.baseURL,
+        timeout: options.timeout ?? 5 * 60 * 1000,
+        ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         fetch: options.onRawSSE ? sseTapFetch(options.onRawSSE) : undefined,
       });
   }
