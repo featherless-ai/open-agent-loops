@@ -22,7 +22,9 @@
 
 import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
+import { StreamEventType } from "../model.types";
 import type { Message, ToolCall } from "../types";
+import { Role, ToolCallType } from "../types";
 
 type ChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
@@ -92,7 +94,7 @@ export class OpenAICompatibleModel implements ModelClient {
       chunks = await this.client.chat.completions.create(params, { signal: request.signal });
     } catch (error) {
       // Connection / request-setup failure: nothing streamed yet.
-      yield { type: "error", error: asError(error), message: emptyAssistant() };
+      yield { type: StreamEventType.Error, error: asError(error), message: emptyAssistant() };
       return;
     }
     yield* chunksToEvents(chunks);
@@ -111,13 +113,13 @@ export function toChatMessages(request: ModelRequest): ChatMessage[] {
 
 function toChatMessage(message: Message): ChatMessage {
   switch (message.role) {
-    case "system":
+    case Role.System:
       return { role: "system", content: message.content };
-    case "user":
+    case Role.User:
       return { role: "user", content: message.content };
-    case "tool":
+    case Role.Tool:
       return { role: "tool", tool_call_id: message.tool_call_id ?? "", content: message.content };
-    case "assistant": {
+    case Role.Assistant: {
       const out: Record<string, unknown> = { role: "assistant", content: message.content };
       // tool_calls is already the OpenAI wire shape, so it passes straight through.
       if (message.tool_calls && message.tool_calls.length > 0) out.tool_calls = message.tool_calls;
@@ -171,11 +173,11 @@ export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGe
       const reasoningText = readReasoning(delta);
       if (reasoningText) {
         reasoning += reasoningText;
-        yield { type: "reasoning_delta", text: reasoningText };
+        yield { type: StreamEventType.ReasoningDelta, text: reasoningText };
       }
       if (delta.content) {
         content += delta.content;
-        yield { type: "text_delta", text: delta.content };
+        yield { type: StreamEventType.TextDelta, text: delta.content };
       }
       for (const call of delta.tool_calls ?? []) {
         const draft = toolDrafts.get(call.index) ?? { id: "", name: "", args: "" };
@@ -186,13 +188,13 @@ export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGe
       }
     }
   } catch (error) {
-    yield { type: "error", error: asError(error), message: assemble(content, reasoning, toolDrafts) };
+    yield { type: StreamEventType.Error, error: asError(error), message: assemble(content, reasoning, toolDrafts) };
     return;
   }
 
   const message = assemble(content, reasoning, toolDrafts);
-  for (const toolCall of message.tool_calls ?? []) yield { type: "tool_call", toolCall };
-  yield { type: "done", message };
+  for (const toolCall of message.tool_calls ?? []) yield { type: StreamEventType.ToolCall, toolCall };
+  yield { type: StreamEventType.Done, message };
 }
 
 /** Read the non-standard reasoning field off a delta (`reasoning` | `reasoning_content`). */
@@ -207,9 +209,9 @@ function assemble(content: string, reasoning: string, drafts: Map<number, ToolDr
   // loop JSON-parses and schema-validates it before the tool runs.
   const toolCalls: ToolCall[] = [...drafts.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([, draft]) => ({ id: draft.id, type: "function", function: { name: draft.name, arguments: draft.args } }));
+    .map(([, draft]) => ({ id: draft.id, type: ToolCallType.Function, function: { name: draft.name, arguments: draft.args } }));
   return {
-    role: "assistant",
+    role: Role.Assistant,
     content,
     ...(reasoning ? { reasoning } : {}),
     ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
@@ -218,7 +220,7 @@ function assemble(content: string, reasoning: string, drafts: Map<number, ToolDr
 }
 
 function emptyAssistant(): Message {
-  return { role: "assistant", content: "", timestamp: Date.now() };
+  return { role: Role.Assistant, content: "", timestamp: Date.now() };
 }
 
 function asError(error: unknown): Error {

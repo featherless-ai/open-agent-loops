@@ -6,6 +6,8 @@ import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
 import type { AgentEvent } from "../types";
+import { AgentEventType, Role, ToolCallType } from "../types";
+import { ExecutionMode } from "../tools/tools.types";
 
 /** A no-op echo tool used to exercise the tool path. */
 const echo = defineTool({
@@ -25,7 +27,7 @@ describe("runAgent", () => {
     expect(result.steps).toBe(1);
     expect(result.messages.at(-1)?.content).toBe("the answer");
     // Prompt + assistant were both persisted.
-    expect((await memory.load("s")).map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect((await memory.load("s")).map((m) => m.role)).toEqual([Role.User, Role.Assistant]);
   });
 
   // Edge: a tool call drives a second turn (call -> result -> final answer).
@@ -43,7 +45,7 @@ describe("runAgent", () => {
     });
 
     expect(result.steps).toBe(2);
-    const toolMsg = result.messages.find((m) => m.role === "tool");
+    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
     expect(toolMsg?.content).toBe("echo:hi");
     expect(result.messages.at(-1)?.content).toBe("done");
   });
@@ -116,7 +118,7 @@ describe("runAgent", () => {
       prompt: "go",
       tools: [echo],
     });
-    const toolMsg = result.messages.find((m) => m.role === "tool");
+    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
     expect(toolMsg?.isError).toBe(true);
     expect(toolMsg?.content).toMatch(/not found/);
   });
@@ -142,7 +144,7 @@ describe("runAgent", () => {
       prompt: "go",
       tools: [boom],
     });
-    const toolMsg = result.messages.find((m) => m.role === "tool");
+    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
     expect(toolMsg?.isError).toBe(true);
     expect(toolMsg?.content).toBe("kaboom");
   });
@@ -172,7 +174,7 @@ describe("runAgent", () => {
       hooks: { beforeToolCall: () => ({ block: true, reason: "denied" }) },
     });
     expect(executed).toBe(false);
-    const toolMsg = result.messages.find((m) => m.role === "tool");
+    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
     expect(toolMsg?.content).toBe("denied");
     expect(toolMsg?.isError).toBe(true);
   });
@@ -191,7 +193,7 @@ describe("runAgent", () => {
       tools: [echo],
       hooks: { afterToolCall: () => ({ result: { content: "overridden" } }) },
     });
-    expect(result.messages.find((m) => m.role === "tool")?.content).toBe("overridden");
+    expect(result.messages.find((m) => m.role === Role.Tool)?.content).toBe("overridden");
   });
 
   // Edge: sequential vs parallel execution ordering is observable.
@@ -224,7 +226,7 @@ describe("runAgent", () => {
       sessionId: "s",
       prompt: "go",
       tools: [make("A"), make("B")],
-      toolExecution: "sequential",
+      toolExecution: ExecutionMode.Sequential,
     });
     // Sequential => A fully completes before B starts.
     expect(log).toEqual(["A-start", "A-end", "B-start", "B-end"]);
@@ -268,7 +270,7 @@ describe("runAgent", () => {
       sessionId: "s",
       prompt: "q",
       onEvent: (e) => {
-        if (e.type === "reasoning_delta") reasoningText.push(e.text);
+        if (e.type === AgentEventType.ReasoningDelta) reasoningText.push(e.text);
       },
     });
     const assistant = result.messages.at(-1);
@@ -295,7 +297,7 @@ describe("runAgent", () => {
     // The 2nd request carries the prior tool-call assistant turn — with its
     // reasoning preserved (required for tool-call continuity).
     const secondReqAssistant = model.requests[1]!.messages.find(
-      (m) => m.role === "assistant",
+      (m) => m.role === Role.Assistant,
     );
     expect(secondReqAssistant?.reasoning).toBe("must call echo");
   });
@@ -303,9 +305,9 @@ describe("runAgent", () => {
   // Edge: prepareRequestMessages applies the resend rule purely, no mutation.
   test("edge: prepareRequestMessages strips only no-tool reasoning", () => {
     const input = [
-      { role: "assistant" as const, content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: "function" as const, function: { name: "t", arguments: "{}" } }] },
-      { role: "assistant" as const, content: "b", reasoning: "dropped" },
-      { role: "user" as const, content: "c" },
+      { role: Role.Assistant, content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
+      { role: Role.Assistant, content: "b", reasoning: "dropped" },
+      { role: Role.User, content: "c" },
     ];
     const out = prepareRequestMessages(input);
     expect(out[0]!.reasoning).toBe("kept");
@@ -328,7 +330,7 @@ describe("runAgent", () => {
       prompt: "go",
       tools: [echo],
       onEvent: (e) => {
-        if (e.type === "tool_start") startArgs = e.args;
+        if (e.type === AgentEventType.ToolStart) startArgs = e.args;
       },
     });
     expect(startArgs).toEqual({ text: "hi" }); // a structured object, not '{"text":"hi"}'
@@ -395,8 +397,8 @@ describe("runAgent", () => {
       },
     });
     const types = events.map((e) => e.type);
-    expect(types[0]).toBe("agent_start");
-    expect(types).toContain("turn_start");
-    expect(types.at(-1)).toBe("agent_end");
+    expect(types[0]).toBe(AgentEventType.AgentStart);
+    expect(types).toContain(AgentEventType.TurnStart);
+    expect(types.at(-1)).toBe(AgentEventType.AgentEnd);
   });
 });

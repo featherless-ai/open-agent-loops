@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { all, any, maxSteps, not, whenToolCalled } from "../stop/conditions";
 import type { StopContext } from "../stop/conditions.types";
 import type { Message } from "../types";
+import { Role } from "../types";
 
 /** Build a StopContext with sensible defaults for pure-function testing. */
 const ctx = (over: Partial<StopContext> = {}): StopContext => ({
   step: 1,
-  assistant: { role: "assistant", content: "" } as Message,
+  assistant: { role: Role.Assistant, content: "" } as Message,
   toolResults: [],
   messages: [],
   ...over,
@@ -29,12 +30,12 @@ describe("maxSteps", () => {
 describe("whenToolCalled", () => {
   // Base case: true when the named tool produced a result this turn.
   test("base: true when the tool ran", async () => {
-    const result = { role: "tool", content: "", toolName: "search" } as Message;
+    const result = { role: Role.Tool, content: "", toolName: "search" } as Message;
     expect(await whenToolCalled("search")(ctx({ toolResults: [result] }))).toBe(true);
   });
   // Edge: false when a different tool ran.
   test("edge: false for a different tool", async () => {
-    const result = { role: "tool", content: "", toolName: "other" } as Message;
+    const result = { role: Role.Tool, content: "", toolName: "other" } as Message;
     expect(await whenToolCalled("search")(ctx({ toolResults: [result] }))).toBe(false);
   });
 });
@@ -69,7 +70,7 @@ describe("any / all / not (composition)", () => {
   test("edge: combinators nest", async () => {
     const cond = all(maxSteps(2), not(whenToolCalled("x")));
     expect(await cond(ctx({ step: 2, toolResults: [] }))).toBe(true);
-    const withTool = ctx({ step: 2, toolResults: [{ role: "tool", content: "", toolName: "x" } as Message] });
+    const withTool = ctx({ step: 2, toolResults: [{ role: Role.Tool, content: "", toolName: "x" } as Message] });
     expect(await cond(withTool)).toBe(false);
   });
 });

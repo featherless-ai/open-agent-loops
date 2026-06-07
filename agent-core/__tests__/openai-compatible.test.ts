@@ -6,6 +6,8 @@ import {
   drainLines,
 } from "../providers/openai-compatible";
 import type { StreamEvent } from "../model.types";
+import { StreamEventType } from "../model.types";
+import { Role, ToolCallType } from "../types";
 
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -34,14 +36,14 @@ describe("chunksToEvents", () => {
   // Base case: text streams as deltas and ends with an assembled done message.
   test("base: content deltas then a done message", async () => {
     const events = await collect(chunksToEvents(stream(chunk({ content: "he" }), chunk({ content: "llo" }))));
-    expect(events.map((e) => e.type)).toEqual(["text_delta", "text_delta", "done"]);
+    expect(events.map((e) => e.type)).toEqual([StreamEventType.TextDelta, StreamEventType.TextDelta, StreamEventType.Done]);
     expect((events.at(-1) as any).message.content).toBe("hello");
   });
 
   // Edge: reasoning deltas surface separately and land on the message.
   test("edge: reasoning is its own channel", async () => {
     const events = await collect(chunksToEvents(stream(chunk({ reasoning: "think" }), chunk({ content: "ok" }))));
-    expect(events.map((e) => e.type)).toEqual(["reasoning_delta", "text_delta", "done"]);
+    expect(events.map((e) => e.type)).toEqual([StreamEventType.ReasoningDelta, StreamEventType.TextDelta, StreamEventType.Done]);
     const done = events.at(-1) as any;
     expect(done.message.reasoning).toBe("think");
     expect(done.message.content).toBe("ok");
@@ -64,15 +66,15 @@ describe("chunksToEvents", () => {
         ),
       ),
     );
-    const toolCall = events.find((e) => e.type === "tool_call") as any;
+    const toolCall = events.find((e) => e.type === StreamEventType.ToolCall) as any;
     // Wire shape, arguments kept as the raw accumulated JSON string.
     expect(toolCall.toolCall).toEqual({
       id: "c1",
-      type: "function",
+      type: ToolCallType.Function,
       function: { name: "search", arguments: '{"q":"paris"}' },
     });
     // tool_call is emitted before done.
-    expect(events.map((e) => e.type)).toEqual(["tool_call", "done"]);
+    expect(events.map((e) => e.type)).toEqual([StreamEventType.ToolCall, StreamEventType.Done]);
   });
 
   // Edge: a mid-stream throw becomes an error event with the partial message.
@@ -83,7 +85,7 @@ describe("chunksToEvents", () => {
     }
     const events = await collect(chunksToEvents(boom()));
     const last = events.at(-1) as any;
-    expect(last.type).toBe("error");
+    expect(last.type).toBe(StreamEventType.Error);
     expect(last.error.message).toBe("network");
     expect(last.message.content).toBe("par");
   });
@@ -97,8 +99,8 @@ describe("OpenAICompatibleModel", () => {
     } as unknown as OpenAI;
 
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
-    const events = await collect(model.stream({ messages: [{ role: "user", content: "q" }] }));
-    expect(events.map((e) => e.type)).toEqual(["text_delta", "done"]);
+    const events = await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect(events.map((e) => e.type)).toEqual([StreamEventType.TextDelta, StreamEventType.Done]);
     expect((events.at(-1) as any).message.content).toBe("hi");
   });
 
@@ -115,9 +117,9 @@ describe("OpenAICompatibleModel", () => {
     } as unknown as OpenAI;
 
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
-    const events = await collect(model.stream({ messages: [{ role: "user", content: "q" }] }));
+    const events = await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
     expect(events).toHaveLength(1);
-    expect((events[0] as any).type).toBe("error");
+    expect((events[0] as any).type).toBe(StreamEventType.Error);
   });
 });
 

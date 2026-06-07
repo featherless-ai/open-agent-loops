@@ -17,11 +17,16 @@
 
 export type {
   AgentEvent,
+  AgentEventBody,
   EventSink,
   Message,
-  Role,
   ToolCall,
 } from "./types";
+
+// Value exports: enums referenced at runtime by consumers comparing or
+// constructing values (e.g. `event.type === AgentEventType.ToolStart`,
+// `message.role === Role.User`).
+export { AgentEventType, Role, ToolCallType } from "./types";
 
 export type {
   ModelClient,
@@ -30,6 +35,10 @@ export type {
   StreamEvent,
   ToolSpec,
 } from "./model.types";
+
+// Value export: the enum is referenced at runtime by consumers comparing or
+// constructing stream-event types (e.g. `event.type === StreamEventType.Done`).
+export { StreamEventType } from "./model.types";
 
 export { SessionMemoryStore } from "./memory/session-memory";
 export type { Memory, MemoryListener } from "./memory/memory.types";
@@ -40,6 +49,20 @@ export {
   validateToolArguments,
 } from "./tools/tools";
 export type { Tool, ToolContext, ToolResult } from "./tools/tools.types";
+export { ExecutionMode } from "./tools/tools.types";
+
+// Built-in tools: SDK-owned wiring over capability seams the consumer MUST
+// implement (no host-binding backend is shipped — that is the consumer's, and
+// the correct security boundary). Fakes live in `./mocks`, imported by tests.
+export { formatShellResult, shellTool } from "./tools/builtin/shell";
+export { formatSearchResults, searchTool } from "./tools/builtin/search";
+export type {
+  SearchBackend,
+  SearchMatch,
+  SearchQuery,
+  ShellBackend,
+  ShellResult,
+} from "./tools/builtin/builtin.types";
 
 export { all, any, maxSteps, not, whenToolCalled } from "./stop/conditions";
 export type { StopCondition, StopContext } from "./stop/conditions.types";
@@ -59,9 +82,8 @@ export { permissionGate } from "./permissions/permission-gate";
 export { InMemoryPermissionStore } from "./permissions/in-memory-permission-store";
 export type { InMemoryPermissionStoreOptions } from "./permissions/in-memory-permission-store";
 export type {
-  ApprovalChoice,
   ApprovalPrompter,
   ApprovalRequest,
-  PermissionPolicy,
   PermissionStore,
 } from "./permissions/permissions.types";
+export { ApprovalChoice, PermissionPolicy } from "./permissions/permissions.types";

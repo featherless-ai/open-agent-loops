@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { SessionMemoryStore } from "../memory/session-memory";
 import type { Message } from "../types";
+import { Role, ToolCallType } from "../types";
 
-const msg = (content: string): Message => ({ role: "user", content });
+const msg = (content: string): Message => ({ role: Role.User, content });
 
 describe("SessionMemoryStore", () => {
   // Base case: what you append is what you load back, in order.
@@ -49,9 +50,9 @@ describe("SessionMemoryStore", () => {
   test("edge: defensive copy reaches nested tool-call fields", async () => {
     const store = new SessionMemoryStore();
     const assistant: Message = {
-      role: "assistant",
+      role: Role.Assistant,
       content: "",
-      tool_calls: [{ id: "1", type: "function", function: { name: "search", arguments: '{"q":"x"}' } }],
+      tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "search", arguments: '{"q":"x"}' } }],
     };
     await store.append("s", [assistant]);
 

@@ -9,7 +9,9 @@
  */
 
 import type { Message, ToolCall } from "../types";
+import { Role, ToolCallType } from "../types";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "../model.types";
+import { StreamEventType } from "../model.types";
 
 /** One scripted assistant turn: some text and/or some tool calls. */
 export interface ScriptedTurn {
@@ -75,31 +77,31 @@ export class FakeModelClient implements ModelClient {
     // 1. Stream chain-of-thought (if any) before the answer, as chunks — the
     //    same separate channel reasoning models emit ahead of the content.
     for (const chunk of chunkText(reasoning, this.chunkSize)) {
-      yield { type: "reasoning_delta", text: chunk };
+      yield { type: StreamEventType.ReasoningDelta, text: chunk };
     }
 
     // 2. Stream the text content as chunks (the "all models stream" default).
     for (const chunk of chunkText(text, this.chunkSize)) {
-      yield { type: "text_delta", text: chunk };
+      yield { type: StreamEventType.TextDelta, text: chunk };
     }
 
     // 3. Emit any tool calls, assigning ids when the script omitted them and
     //    serializing object args to the wire JSON string.
     const toolCalls: ToolCall[] = (turn.toolCalls ?? []).map((call, i) => ({
       id: call.id ?? `call_${this.callIndex}_${i}`,
-      type: "function",
+      type: ToolCallType.Function,
       function: {
         name: call.name,
         arguments: JSON.stringify(call.arguments ?? {}),
       },
     }));
     for (const toolCall of toolCalls) {
-      yield { type: "tool_call", toolCall };
+      yield { type: StreamEventType.ToolCall, toolCall };
     }
 
     // 4. Assemble the final assistant message and emit the terminal event.
     const message: Message = {
-      role: "assistant",
+      role: Role.Assistant,
       content: text,
       ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
@@ -107,10 +109,10 @@ export class FakeModelClient implements ModelClient {
     };
 
     if (turn.error) {
-      yield { type: "error", error: new Error(turn.error), message };
+      yield { type: StreamEventType.Error, error: new Error(turn.error), message };
       return;
     }
-    yield { type: "done", message };
+    yield { type: StreamEventType.Done, message };
   }
 }
 

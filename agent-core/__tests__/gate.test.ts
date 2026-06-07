@@ -7,6 +7,8 @@ import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { permissionGate } from "../permissions/permission-gate";
 import { InMemoryPermissionStore } from "../permissions/in-memory-permission-store";
+import { PermissionPolicy } from "../permissions/permissions.types";
+import { Role } from "../types";
 
 /** A tool that records each execution, so we can assert it never ran. */
 const makeTool = (name: string, ran: string[]) =>
@@ -55,7 +57,7 @@ describe("gateToolCalls (loop integration)", () => {
       hooks: { gateToolCalls: () => [{ allow: false, reason: "nope" }] },
     });
     expect(ran).toEqual([]); // never executed
-    const toolMsg = result.messages.find((m) => m.role === "tool");
+    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
     expect(toolMsg?.isError).toBe(true);
     expect(toolMsg?.content).toBe("nope");
     expect(result.messages.at(-1)?.content).toBe("recovered");
@@ -88,7 +90,7 @@ describe("gateToolCalls (loop integration)", () => {
       },
     });
     expect(ran).toEqual(["a:1"]); // only the allowed tool ran
-    const toolMsgs = result.messages.filter((m) => m.role === "tool");
+    const toolMsgs = result.messages.filter((m) => m.role === Role.Tool);
     expect(toolMsgs.map((m) => m.toolName)).toEqual(["a", "b"]); // original order
     expect(toolMsgs[0]?.content).toBe("a:1");
     expect(toolMsgs[1]?.isError).toBe(true);
@@ -124,7 +126,7 @@ describe("gateToolCalls (loop integration)", () => {
       },
     });
     expect(seen).toEqual([["a"]]); // only the well-formed call reached the gate
-    const errors = result.messages.filter((m) => m.role === "tool" && m.isError);
+    const errors = result.messages.filter((m) => m.role === Role.Tool && m.isError);
     expect(errors.length).toBe(2); // invalid + unknown still errored via execute
   });
 
@@ -165,7 +167,7 @@ describe("gateToolCalls (loop integration)", () => {
       { toolCalls: [{ name: "danger", arguments: { x: "1" } }] },
       { text: "ok" },
     ]);
-    const store = new InMemoryPermissionStore({ rules: { danger: "deny" } });
+    const store = new InMemoryPermissionStore({ rules: { danger: PermissionPolicy.Deny } });
     const prompter = { ask: async () => [] }; // never consulted for a "deny" rule
     const result = await runAgent({
       model,
@@ -176,6 +178,6 @@ describe("gateToolCalls (loop integration)", () => {
       hooks: { gateToolCalls: permissionGate(store, prompter) },
     });
     expect(ran).toEqual([]);
-    expect(result.messages.find((m) => m.role === "tool")?.isError).toBe(true);
+    expect(result.messages.find((m) => m.role === Role.Tool)?.isError).toBe(true);
   });
 });

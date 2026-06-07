@@ -11,7 +11,8 @@
  */
 
 import type { GateDecision, ToolGateRequest } from "../primitives/loop";
-import type { ApprovalChoice, ApprovalPrompter, PermissionStore } from "./permissions.types";
+import type { ApprovalPrompter, PermissionStore } from "./permissions.types";
+import { ApprovalChoice, PermissionPolicy } from "./permissions.types";
 
 export function permissionGate(
   store: PermissionStore,
@@ -23,7 +24,7 @@ export function permissionGate(
     );
 
     // Collect the calls that need a prompt, then ask about them all at once.
-    const askIndices = policies.flatMap((policy, i) => (policy === "ask" ? [i] : []));
+    const askIndices = policies.flatMap((policy, i) => (policy === PermissionPolicy.Ask ? [i] : []));
     const choices = askIndices.length
       ? await prompter.ask(
           askIndices.map((i) => ({ toolCall: batch[i]!.toolCall, args: batch[i]!.args })),
@@ -34,21 +35,21 @@ export function permissionGate(
     const decisions: GateDecision[] = [];
     for (let i = 0; i < batch.length; i += 1) {
       const policy = policies[i]!;
-      if (policy === "allow") {
+      if (policy === PermissionPolicy.Allow) {
         decisions.push({ allow: true });
         continue;
       }
-      if (policy === "deny") {
+      if (policy === PermissionPolicy.Deny) {
         decisions.push({ allow: false, reason: "Denied by saved permission" });
         continue;
       }
 
-      // policy === "ask": apply the user's choice, persisting "always" ones.
-      const choice: ApprovalChoice = choiceByIndex.get(i) ?? "deny_once";
+      // policy === Ask: apply the user's choice, persisting "always" ones.
+      const choice: ApprovalChoice = choiceByIndex.get(i) ?? ApprovalChoice.DenyOnce;
       const name = batch[i]!.toolCall.function.name;
-      if (choice === "allow_always") await store.set(name, "allow");
-      if (choice === "deny_always") await store.set(name, "deny");
-      const allow = choice === "allow_once" || choice === "allow_always";
+      if (choice === ApprovalChoice.AllowAlways) await store.set(name, PermissionPolicy.Allow);
+      if (choice === ApprovalChoice.DenyAlways) await store.set(name, PermissionPolicy.Deny);
+      const allow = choice === ApprovalChoice.AllowOnce || choice === ApprovalChoice.AllowAlways;
       decisions.push(allow ? { allow: true } : { allow: false, reason: "Denied by user" });
     }
     return decisions;

@@ -10,7 +10,11 @@
 import type { ToolCall } from "../types";
 
 /** A configured policy for a tool: allow silently, deny silently, or ask. */
-export type PermissionPolicy = "allow" | "deny" | "ask";
+export enum PermissionPolicy {
+  Allow = "allow",
+  Deny = "deny",
+  Ask = "ask",
+}
 
 /**
  * The configuration the gate consults. Reads the policy for a tool and persists
@@ -21,15 +25,16 @@ export interface PermissionStore {
   /** Current policy for a call. `args` is passed so rules can be arg-aware. */
   get(toolName: string, args: unknown): Promise<PermissionPolicy>;
   /** Persist a durable decision — the "always" half of an approval choice. */
-  set(toolName: string, policy: "allow" | "deny"): Promise<void>;
+  set(toolName: string, policy: PermissionPolicy.Allow | PermissionPolicy.Deny): Promise<void>;
 }
 
 /** What the user picked when prompted: scoped to this call, or remembered. */
-export type ApprovalChoice =
-  | "allow_once"
-  | "allow_always"
-  | "deny_once"
-  | "deny_always";
+export enum ApprovalChoice {
+  AllowOnce = "allow_once",
+  AllowAlways = "allow_always",
+  DenyOnce = "deny_once",
+  DenyAlways = "deny_always",
+}
 
 /** One call the user is being asked to approve. */
 export interface ApprovalRequest {

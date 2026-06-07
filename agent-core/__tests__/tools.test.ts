@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { defineTool, toToolSpec, validateToolArguments } from "../tools/tools";
 import type { ToolCall } from "../types";
+import { ToolCallType } from "../types";
 
 const adder = defineTool({
   name: "add",
@@ -12,14 +13,14 @@ const adder = defineTool({
 
 const call = (args: Record<string, unknown>): ToolCall => ({
   id: "c1",
-  type: "function",
+  type: ToolCallType.Function,
   function: { name: "add", arguments: JSON.stringify(args) },
 });
 
 /** A call whose wire arguments are a raw (possibly malformed) JSON string. */
 const rawCall = (argsJson: string): ToolCall => ({
   id: "c1",
-  type: "function",
+  type: ToolCallType.Function,
   function: { name: "add", arguments: argsJson },
 });
 

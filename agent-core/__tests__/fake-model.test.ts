@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { FakeModelClient } from "../mocks/fake-model";
 import type { ModelRequest, StreamEvent } from "../model.types";
+import { StreamEventType } from "../model.types";
+import { Role } from "../types";
 
-const req: ModelRequest = { messages: [{ role: "user", content: "hi" }] };
+const req: ModelRequest = { messages: [{ role: Role.User, content: "hi" }] };
 
 /** Drain a stream into an array of events for inspection. */
 async function collect(stream: AsyncIterable<StreamEvent>): Promise<StreamEvent[]> {
@@ -17,19 +19,19 @@ describe("FakeModelClient", () => {
     const model = new FakeModelClient([{ text: "hello world" }], { chunkSize: 4 });
     const events = await collect(model.stream(req));
 
-    const deltas = events.filter((e) => e.type === "text_delta");
+    const deltas = events.filter((e) => e.type === StreamEventType.TextDelta);
     expect(deltas.length).toBeGreaterThan(1); // proves it actually streamed
     expect(deltas.map((e) => (e as any).text).join("")).toBe("hello world");
 
     const done = events.at(-1);
-    expect(done?.type).toBe("done");
+    expect(done?.type).toBe(StreamEventType.Done);
     expect((done as any).message.content).toBe("hello world");
   });
 
   // Edge: chunkSize Infinity emits the text as a single delta.
   test("edge: chunkSize Infinity emits one delta", async () => {
     const model = new FakeModelClient([{ text: "abcdef" }], { chunkSize: Infinity });
-    const deltas = (await collect(model.stream(req))).filter((e) => e.type === "text_delta");
+    const deltas = (await collect(model.stream(req))).filter((e) => e.type === StreamEventType.TextDelta);
     expect(deltas).toHaveLength(1);
   });
 
@@ -37,8 +39,8 @@ describe("FakeModelClient", () => {
   test("edge: empty text yields no deltas but still emits done", async () => {
     const model = new FakeModelClient([{ text: "" }]);
     const events = await collect(model.stream(req));
-    expect(events.filter((e) => e.type === "text_delta")).toHaveLength(0);
-    expect(events.at(-1)?.type).toBe("done");
+    expect(events.filter((e) => e.type === StreamEventType.TextDelta)).toHaveLength(0);
+    expect(events.at(-1)?.type).toBe(StreamEventType.Done);
   });
 
   // Edge: scripted reasoning streams as reasoning_delta before the text.
@@ -48,13 +50,13 @@ describe("FakeModelClient", () => {
     });
     const events = await collect(model.stream(req));
 
-    const reasoningDeltas = events.filter((e) => e.type === "reasoning_delta");
+    const reasoningDeltas = events.filter((e) => e.type === StreamEventType.ReasoningDelta);
     expect(reasoningDeltas.length).toBeGreaterThan(1); // streamed in chunks
     expect(reasoningDeltas.map((e) => (e as any).text).join("")).toBe("thinking");
 
     // All reasoning is emitted before any text delta.
-    const firstText = events.findIndex((e) => e.type === "text_delta");
-    const lastReasoning = events.map((e) => e.type).lastIndexOf("reasoning_delta");
+    const firstText = events.findIndex((e) => e.type === StreamEventType.TextDelta);
+    const lastReasoning = events.map((e) => e.type).lastIndexOf(StreamEventType.ReasoningDelta);
     expect(lastReasoning).toBeLessThan(firstText);
 
     expect((events.at(-1) as any).message.reasoning).toBe("thinking");
@@ -64,7 +66,7 @@ describe("FakeModelClient", () => {
   test("edge: no reasoning means no reasoning_delta and no field", async () => {
     const model = new FakeModelClient([{ text: "plain" }]);
     const events = await collect(model.stream(req));
-    expect(events.some((e) => e.type === "reasoning_delta")).toBe(false);
+    expect(events.some((e) => e.type === StreamEventType.ReasoningDelta)).toBe(false);
     expect((events.at(-1) as any).message.reasoning).toBeUndefined();
   });
 
@@ -74,7 +76,7 @@ describe("FakeModelClient", () => {
       { toolCalls: [{ name: "search", arguments: { q: "x" } }] },
     ]);
     const events = await collect(model.stream(req));
-    const toolCall = events.find((e) => e.type === "tool_call") as any;
+    const toolCall = events.find((e) => e.type === StreamEventType.ToolCall) as any;
     expect(toolCall.toolCall.function.name).toBe("search");
     expect(typeof toolCall.toolCall.id).toBe("string");
     expect(toolCall.toolCall.id.length).toBeGreaterThan(0);
@@ -94,9 +96,9 @@ describe("FakeModelClient", () => {
     const model = new FakeModelClient([{ text: "partial", error: "boom" }]);
     const events = await collect(model.stream(req));
     const last = events.at(-1) as any;
-    expect(last.type).toBe("error");
+    expect(last.type).toBe(StreamEventType.Error);
     expect(last.error.message).toBe("boom");
-    expect(events.some((e) => e.type === "done")).toBe(false);
+    expect(events.some((e) => e.type === StreamEventType.Done)).toBe(false);
   });
 
   // Edge: running past the end of an array script throws a clear error.
@@ -109,8 +111,8 @@ describe("FakeModelClient", () => {
   // Edge: every request is captured for assertions.
   test("edge: requests are recorded in order", async () => {
     const model = new FakeModelClient([{ text: "a" }, { text: "b" }]);
-    await collect(model.stream({ messages: [{ role: "user", content: "first" }] }));
-    await collect(model.stream({ messages: [{ role: "user", content: "second" }] }));
+    await collect(model.stream({ messages: [{ role: Role.User, content: "first" }] }));
+    await collect(model.stream({ messages: [{ role: Role.User, content: "second" }] }));
     expect(model.requests).toHaveLength(2);
     expect(model.requests[1]!.messages[0]!.content).toBe("second");
   });

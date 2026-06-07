@@ -7,6 +7,16 @@
 
 import { z } from "zod";
 
+/**
+ * How a tool runs relative to its sibling calls in the same turn.
+ * - `Parallel` (default) lets the loop run it alongside others.
+ * - `Sequential` forces the whole batch to run one-at-a-time.
+ */
+export enum ExecutionMode {
+  Parallel = "parallel",
+  Sequential = "sequential",
+}
+
 /** What a tool hands back to the loop. */
 export interface ToolResult {
   /** Text content folded back into the conversation as the tool result. */
@@ -27,9 +37,6 @@ export interface Tool<S extends z.ZodType = z.ZodType> {
   description: string;
   parameters: S;
   execute(args: z.infer<S>, ctx: ToolContext): ToolResult | Promise<ToolResult>;
-  /**
-   * "parallel" (default) lets the loop run this alongside sibling calls.
-   * "sequential" forces the whole batch to run one-at-a-time.
-   */
-  executionMode?: "parallel" | "sequential";
+  /** See {@link ExecutionMode}. Defaults to `Parallel`. */
+  executionMode?: ExecutionMode;
 }

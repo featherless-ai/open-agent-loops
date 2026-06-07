@@ -4,7 +4,17 @@
  * LLM SDK so that every seam (model, memory, tools) stays swappable.
  */
 
-export type Role = "system" | "user" | "assistant" | "tool";
+/**
+ * Conversation roles. A string enum whose values are the OpenAI wire strings, so
+ * `JSON.stringify` of a message still emits `"role":"user"` etc. — the wire shape
+ * is unchanged; only in-code references become named constants.
+ */
+export enum Role {
+  System = "system",
+  User = "user",
+  Assistant = "assistant",
+  Tool = "tool",
+}
 
 /**
  * A tool invocation requested by the model — the OpenAI chat-completions wire
@@ -12,9 +22,18 @@ export type Role = "system" | "user" | "assistant" | "tool";
  * `arguments` is a JSON *string* (not a parsed object). The loop JSON-parses
  * and schema-validates it before the tool runs.
  */
+/**
+ * The kind of tool call. The OpenAI chat-completions format defines exactly one
+ * value, `"function"`; a single-member string enum keeps the call sites named
+ * while serializing to that same wire string.
+ */
+export enum ToolCallType {
+  Function = "function",
+}
+
 export interface ToolCall {
   id: string;
-  type: "function";
+  type: ToolCallType.Function;
   function: {
     name: string;
     /** Arguments as a JSON string, exactly as the model emitted them. */
@@ -107,21 +126,49 @@ export interface Message {
   timestamp?: number;
 }
 
-/** Events emitted by the loop for observability / streaming to a UI. */
-export type AgentEvent =
-  | { type: "agent_start"; sessionId: string }
-  | { type: "turn_start"; step: number }
-  | { type: "reasoning_delta"; text: string }
-  | { type: "text_delta"; text: string }
-  | { type: "message"; message: Message }
-  | { type: "tool_start"; toolCallId: string; toolName: string; args: ToolArguments }
+/**
+ * Discriminant tags for {@link AgentEvent}. A string enum: each member's value
+ * is the wire string it replaces, so serialized events (JSON to a UI, logs) are
+ * byte-for-byte unchanged — only the in-code references become named constants.
+ */
+export enum AgentEventType {
+  AgentStart = "agent_start",
+  TurnStart = "turn_start",
+  ReasoningDelta = "reasoning_delta",
+  TextDelta = "text_delta",
+  Message = "message",
+  ToolStart = "tool_start",
+  ToolEnd = "tool_end",
+  AgentEnd = "agent_end",
+}
+
+/**
+ * The payload of an event, minus the timestamp. The loop's call sites construct
+ * these; `emit` stamps each one centrally on the way out (see {@link AgentEvent}),
+ * so no call site has to remember to set the time.
+ */
+export type AgentEventBody =
+  | { type: AgentEventType.AgentStart; sessionId: string }
+  | { type: AgentEventType.TurnStart; step: number }
+  | { type: AgentEventType.ReasoningDelta; text: string }
+  | { type: AgentEventType.TextDelta; text: string }
+  | { type: AgentEventType.Message; message: Message }
+  | { type: AgentEventType.ToolStart; toolCallId: string; toolName: string; args: ToolArguments }
   | {
-      type: "tool_end";
+      type: AgentEventType.ToolEnd;
       toolCallId: string;
       toolName: string;
       result: string;
       isError: boolean;
     }
-  | { type: "agent_end"; messages: Message[]; steps: number };
+  | { type: AgentEventType.AgentEnd; messages: Message[]; steps: number };
+
+/**
+ * An event emitted by the loop for observability / streaming to a UI. Every
+ * event carries a `timestamp` (ms since epoch) stamped at emit time, so a
+ * consumer can measure latency between turns, tokens, and tool calls. The
+ * intersection still discriminates on `type` exactly like the body union does.
+ */
+export type AgentEvent = AgentEventBody & { timestamp: number };
 
 export type EventSink = (event: AgentEvent) => void | Promise<void>;

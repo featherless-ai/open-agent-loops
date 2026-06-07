@@ -27,20 +27,30 @@ export interface ModelRequest {
 }
 
 /**
- * Incremental output from the model.
- * - `reasoning_delta`  partial chain-of-thought (provider field `reasoning` /
- *                      `reasoning_content`); a separate channel from `text`
- * - `text_delta`  partial assistant text (streamed token-by-token / chunked)
- * - `tool_call`   a fully-formed tool invocation the model wants to make
- * - `done`        terminal event carrying the assembled assistant message
- * - `error`       the model failed; `message` holds whatever was assembled
+ * Discriminant tags for {@link StreamEvent}. A string enum whose values are the
+ * wire strings they replace, so nothing about the emitted events changes on the
+ * wire — only in-code references become named constants.
  */
+export enum StreamEventType {
+  /** Partial chain-of-thought (provider field `reasoning` / `reasoning_content`). */
+  ReasoningDelta = "reasoning_delta",
+  /** Partial assistant text (streamed token-by-token / chunked). */
+  TextDelta = "text_delta",
+  /** A fully-formed tool invocation the model wants to make. */
+  ToolCall = "tool_call",
+  /** Terminal event carrying the assembled assistant message. */
+  Done = "done",
+  /** The model failed; `message` holds whatever was assembled. */
+  Error = "error",
+}
+
+/** Incremental output from the model. See {@link StreamEventType} for each tag. */
 export type StreamEvent =
-  | { type: "reasoning_delta"; text: string }
-  | { type: "text_delta"; text: string }
-  | { type: "tool_call"; toolCall: ToolCall }
-  | { type: "done"; message: Message }
-  | { type: "error"; error: Error; message: Message };
+  | { type: StreamEventType.ReasoningDelta; text: string }
+  | { type: StreamEventType.TextDelta; text: string }
+  | { type: StreamEventType.ToolCall; toolCall: ToolCall }
+  | { type: StreamEventType.Done; message: Message }
+  | { type: StreamEventType.Error; error: Error; message: Message };
 
 /** A live model response: async-iterable of events. */
 export type ModelStream = AsyncIterable<StreamEvent>;

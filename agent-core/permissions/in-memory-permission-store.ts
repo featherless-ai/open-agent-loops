@@ -8,21 +8,24 @@
  * the same interface.
  */
 
-import type { PermissionPolicy, PermissionStore } from "./permissions.types";
+import type { PermissionStore } from "./permissions.types";
+import { PermissionPolicy } from "./permissions.types";
+
+type SettablePolicy = PermissionPolicy.Allow | PermissionPolicy.Deny;
 
 export interface InMemoryPermissionStoreOptions {
   /** Policy for tools without an explicit rule. Default "ask". */
   fallback?: PermissionPolicy;
   /** Preconfigured per-tool policies, e.g. loaded from a config file. */
-  rules?: Record<string, "allow" | "deny">;
+  rules?: Record<string, SettablePolicy>;
 }
 
 export class InMemoryPermissionStore implements PermissionStore {
   private readonly fallback: PermissionPolicy;
-  private readonly rules: Map<string, "allow" | "deny">;
+  private readonly rules: Map<string, SettablePolicy>;
 
   constructor(options: InMemoryPermissionStoreOptions = {}) {
-    this.fallback = options.fallback ?? "ask";
+    this.fallback = options.fallback ?? PermissionPolicy.Ask;
     this.rules = new Map(Object.entries(options.rules ?? {}));
   }
 
@@ -30,7 +33,7 @@ export class InMemoryPermissionStore implements PermissionStore {
     return this.rules.get(toolName) ?? this.fallback;
   }
 
-  async set(toolName: string, policy: "allow" | "deny"): Promise<void> {
+  async set(toolName: string, policy: SettablePolicy): Promise<void> {
     this.rules.set(toolName, policy);
   }
 }

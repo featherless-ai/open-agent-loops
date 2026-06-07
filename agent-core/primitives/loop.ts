@@ -11,10 +11,13 @@
  * `maxSteps` safety cap is hit (prevents runaway loops).
  */
 
-import type { AgentEvent, EventSink, Message, ToolArguments, ToolCall } from "../types";
+import type { AgentEventBody, EventSink, Message, ToolArguments, ToolCall } from "../types";
+import { AgentEventType, Role } from "../types";
 import type { ModelClient, ModelRequest } from "../model.types";
+import { StreamEventType } from "../model.types";
 import type { Memory } from "../memory/memory.types";
 import type { Tool, ToolResult } from "../tools/tools.types";
+import { ExecutionMode } from "../tools/tools.types";
 import {
   parseToolArguments,
   toToolSpec,
@@ -22,6 +25,12 @@ import {
   validateToolArguments,
 } from "../tools/tools";
 import type { StopCondition } from "../stop/conditions.types";
+
+/**
+ * Internal emit function: call sites build an event body, and this stamps the
+ * timestamp before handing the finished {@link AgentEvent} to the public sink.
+ */
+type Emit = (event: AgentEventBody) => Promise<void>;
 
 /** One tool call presented to the gate, with its validated arguments. */
 export interface ToolGateRequest {
@@ -91,7 +100,7 @@ export interface RunAgentOptions {
   stopWhen?: StopCondition;
   hooks?: Hooks;
   /** Force sequential tool execution regardless of per-tool mode. */
-  toolExecution?: "parallel" | "sequential";
+  toolExecution?: ExecutionMode;
   onEvent?: EventSink;
   /**
    * Cancel the run. Aborting rejects `runAgent` with the signal's reason (an
@@ -127,8 +136,8 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     signal,
   } = options;
 
-  const emit = async (event: AgentEvent) => {
-    await onEvent?.(event);
+  const emit: Emit = async (event) => {
+    await onEvent?.({ ...event, timestamp: Date.now() });
   };
   const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const toolSpecs = tools.length > 0 ? tools.map(toToolSpec) : undefined;
@@ -140,9 +149,9 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const messages: Message[] = [...history, ...prompts];
   await memory.append(sessionId, prompts);
 
-  await emit({ type: "agent_start", sessionId });
+  await emit({ type: AgentEventType.AgentStart, sessionId });
   for (const prompt of prompts) {
-    await emit({ type: "message", message: prompt });
+    await emit({ type: AgentEventType.Message, message: prompt });
   }
 
   let steps = 0;
@@ -152,7 +161,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     // signal's reason (an AbortError), rejecting runAgent.
     signal?.throwIfAborted();
     steps += 1;
-    await emit({ type: "turn_start", step: steps });
+    await emit({ type: AgentEventType.TurnStart, step: steps });
 
     // --- stream the assistant turn ---------------------------------------
     const contextMessages = hooks.transformContext
@@ -175,7 +184,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     messages.push(assistant);
     newMessages.push(assistant);
     await memory.append(sessionId, [assistant]);
-    await emit({ type: "message", message: assistant });
+    await emit({ type: AgentEventType.Message, message: assistant });
 
     const toolCalls = assistant.tool_calls ?? [];
 
@@ -233,7 +242,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     if (steps >= maxSteps) break;
   }
 
-  await emit({ type: "agent_end", messages, steps });
+  await emit({ type: AgentEventType.AgentEnd, messages, steps });
   return { messages, newMessages, steps };
 }
 
@@ -247,7 +256,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 export function prepareRequestMessages(messages: Message[]): Message[] {
   return messages.map((message) => {
     const isToolCallTurn = (message.tool_calls?.length ?? 0) > 0;
-    if (message.role === "assistant" && message.reasoning !== undefined && !isToolCallTurn) {
+    if (message.role === Role.Assistant && message.reasoning !== undefined && !isToolCallTurn) {
       const { reasoning: _dropped, ...rest } = message;
       return rest;
     }
@@ -259,7 +268,7 @@ export function prepareRequestMessages(messages: Message[]): Message[] {
 async function streamAssistant(
   model: ModelClient,
   request: ModelRequest,
-  emit: EventSink,
+  emit: Emit,
 ): Promise<Message> {
   let text = "";
   let reasoning = "";
@@ -268,21 +277,21 @@ async function streamAssistant(
 
   for await (const event of model.stream(request)) {
     switch (event.type) {
-      case "reasoning_delta":
+      case StreamEventType.ReasoningDelta:
         reasoning += event.text;
-        await emit({ type: "reasoning_delta", text: event.text });
+        await emit({ type: AgentEventType.ReasoningDelta, text: event.text });
         break;
-      case "text_delta":
+      case StreamEventType.TextDelta:
         text += event.text;
-        await emit({ type: "text_delta", text: event.text });
+        await emit({ type: AgentEventType.TextDelta, text: event.text });
         break;
-      case "tool_call":
+      case StreamEventType.ToolCall:
         toolCalls.push(event.toolCall);
         break;
-      case "done":
+      case StreamEventType.Done:
         finalMessage = event.message;
         break;
-      case "error":
+      case StreamEventType.Error:
         // Surface the partial message but mark it so the loop can stop.
         finalMessage = { ...event.message, isError: true };
         break;
@@ -292,7 +301,7 @@ async function streamAssistant(
   // Prefer the model's assembled message; otherwise rebuild from deltas.
   return (
     finalMessage ?? {
-      role: "assistant",
+      role: Role.Assistant,
       content: text,
       ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
@@ -338,14 +347,14 @@ async function gateToolBatch(
 async function emitDenied(
   call: ToolCall,
   reason: string | undefined,
-  emit: EventSink,
+  emit: Emit,
 ): Promise<Message> {
   const content = reason ?? "Tool execution denied";
   const name = call.function.name;
-  await emit({ type: "tool_start", toolCallId: call.id, toolName: name, args: parseToolArguments(call) });
-  await emit({ type: "tool_end", toolCallId: call.id, toolName: name, result: content, isError: true });
+  await emit({ type: AgentEventType.ToolStart, toolCallId: call.id, toolName: name, args: parseToolArguments(call) });
+  await emit({ type: AgentEventType.ToolEnd, toolCallId: call.id, toolName: name, result: content, isError: true });
   return {
-    role: "tool",
+    role: Role.Tool,
     content,
     tool_call_id: call.id,
     toolName: name,
@@ -365,14 +374,14 @@ async function executeToolCalls(
   toolCalls: ToolCall[],
   toolsByName: Map<string, Tool>,
   hooks: Hooks,
-  mode: "parallel" | "sequential" | undefined,
-  emit: EventSink,
+  mode: ExecutionMode | undefined,
+  emit: Emit,
   signal: AbortSignal | undefined,
 ): Promise<ToolBatchOutcome> {
   const hasSequentialTool = toolCalls.some(
-    (call) => toolsByName.get(call.function.name)?.executionMode === "sequential",
+    (call) => toolsByName.get(call.function.name)?.executionMode === ExecutionMode.Sequential,
   );
-  const sequential = mode === "sequential" || hasSequentialTool;
+  const sequential = mode === ExecutionMode.Sequential || hasSequentialTool;
 
   let outcomes: FinalizedCall[];
   if (sequential) {
@@ -403,12 +412,12 @@ async function executeOne(
   call: ToolCall,
   toolsByName: Map<string, Tool>,
   hooks: Hooks,
-  emit: EventSink,
+  emit: Emit,
   signal: AbortSignal | undefined,
 ): Promise<FinalizedCall> {
   const name = call.function.name;
   await emit({
-    type: "tool_start",
+    type: AgentEventType.ToolStart,
     toolCallId: call.id,
     toolName: name,
     args: parseToolArguments(call),
@@ -450,7 +459,7 @@ async function executeOne(
   }
 
   await emit({
-    type: "tool_end",
+    type: AgentEventType.ToolEnd,
     toolCallId: call.id,
     toolName: name,
     result: result.content,
@@ -458,7 +467,7 @@ async function executeOne(
   });
 
   const message: Message = {
-    role: "tool",
+    role: Role.Tool,
     content: result.content,
     tool_call_id: call.id,
     toolName: name,
@@ -471,7 +480,7 @@ async function executeOne(
 /** Accept a string / single message / array and normalize to Message[]. */
 function normalizePrompt(prompt: string | Message | Message[]): Message[] {
   if (typeof prompt === "string") {
-    return [{ role: "user", content: prompt, timestamp: Date.now() }];
+    return [{ role: Role.User, content: prompt, timestamp: Date.now() }];
   }
   return Array.isArray(prompt) ? prompt : [prompt];
 }
