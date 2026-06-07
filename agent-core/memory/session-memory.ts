@@ -1,6 +1,8 @@
 /**
- * `InMemoryStore` — the v1 implementation of the `Memory` seam (interface in
- * `./memory.types`). Simplest possible backend: a Map of sessionId -> messages.
+ * `SessionMemoryStore` — the v1 implementation of the `Memory` seam (interface
+ * in `./memory.types`). Ephemeral, RAM-only backend: a Map of sessionId ->
+ * messages. History lives for the lifetime of the process and is gone on
+ * restart; durable backends (JSONL, Redis, vector) implement the same interface.
  *
  * Defensive copying is deliberate. `load` returns a fresh array of cloned
  * messages and `append` clones on the way in, so callers can never mutate
@@ -11,7 +13,7 @@
 import type { Message } from "../types";
 import type { Memory } from "./memory.types";
 
-export class InMemoryStore implements Memory {
+export class SessionMemoryStore implements Memory {
   private readonly sessions = new Map<string, Message[]>();
 
   async load(sessionId: string): Promise<Message[]> {

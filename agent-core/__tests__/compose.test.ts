@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { withMemoryListeners, withMemoryNamespace, withModelObserver } from "../compose";
-import { InMemoryStore } from "../memory/memory";
+import { SessionMemoryStore } from "../memory/session-memory";
 import { runAgent } from "../primitives/loop";
 import type { ModelClient, StreamEvent } from "../model.types";
 import type { Memory } from "../memory/memory.types";
@@ -23,7 +23,7 @@ describe("plain-object seams (no factory needed)", () => {
   test("base: an inline ModelClient object works with runAgent", async () => {
     const result = await runAgent({
       model: helloModel,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "q",
     });
@@ -48,7 +48,7 @@ describe("withModelObserver", () => {
   test("base: observes all stream events", async () => {
     const seen: string[] = [];
     const model = withModelObserver(helloModel, (e) => seen.push(e.type));
-    await runAgent({ model, memory: new InMemoryStore(), sessionId: "s", prompt: "q" });
+    await runAgent({ model, memory: new SessionMemoryStore(), sessionId: "s", prompt: "q" });
     expect(seen).toContain("text_delta");
     expect(seen).toContain("done");
   });
@@ -57,13 +57,13 @@ describe("withModelObserver", () => {
   test("edge: wrapping does not alter the result", async () => {
     const plain = await runAgent({
       model: helloModel,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "q",
     });
     const wrapped = await runAgent({
       model: withModelObserver(helloModel, () => {}),
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "q",
     });
@@ -78,7 +78,7 @@ describe("withModelObserver", () => {
       withModelObserver(helloModel, (e) => a.push(e.type)),
       (e) => b.push(e.type),
     );
-    await runAgent({ model, memory: new InMemoryStore(), sessionId: "s", prompt: "q" });
+    await runAgent({ model, memory: new SessionMemoryStore(), sessionId: "s", prompt: "q" });
     expect(a).toEqual(b);
     expect(a.length).toBeGreaterThan(0);
   });
@@ -87,7 +87,7 @@ describe("withModelObserver", () => {
 describe("withMemoryNamespace", () => {
   // Base case: reads/writes go through the prefixed key on the base store.
   test("base: namespacing prefixes the underlying session id", async () => {
-    const base = new InMemoryStore();
+    const base = new SessionMemoryStore();
     const ns = withMemoryNamespace(base, "tenantA");
     await ns.append("s", [{ role: "user", content: "hello" }]);
 
@@ -97,7 +97,7 @@ describe("withMemoryNamespace", () => {
 
   // Edge: two namespaces over one store stay isolated.
   test("edge: separate namespaces do not collide", async () => {
-    const base = new InMemoryStore();
+    const base = new SessionMemoryStore();
     const a = withMemoryNamespace(base, "a");
     const b = withMemoryNamespace(base, "b");
     await a.append("s", [{ role: "user", content: "from-a" }]);
@@ -108,7 +108,7 @@ describe("withMemoryNamespace", () => {
 
   // Edge: clear only affects the namespaced session.
   test("edge: clear is scoped to the namespace", async () => {
-    const base = new InMemoryStore();
+    const base = new SessionMemoryStore();
     const a = withMemoryNamespace(base, "a");
     await a.append("s", [{ role: "user", content: "x" }]);
     await a.clear("s");
@@ -120,7 +120,7 @@ describe("withMemoryListeners", () => {
   // Base case: each callback fires after its operation, seeing what happened.
   test("base: notifies the listener after load / append / clear", async () => {
     const events: string[] = [];
-    const mem = withMemoryListeners(new InMemoryStore(), {
+    const mem = withMemoryListeners(new SessionMemoryStore(), {
       onAppend: (id, msgs) => void events.push(`append:${id}:${msgs.length}`),
       onLoad: (id, msgs) => void events.push(`load:${id}:${msgs.length}`),
       onClear: (id) => void events.push(`clear:${id}`),
@@ -135,7 +135,7 @@ describe("withMemoryListeners", () => {
 
   // Edge: the decorator is transparent — stored data is unchanged.
   test("edge: listening does not alter what is stored", async () => {
-    const base = new InMemoryStore();
+    const base = new SessionMemoryStore();
     const mem = withMemoryListeners(base, { onAppend: () => "ignored" as never });
     await mem.append("s", [{ role: "user", content: "x" }]);
     expect((await base.load("s")).map((m) => m.content)).toEqual(["x"]);
@@ -144,7 +144,7 @@ describe("withMemoryListeners", () => {
   // Edge: a listener may omit callbacks it doesn't care about.
   test("edge: partial listeners are fine", async () => {
     let loads = 0;
-    const mem = withMemoryListeners(new InMemoryStore(), {
+    const mem = withMemoryListeners(new SessionMemoryStore(), {
       onLoad: () => void (loads += 1),
     });
     await mem.append("s", [{ role: "user", content: "x" }]); // no onAppend — no throw
@@ -156,7 +156,7 @@ describe("withMemoryListeners", () => {
   test("edge: listeners compose when stacked", async () => {
     const seen: string[] = [];
     const mem = withMemoryListeners(
-      withMemoryListeners(new InMemoryStore(), {
+      withMemoryListeners(new SessionMemoryStore(), {
         onAppend: () => void seen.push("inner"),
       }),
       { onAppend: () => void seen.push("outer") },
@@ -168,7 +168,7 @@ describe("withMemoryListeners", () => {
   // Edge: async listeners are awaited before the operation resolves.
   test("edge: async listener callbacks are awaited", async () => {
     let done = false;
-    const mem = withMemoryListeners(new InMemoryStore(), {
+    const mem = withMemoryListeners(new SessionMemoryStore(), {
       onAppend: async () => {
         await Promise.resolve();
         done = true;

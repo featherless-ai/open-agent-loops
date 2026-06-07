@@ -4,9 +4,9 @@
  * on disk, in Redis, or behind a vector index. Swap the implementation, keep
  * the loop untouched.
  *
- * v1 ships a single in-memory store (`InMemoryStore` in `./memory`); durable
- * backends (JSONL, Redis, vector) are future implementations of this same
- * interface.
+ * v1 ships a single ephemeral store (`SessionMemoryStore` in `./session-memory`);
+ * durable backends (JSONL, Redis, vector) are future implementations of this
+ * same interface.
  */
 
 import type { Message } from "../types";

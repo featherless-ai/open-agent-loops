@@ -1,13 +1,13 @@
 /**
  * Public surface of the lightweight agent core. Import from here:
  *
- *   import { runAgent, InMemoryStore, defineTool } from "~/agent-core";
+ *   import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
  *
  * Composition over inheritance: every piece sits behind an interface that you
  * satisfy with a plain object/function, then optionally wrap with a decorator
  * (with*) — never subclassed.
  *   ModelClient  - the LLM boundary (implement `{ stream }`)
- *   Memory       - conversation storage (use InMemoryStore, or `{ load, ... }`)
+ *   Memory       - conversation storage (use SessionMemoryStore, or `{ load, ... }`)
  *   Tool         - a callable capability (defineTool: infers Zod arg types)
  *   StopCondition- when to end a run (compose with any / all / not)
  *
@@ -31,7 +31,7 @@ export type {
   ToolSpec,
 } from "./model.types";
 
-export { InMemoryStore } from "./memory/memory";
+export { SessionMemoryStore } from "./memory/session-memory";
 export type { Memory, MemoryListener } from "./memory/memory.types";
 
 export {

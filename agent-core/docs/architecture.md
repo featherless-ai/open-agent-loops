@@ -41,7 +41,7 @@ flowchart TB
 
         subgraph BUILTIN["Built-in implementations — v1"]
             FAKE["FakeModelClient (streaming, scriptable)"]
-            INMEM["InMemoryStore"]
+            INMEM["SessionMemoryStore"]
         end
     end
 
@@ -69,7 +69,7 @@ flowchart TB
 ```
 
 **Reading it:** the core engine only ever calls the **interfaces** in the seams
-layer. v1 ships `FakeModelClient` + `InMemoryStore`; future providers/stores are
+layer. v1 ships `FakeModelClient` + `SessionMemoryStore`; future providers/stores are
 just new implementations of the same seams — the core never changes.
 
 ## Composition over inheritance
@@ -165,7 +165,7 @@ classDiagram
         +List~ModelRequest~ requests
         +stream(req) ModelStream
     }
-    class InMemoryStore {
+    class SessionMemoryStore {
         -Map sessions
         +load(sessionId) List~Message~
         +append(sessionId, messages)
@@ -189,7 +189,7 @@ classDiagram
     }
 
     FakeModelClient ..|> ModelClient
-    InMemoryStore ..|> Memory
+    SessionMemoryStore ..|> Memory
     runAgent ..> ModelClient : streams
     runAgent ..> Memory : load / append
     runAgent ..> Tool : dispatches

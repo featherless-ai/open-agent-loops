@@ -9,7 +9,7 @@ package is to make the **core things plug-and-play and independently testable**.
 | Seam          | Interface      | v1 implementation        | Swap in later                   |
 | ------------- | -------------- | ------------------------ | ------------------------------- |
 | LLM boundary  | `ModelClient`  | `FakeModelClient`        | OpenAI-compatible / Anthropic   |
-| Memory        | `Memory`       | `InMemoryStore`          | JSONL file / Redis / vector     |
+| Memory        | `Memory`       | `SessionMemoryStore`     | JSONL file / Redis / vector     |
 | Capabilities  | `Tool`         | `defineTool(...)`        | any tool you write              |
 | Stopping      | `StopCondition`| `maxSteps`, `whenToolCalled` | custom predicates          |
 
@@ -32,7 +32,7 @@ load history → append prompt → ┌─ stream assistant turn
 ## Usage
 
 ```ts
-import { runAgent, InMemoryStore, defineTool } from "~/agent-core";
+import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
 // FakeModelClient is a test double, not part of the public surface:
 import { FakeModelClient } from "~/agent-core/mocks/fake-model";
 import { z } from "zod";
@@ -52,7 +52,7 @@ const model = new FakeModelClient([
 
 const result = await runAgent({
   model,
-  memory: new InMemoryStore(),
+  memory: new SessionMemoryStore(),
   sessionId: "demo",
   prompt: "What's the weather in Paris?",
   tools: [weather],

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { prepareRequestMessages, runAgent } from "../primitives/loop";
 import { FakeModelClient } from "../mocks/fake-model";
-import { InMemoryStore } from "../memory/memory";
+import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
 import type { AgentEvent } from "../types";
@@ -19,7 +19,7 @@ describe("runAgent", () => {
   // Base case: a turn with no tool calls is the final answer (one step).
   test("base: single turn with no tools returns the final answer", async () => {
     const model = new FakeModelClient([{ text: "the answer" }]);
-    const memory = new InMemoryStore();
+    const memory = new SessionMemoryStore();
     const result = await runAgent({ model, memory, sessionId: "s", prompt: "q" });
 
     expect(result.steps).toBe(1);
@@ -36,7 +36,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -56,7 +56,7 @@ describe("runAgent", () => {
     }));
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -78,7 +78,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [finish],
@@ -94,7 +94,7 @@ describe("runAgent", () => {
     }));
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -111,7 +111,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -137,7 +137,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [boom],
@@ -165,7 +165,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [tracked],
@@ -185,7 +185,7 @@ describe("runAgent", () => {
     ]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -220,7 +220,7 @@ describe("runAgent", () => {
     ]);
     await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [make("A"), make("B")],
@@ -235,7 +235,7 @@ describe("runAgent", () => {
     const model = new FakeModelClient([{ text: "ok" }]);
     await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "secret",
       hooks: {
@@ -248,7 +248,7 @@ describe("runAgent", () => {
 
   // Edge: memory persists across separate runs in the same session.
   test("edge: a second run sees the first run's history", async () => {
-    const memory = new InMemoryStore();
+    const memory = new SessionMemoryStore();
     const model = new FakeModelClient([{ text: "first" }, { text: "second" }]);
     await runAgent({ model, memory, sessionId: "s", prompt: "one" });
     await runAgent({ model, memory, sessionId: "s", prompt: "two" });
@@ -264,7 +264,7 @@ describe("runAgent", () => {
     const model = new FakeModelClient([{ reasoning: "let me think", text: "the answer" }]);
     const result = await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "q",
       onEvent: (e) => {
@@ -286,7 +286,7 @@ describe("runAgent", () => {
     ]);
     await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       tools: [echo],
@@ -320,7 +320,7 @@ describe("runAgent", () => {
     const model = new FakeModelClient([{ text: "ok" }]);
     await runAgent({
       model,
-      memory: new InMemoryStore(),
+      memory: new SessionMemoryStore(),
       sessionId: "s",
       prompt: "go",
       onEvent: (e) => {
