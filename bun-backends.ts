@@ -52,17 +52,27 @@ export function bunShellBackend(options: BackendOptions = {}): ShellBackend {
 
 /**
  * A real {@link SearchBackend}: shells out to ripgrep (`rg`) and parses its
- * `path:line:text` output into {@link SearchMatch} records. ripgrep exits 1 when
+ * `path:line:text` output into {@link SearchMatch} records. When `rg` is not on
+ * the PATH it falls back to POSIX `grep -rHnE`, which emits the same
+ * `path:line:text` shape so the parser below is unchanged. Both tools exit 1 when
  * there are simply no matches (not an error); only exit codes above 1 are real
  * failures and are surfaced as a thrown error.
  */
 export function bunSearchBackend(options: BackendOptions = {}): SearchBackend {
   return {
     async search(query: SearchQuery, ctx: ToolContext): Promise<SearchMatch[]> {
-      const args = ["rg", "--line-number", "--no-heading", "--with-filename"];
-      if (query.ignoreCase) args.push("--ignore-case");
-      args.push("--regexp", query.pattern);
-      if (query.path) args.push(query.path);
+      const hasRipgrep = Bun.which("rg") !== null;
+      const args = hasRipgrep
+        ? ["rg", "--line-number", "--no-heading", "--with-filename"]
+        : ["grep", "-rHnE"];
+      if (query.ignoreCase) args.push(hasRipgrep ? "--ignore-case" : "-i");
+      if (hasRipgrep) {
+        args.push("--regexp", query.pattern);
+        if (query.path) args.push(query.path);
+      } else {
+        // grep needs the pattern before the path; `-e` guards patterns with `-`.
+        args.push("-e", query.pattern, query.path ?? ".");
+      }
 
       const proc = Bun.spawn(args, {
         cwd: options.cwd,
@@ -76,11 +86,14 @@ export function bunSearchBackend(options: BackendOptions = {}): SearchBackend {
         proc.exited,
       ]);
       if (exitCode > 1) {
-        throw new Error(`search failed: ${stderr.trim() || `rg exited ${exitCode}`}`);
+        throw new Error(`search failed: ${stderr.trim() || `${args[0]} exited ${exitCode}`}`);
       }
 
       const matches: SearchMatch[] = [];
-      for (const row of stdout.split("\n")) {
+      // Split on `\r?\n`: CRLF files (like war-and-peace.txt) would otherwise
+      // leave a trailing `\r` that the row regex's `$` won't match, silently
+      // dropping every result.
+      for (const row of stdout.split(/\r?\n/)) {
         if (!row) continue;
         // Non-greedy path grabs the minimal text before the first `:<digits>:`.
         const parsed = row.match(/^(.+?):(\d+):(.*)$/);
