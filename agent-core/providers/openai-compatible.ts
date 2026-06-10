@@ -33,8 +33,8 @@
 import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
 import { StreamEventType } from "../model.types";
-import type { Message, ToolCall } from "../types";
-import { Role, ToolCallType } from "../types";
+import type { Message, ReasoningDetail, ToolCall } from "../types";
+import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 
 type ChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
@@ -224,8 +224,15 @@ function toChatMessage(message: Message): ChatMessage {
       // tool_calls is already the OpenAI wire shape, so it passes straight through.
       if (message.tool_calls && message.tool_calls.length > 0) out.tool_calls = message.tool_calls;
       // Resend reasoning on tool-call turns (DeepSeek thinking mode needs it);
-      // prepareRequestMessages already dropped it from plain turns.
-      if (message.reasoning) out.reasoning_content = message.reasoning;
+      // prepareRequestMessages already dropped it from plain turns. Prefer the
+      // verbatim structured blocks when present (signed/encrypted models require
+      // the exact sequence back); otherwise fall back to the flat string that
+      // raw-string reasoning models (DeepSeek, GLM) accept on `reasoning_content`.
+      if (message.reasoning_details && message.reasoning_details.length > 0) {
+        out.reasoning_details = message.reasoning_details;
+      } else if (message.reasoning) {
+        out.reasoning_content = message.reasoning;
+      }
       return out as unknown as ChatMessage;
     }
     default: {
@@ -265,6 +272,22 @@ interface ToolDraft {
 }
 
 /**
+ * Accumulator for one structured reasoning block whose text/data streams across
+ * chunks. Metadata (type/id/format/signature) is taken from whichever chunk
+ * carries it; the body strings are concatenated in arrival order.
+ *
+ * @internal
+ */
+interface ReasoningDraft {
+  type: ReasoningDetail["type"] | "";
+  id: string | null;
+  format: ReasoningFormat;
+  index?: number;
+  body: string;
+  signature: string | null;
+}
+
+/**
  * Translate the SDK's chunk stream into {@link StreamEvent}s.
  *
  * @remarks
@@ -278,44 +301,75 @@ interface ToolDraft {
  * @group Model
  */
 export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGenerator<StreamEvent> {
-  let content = "";
-  let reasoning = "";
-  const toolDrafts = new Map<number, ToolDraft>();
+  const acc: StreamAccumulator = {
+    content: "",
+    reasoning: "",
+    toolDrafts: new Map(),
+    reasoningDrafts: new Map(),
+    finishReason: undefined,
+  };
 
   try {
     for await (const chunk of chunks) {
-      const delta = chunk.choices[0]?.delta;
+      const choice = chunk.choices[0];
+      const finish = mapFinishReason(choice?.finish_reason);
+      if (finish) acc.finishReason = finish;
+
+      const delta = choice?.delta;
       if (!delta) continue;
 
+      // Flat string reasoning (DeepSeek / GLM / vLLM) streams ready to display.
       const reasoningText = readReasoning(delta);
       if (reasoningText) {
-        reasoning += reasoningText;
+        acc.reasoning += reasoningText;
         yield { type: StreamEventType.ReasoningDelta, text: reasoningText };
       }
+      // Structured reasoning blocks: accumulate verbatim by index; surface the
+      // human-readable text/summary as deltas so display still works.
+      for (const display of accumulateReasoningDetails(delta, acc.reasoningDrafts)) {
+        acc.reasoning += display;
+        yield { type: StreamEventType.ReasoningDelta, text: display };
+      }
       if (delta.content) {
-        content += delta.content;
+        acc.content += delta.content;
         yield { type: StreamEventType.TextDelta, text: delta.content };
       }
       for (const call of delta.tool_calls ?? []) {
-        const draft = toolDrafts.get(call.index) ?? { id: "", name: "", args: "" };
+        const draft = acc.toolDrafts.get(call.index) ?? { id: "", name: "", args: "" };
         if (call.id) draft.id = call.id;
         if (call.function?.name) draft.name = call.function.name;
         if (call.function?.arguments) draft.args += call.function.arguments;
-        toolDrafts.set(call.index, draft);
+        acc.toolDrafts.set(call.index, draft);
       }
     }
   } catch (error) {
-    yield { type: StreamEventType.Error, error: asError(error), message: assemble(content, reasoning, toolDrafts) };
+    yield { type: StreamEventType.Error, error: asError(error), message: assemble(acc) };
     return;
   }
 
-  const message = assemble(content, reasoning, toolDrafts);
+  const message = assemble(acc);
   for (const toolCall of message.tool_calls ?? []) yield { type: StreamEventType.ToolCall, toolCall };
-  yield { type: StreamEventType.Done, message };
+  yield { type: StreamEventType.Done, message, ...(acc.finishReason ? { finishReason: acc.finishReason } : {}) };
 }
 
 /**
- * Read the non-standard reasoning field off a delta (`reasoning` | `reasoning_content`).
+ * Everything one streamed turn accumulates before it is assembled into a Message.
+ *
+ * @internal
+ */
+interface StreamAccumulator {
+  content: string;
+  /** Flattened, human-readable reasoning (flat field + text/summary blocks). */
+  reasoning: string;
+  toolDrafts: Map<number, ToolDraft>;
+  /** Verbatim structured reasoning blocks, keyed by their stream index. */
+  reasoningDrafts: Map<number, ReasoningDraft>;
+  finishReason?: FinishReason;
+}
+
+/**
+ * Read the non-standard flat reasoning field off a delta (`reasoning` |
+ * `reasoning_content`).
  *
  * @internal
  */
@@ -326,21 +380,132 @@ function readReasoning(delta: object): string {
 }
 
 /**
- * Assemble accumulated content, reasoning, and tool drafts into a Message.
+ * Fold a delta's `reasoning_details[]` chunks into the per-index drafts,
+ * preserving every block verbatim. Returns the human-readable fragments
+ * (`reasoning.text` / `reasoning.summary`) seen in THIS delta, in order, so the
+ * caller can stream them as display deltas. Encrypted blocks contribute no
+ * display text (their `data` is opaque and may arrive as `[REDACTED]`).
  *
  * @internal
  */
-function assemble(content: string, reasoning: string, drafts: Map<number, ToolDraft>): Message {
+function accumulateReasoningDetails(
+  delta: object,
+  drafts: Map<number, ReasoningDraft>,
+): string[] {
+  const raw = (delta as Record<string, unknown>).reasoning_details;
+  if (!Array.isArray(raw)) return [];
+
+  const display: string[] = [];
+  raw.forEach((entry, position) => {
+    if (entry === null || typeof entry !== "object") return;
+    const block = entry as Record<string, unknown>;
+    // Most providers send a per-block `index`; fall back to array position for
+    // the single-block streams that omit it.
+    const key = typeof block.index === "number" ? block.index : position;
+    const draft = drafts.get(key) ?? {
+      type: "",
+      id: null,
+      format: ReasoningFormat.AnthropicClaudeV1,
+      index: typeof block.index === "number" ? block.index : undefined,
+      body: "",
+      signature: null,
+    };
+    if (typeof block.type === "string") draft.type = block.type as ReasoningDraft["type"];
+    if (typeof block.id === "string") draft.id = block.id;
+    if (typeof block.format === "string") draft.format = block.format as ReasoningFormat;
+    if (typeof block.signature === "string") draft.signature = block.signature;
+
+    const fragment = readBlockBody(block);
+    draft.body += fragment;
+    if (fragment && block.type !== "reasoning.encrypted") display.push(fragment);
+
+    drafts.set(key, draft);
+  });
+  return display;
+}
+
+/**
+ * Extract the streamed body string of a reasoning block, whichever field its
+ * type uses (`text` / `summary` / `data`).
+ *
+ * @internal
+ */
+function readBlockBody(block: Record<string, unknown>): string {
+  const value = block.text ?? block.summary ?? block.data;
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Finalize the per-index reasoning drafts into verbatim {@link ReasoningDetail}
+ * blocks, ordered by stream index.
+ *
+ * @internal
+ */
+function assembleReasoningDetails(drafts: Map<number, ReasoningDraft>): ReasoningDetail[] {
+  return [...drafts.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, draft]): ReasoningDetail => {
+      const base = { id: draft.id, format: draft.format, ...(draft.index !== undefined ? { index: draft.index } : {}) };
+      switch (draft.type) {
+        case "reasoning.summary":
+          return { ...base, type: "reasoning.summary", summary: draft.body };
+        case "reasoning.encrypted":
+          return { ...base, type: "reasoning.encrypted", data: draft.body };
+        case "reasoning.text":
+        default:
+          // Default unknown/blank types to text — the only shape with an
+          // optional signature, so nothing signed is dropped.
+          return {
+            ...base,
+            type: "reasoning.text",
+            text: draft.body,
+            ...(draft.signature !== null ? { signature: draft.signature } : {}),
+          };
+      }
+    });
+}
+
+/**
+ * Map a wire `finish_reason` to the {@link FinishReason} enum, or `undefined`
+ * when the provider sent none (still streaming) or an unrecognized value.
+ *
+ * @internal
+ */
+function mapFinishReason(reason: string | null | undefined): FinishReason | undefined {
+  switch (reason) {
+    case "stop":
+      return FinishReason.Stop;
+    case "tool_calls":
+      return FinishReason.ToolCalls;
+    case "length":
+      return FinishReason.Length;
+    case "content_filter":
+      return FinishReason.ContentFilter;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Assemble accumulated content, reasoning, tool drafts, reasoning-detail drafts,
+ * and finish reason into a Message.
+ *
+ * @internal
+ */
+function assemble(acc: StreamAccumulator): Message {
   // Keep `arguments` as the raw accumulated JSON string (wire format) — the
   // loop JSON-parses and schema-validates it before the tool runs.
-  const toolCalls: ToolCall[] = [...drafts.entries()]
+  const toolCalls: ToolCall[] = [...acc.toolDrafts.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, draft]) => ({ id: draft.id, type: ToolCallType.Function, function: { name: draft.name, arguments: draft.args } }));
+  const reasoningDetails = assembleReasoningDetails(acc.reasoningDrafts);
   return {
     role: Role.Assistant,
-    content,
-    ...(reasoning ? { reasoning } : {}),
+    content: acc.content,
+    ...(acc.reasoning ? { reasoning: acc.reasoning } : {}),
+    ...(reasoningDetails.length > 0 ? { reasoning_details: reasoningDetails } : {}),
     ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    ...(acc.finishReason ? { finishReason: acc.finishReason } : {}),
     timestamp: Date.now(),
   };
 }

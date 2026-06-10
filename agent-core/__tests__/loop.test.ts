@@ -6,7 +6,7 @@ import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
 import type { AgentEvent } from "../types";
-import { AgentEventType, Role, ToolCallType } from "../types";
+import { AgentEventType, ReasoningFormat, Role, ToolCallType } from "../types";
 import { ExecutionMode } from "../tools/tools.types";
 
 /** A no-op echo tool used to exercise the tool path. */
@@ -314,6 +314,21 @@ describe("runAgent", () => {
     expect(out[1]!.reasoning).toBeUndefined();
     // Inputs are not mutated.
     expect(input[1]!.reasoning).toBe("dropped");
+  });
+
+  // Edge: structured reasoning_details follow the same resend rule as the string.
+  test("edge: prepareRequestMessages strips reasoning_details on no-tool turns", () => {
+    const block = { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text", text: "t" } as const;
+    const input = [
+      { role: Role.Assistant, content: "a", reasoning_details: [block], tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
+      { role: Role.Assistant, content: "b", reasoning_details: [block] },
+    ];
+    const out = prepareRequestMessages(input);
+    // Kept on the tool-call turn (continuity), dropped on the plain turn.
+    expect(out[0]!.reasoning_details).toEqual([block]);
+    expect(out[1]!.reasoning_details).toBeUndefined();
+    // Input untouched.
+    expect(input[1]!.reasoning_details).toEqual([block]);
   });
 
   // Edge: tool_start hands off parsed object args, not the raw JSON string.

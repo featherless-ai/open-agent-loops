@@ -68,6 +68,151 @@ export interface ToolCall {
 }
 
 /**
+ * Why a model turn ended — the wire `finish_reason` from the provider.
+ *
+ * @remarks
+ * Part of the OpenAI chat-completions contract, surfaced here so the loop and
+ * callers can tell a *clean* finish apart from a degraded one rather than
+ * treating "no tool calls" as a blanket "done":
+ * - {@link FinishReason.Stop | stop} — the model finished on its own; a final answer.
+ * - {@link FinishReason.ToolCalls | tool_calls} — the model wants tools run; the loop continues.
+ * - {@link FinishReason.Length | length} — output hit the token cap and was TRUNCATED;
+ *   the turn is incomplete, not a real answer.
+ * - {@link FinishReason.ContentFilter | content_filter} — the provider withheld content.
+ *
+ * The loop still drives continuation off the presence of tool calls (the two
+ * agree in practice); this value is recorded on the assistant turn so truncation
+ * and filtering are observable instead of silently passing as success.
+ *
+ * @group Messages & Events
+ */
+export enum FinishReason {
+  /** The model stopped on its own — a complete final answer. */
+  Stop = "stop",
+  /** The model wants one or more tools run before it can continue. */
+  ToolCalls = "tool_calls",
+  /** Output hit the max-tokens cap and was truncated mid-turn (incomplete). */
+  Length = "length",
+  /** The provider's content filter withheld part or all of the output. */
+  ContentFilter = "content_filter",
+}
+
+/**
+ * Provider dialect a {@link ReasoningDetail} block is encoded in.
+ *
+ * @remarks
+ * Carried verbatim and used only to pick the right egress field — never parsed
+ * by this library. `anthropic-claude-v1` is the default for unlabeled blocks.
+ * Unknown future dialects map to {@link ReasoningFormat.Unknown}.
+ *
+ * @group Messages & Events
+ */
+export enum ReasoningFormat {
+  /** Dialect not advertised by the provider. */
+  Unknown = "unknown",
+  /** OpenAI Responses API reasoning items. */
+  OpenAIResponsesV1 = "openai-responses-v1",
+  /** Azure OpenAI Responses API reasoning items. */
+  AzureOpenAIResponsesV1 = "azure-openai-responses-v1",
+  /** xAI Responses API reasoning items. */
+  XAIResponsesV1 = "xai-responses-v1",
+  /** Anthropic Claude reasoning blocks — the default for unlabeled blocks. */
+  AnthropicClaudeV1 = "anthropic-claude-v1",
+  /** Google Gemini reasoning blocks (thought signatures). */
+  GoogleGeminiV1 = "google-gemini-v1",
+}
+
+/**
+ * One structured reasoning block, preserved VERBATIM for replay.
+ *
+ * @remarks
+ * The richer counterpart to the flat {@link Message.reasoning} string: the form
+ * aggregators (OpenRouter and similar) use for models whose chain-of-thought is
+ * signed, summarized, or encrypted (Anthropic, Gemini, OpenAI o-series). A turn
+ * may carry several blocks; their relative order and {@link ReasoningDetailBase.index | index}
+ * are load-bearing.
+ *
+ * IMMUTABILITY CONTRACT — these blocks are pass-through-verbatim. A
+ * `reasoning.text` block's {@link ReasoningTextDetail.signature | signature} and a
+ * {@link ReasoningEncryptedDetail.data | reasoning.encrypted} blob are validated
+ * by the model; editing, reordering, merging, splitting, or dropping any block
+ * invalidates the sequence (e.g. Gemini rejects a tool call whose thought
+ * signature is missing with a 400). Consumers that inspect reasoning may read the
+ * flattened {@link Message.reasoning} text, but must resend `reasoning_details`
+ * unchanged and in original order.
+ *
+ * @see {@link Message.reasoning_details}
+ * @group Messages & Events
+ */
+export interface ReasoningDetailBase {
+  /** Provider-assigned block id, or `null` when the provider sends none. */
+  id: string | null;
+  /** The dialect this block is encoded in; see {@link ReasoningFormat}. */
+  format: ReasoningFormat;
+  /**
+   * Sequence position within the turn's reasoning. Load-bearing: it drives
+   * streaming reassembly and fixes the order blocks must be resent in.
+   */
+  index?: number;
+}
+
+/**
+ * A plaintext (optionally signed) reasoning block.
+ *
+ * @remarks
+ * When {@link ReasoningTextDetail.signature | signature} is present the `text` is
+ * signature-protected — treat the whole block as immutable.
+ *
+ * @group Messages & Events
+ */
+export interface ReasoningTextDetail extends ReasoningDetailBase {
+  /** Discriminant. */
+  type: "reasoning.text";
+  /** The reasoning text. */
+  text: string;
+  /** Provider signature over the text; when set, the block is immutable. */
+  signature?: string | null;
+}
+
+/**
+ * A provider-summarized reasoning block (the raw chain-of-thought is withheld).
+ *
+ * @group Messages & Events
+ */
+export interface ReasoningSummaryDetail extends ReasoningDetailBase {
+  /** Discriminant. */
+  type: "reasoning.summary";
+  /** The provider's summary of the hidden reasoning. */
+  summary: string;
+}
+
+/**
+ * An encrypted reasoning block — opaque ciphertext, never decoded by this library.
+ *
+ * @group Messages & Events
+ */
+export interface ReasoningEncryptedDetail extends ReasoningDetailBase {
+  /** Discriminant. */
+  type: "reasoning.encrypted";
+  /** Opaque encrypted payload; pass-through only. May stream as `[REDACTED]`. */
+  data: string;
+}
+
+/**
+ * A structured reasoning block in one of its three shapes.
+ *
+ * @remarks
+ * Discriminated on `type`. See {@link ReasoningDetailBase} for the immutability
+ * contract that governs all three.
+ *
+ * @group Messages & Events
+ */
+export type ReasoningDetail =
+  | ReasoningTextDetail
+  | ReasoningSummaryDetail
+  | ReasoningEncryptedDetail;
+
+/**
  * Tool-call arguments *parsed* into an object.
  *
  * @remarks
@@ -91,8 +236,15 @@ export type ToolArguments = Record<string, unknown>;
  * — not in that spec, but kept deliberately for agent engineering (`reasoning`,
  * `toolName`, `isError`, `timestamp`), each marked below. One shape covers
  * user/assistant/tool turns:
- * - assistant turns may carry `reasoning` and/or `tool_calls`
+ * - assistant turns may carry `reasoning` (+ optional `reasoning_details`),
+ *   `finishReason`, and/or `tool_calls`
  * - tool-result turns set `tool_call_id` / `toolName` / `isError`
+ *
+ * Reasoning has two representations that travel together: the flat
+ * {@link Message.reasoning} string (for inspection/display) and, when the
+ * provider sends structured blocks, {@link Message.reasoning_details} (preserved
+ * verbatim for replay). The same conditional-resend rule governs BOTH — see
+ * {@link Message.reasoning}.
  *
  * @group Messages & Events
  */
@@ -121,13 +273,14 @@ export interface Message {
    *   - others    IBM Granite 3.2, Hunyuan A13B, MiniMax-M2, ERNIE-4.5,
    *               Cohere Command A, Gemma, Holo2
    *
-   * Persisted, not transient, because resend rules depend on the turn:
+   * Persisted, not transient, because resend rules depend on the turn (the same
+   * rule governs {@link Message.reasoning_details}):
    * - turn HAS `toolCalls`  → reasoning MUST be resent on later turns, or
    *   thinking-mode models (e.g. DeepSeek V4) reject the request with a 400.
    * - turn has NO tool calls → reasoning is display/memory only and is
    *   dropped when building the next request (the model ignores it).
-   * The request builder (prepareRequestMessages) applies this; storage just
-   * keeps the value.
+   * The request builder (prepareRequestMessages) applies this to both the flat
+   * string and the structured blocks; storage just keeps the value.
    *
    * Sources of truth — these rules live in provider docs, not here:
    *   - vLLM, field naming + parser registry (reasoning vs reasoning_content,
@@ -142,6 +295,35 @@ export interface Message {
    *     https://platform.openai.com/docs/guides/reasoning
    */
   reasoning?: string;
+
+  /**
+   * [extension — not in the OpenAI spec] The structured, VERBATIM form of this
+   * turn's reasoning: signed / summarized / encrypted blocks, as emitted by
+   * aggregators for Anthropic, Gemini, and OpenAI o-series models.
+   *
+   * Present alongside {@link Message.reasoning} only when the provider sends
+   * structured blocks; raw-string reasoning models leave it unset. The flat
+   * `reasoning` string is the human-readable view; this is the source of truth
+   * for round-tripping and MUST be resent unchanged and in original order on
+   * tool-call turns (see {@link ReasoningDetail} for the immutability contract,
+   * and {@link Message.reasoning} for the conditional-resend rule that applies
+   * identically to both fields).
+   *
+   * @see {@link ReasoningDetail}
+   */
+  reasoning_details?: ReasoningDetail[];
+
+  /**
+   * [extension — not in the OpenAI spec field set, but a standard wire value]
+   * Why this assistant turn ended ({@link FinishReason}). Recorded so callers and
+   * stop conditions can distinguish a clean `stop` from a truncated `length` or a
+   * `content_filter` withholding — a turn with no tool calls is otherwise
+   * indistinguishable from a complete answer. Unset on non-model turns and when
+   * the provider reports none.
+   *
+   * @see {@link FinishReason}
+   */
+  finishReason?: FinishReason;
 
   /** Standard wire field: tool calls the assistant wants to make (assistant turns). */
   tool_calls?: ToolCall[];

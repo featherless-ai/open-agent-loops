@@ -384,24 +384,28 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 }
 
 /**
- * Prepare working history for sending: drop `reasoning` from assistant turns
- * that did NOT call tools.
+ * Prepare working history for sending: drop both reasoning representations
+ * (`reasoning` and `reasoning_details`) from assistant turns that did NOT call
+ * tools.
  *
  * @remarks
  * Reasoning is resent only on tool-call turns — thinking-mode models (e.g.
  * DeepSeek V4) require it there for tool-call continuity and reject the request
- * otherwise, while on plain turns the model ignores it.
+ * otherwise, while on plain turns the model ignores it. The flat string and the
+ * verbatim structured blocks follow the same rule (see {@link Message.reasoning}).
  *
  * @param messages - The working history to prepare. Never mutated.
  * @returns A fresh array with reasoning stripped from non-tool-call turns.
  * @see {@link Message.reasoning}
+ * @see {@link Message.reasoning_details}
  * @group Core
  */
 export function prepareRequestMessages(messages: Message[]): Message[] {
   return messages.map((message) => {
     const isToolCallTurn = (message.tool_calls?.length ?? 0) > 0;
-    if (message.role === Role.Assistant && message.reasoning !== undefined && !isToolCallTurn) {
-      const { reasoning: _dropped, ...rest } = message;
+    const hasReasoning = message.reasoning !== undefined || message.reasoning_details !== undefined;
+    if (message.role === Role.Assistant && hasReasoning && !isToolCallTurn) {
+      const { reasoning: _dropped, reasoning_details: _droppedDetails, ...rest } = message;
       return rest;
     }
     return message;

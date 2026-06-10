@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { Message, ToolCall } from "./types";
+import type { FinishReason, Message, ToolCall } from "./types";
 
 /**
  * Tool description handed to the model so it knows what it can call.
@@ -95,8 +95,18 @@ export type StreamEvent =
   | {
       /** Discriminant; see {@link StreamEventType.Done}. */
       type: StreamEventType.Done;
-      /** The assembled assistant message for the turn. */
+      /**
+       * The assembled assistant message for the turn. Carries the verbatim
+       * `reasoning_details` (when the provider streamed structured blocks) and
+       * the `finishReason`, both reassembled from the stream.
+       */
       message: Message;
+      /**
+       * Why the turn ended, when the provider reported it. The same value is
+       * mirrored onto {@link Message.finishReason}; it is surfaced on the event
+       * too so a consumer reading the stream need not wait to inspect the message.
+       */
+      finishReason?: FinishReason;
     }
   | {
       /** Discriminant; see {@link StreamEventType.Error}. */

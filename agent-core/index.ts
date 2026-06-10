@@ -44,14 +44,19 @@ export type {
   AgentEventBody,
   EventSink,
   Message,
+  ReasoningDetail,
+  ReasoningDetailBase,
+  ReasoningEncryptedDetail,
+  ReasoningSummaryDetail,
+  ReasoningTextDetail,
   ToolArguments,
   ToolCall,
 } from "./types";
 
 // Value exports: enums referenced at runtime by consumers comparing or
 // constructing values (e.g. `event.type === AgentEventType.ToolStart`,
-// `message.role === Role.User`).
-export { AgentEventType, Role, ToolCallType } from "./types";
+// `message.role === Role.User`, `message.finishReason === FinishReason.Length`).
+export { AgentEventType, FinishReason, ReasoningFormat, Role, ToolCallType } from "./types";
 
 export type {
   ModelClient,

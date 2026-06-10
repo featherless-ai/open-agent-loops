@@ -4,21 +4,22 @@ import {
   OpenAICompatibleModel,
   chunksToEvents,
   drainLines,
+  toChatMessages,
 } from "../providers/openai-compatible";
 import type { StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
-import { Role, ToolCallType } from "../types";
+import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
 /** Build a minimal streaming chunk carrying a single choice delta. */
-function chunk(delta: Record<string, unknown>): ChatChunk {
+function chunk(delta: Record<string, unknown>, finishReason: string | null = null): ChatChunk {
   return {
     id: "c",
     object: "chat.completion.chunk",
     created: 0,
     model: "m",
-    choices: [{ index: 0, delta, finish_reason: null }],
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
   } as unknown as ChatChunk;
 }
 
@@ -75,6 +76,51 @@ describe("chunksToEvents", () => {
     });
     // tool_call is emitted before done.
     expect(events.map((e) => e.type)).toEqual([StreamEventType.ToolCall, StreamEventType.Done]);
+  });
+
+  // Edge: structured reasoning blocks stream by index and are kept verbatim.
+  test("edge: reasoning_details accumulate by index, verbatim, with display deltas", async () => {
+    const events = await collect(
+      chunksToEvents(
+        stream(
+          chunk({ reasoning_details: [{ type: "reasoning.text", index: 0, format: "anthropic-claude-v1", id: "r0", text: "step " }] }),
+          chunk({ reasoning_details: [{ type: "reasoning.text", index: 0, text: "one", signature: "sig" }] }),
+          chunk({ content: "answer" }),
+        ),
+      ),
+    );
+    // The human-readable text surfaces as reasoning deltas for display.
+    const reasoningDeltas = events.filter((e) => e.type === StreamEventType.ReasoningDelta).map((e) => (e as any).text);
+    expect(reasoningDeltas).toEqual(["step ", "one"]);
+    const done = events.at(-1) as any;
+    // Flattened view for inspection.
+    expect(done.message.reasoning).toBe("step one");
+    // Verbatim structured block, body concatenated, signature + metadata kept.
+    expect(done.message.reasoning_details).toEqual([
+      { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text", text: "step one", signature: "sig" },
+    ]);
+  });
+
+  // Edge: an encrypted block is preserved but contributes no display text.
+  test("edge: encrypted reasoning block is opaque, no display delta", async () => {
+    const events = await collect(
+      chunksToEvents(stream(chunk({ reasoning_details: [{ type: "reasoning.encrypted", index: 0, data: "AQID" }] }), chunk({ content: "x" }))),
+    );
+    expect(events.some((e) => e.type === StreamEventType.ReasoningDelta)).toBe(false);
+    const done = events.at(-1) as any;
+    expect(done.message.reasoning).toBeUndefined();
+    expect(done.message.reasoning_details).toEqual([
+      { id: null, format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.encrypted", data: "AQID" },
+    ]);
+  });
+
+  // Edge: finish_reason is captured onto the message and the Done event.
+  test("edge: finish_reason surfaces on the done event and message", async () => {
+    const events = await collect(chunksToEvents(stream(chunk({ content: "hi" }), chunk({}, "length"))));
+    const done = events.at(-1) as any;
+    expect(done.type).toBe(StreamEventType.Done);
+    expect(done.finishReason).toBe(FinishReason.Length);
+    expect(done.message.finishReason).toBe(FinishReason.Length);
   });
 
   // Edge: a mid-stream throw becomes an error event with the partial message.
@@ -162,6 +208,31 @@ describe("OpenAICompatibleModel", () => {
     const events = await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
     expect(events).toHaveLength(1);
     expect((events[0] as any).type).toBe(StreamEventType.Error);
+  });
+});
+
+describe("toChatMessages (egress)", () => {
+  // Structured reasoning is resent verbatim under reasoning_details.
+  test("edge: resends reasoning_details verbatim, not reasoning_content", () => {
+    const details = [
+      { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text" as const, text: "t", signature: "sig" },
+    ];
+    const out = toChatMessages({
+      messages: [{ role: Role.Assistant, content: "", reasoning: "t", reasoning_details: details, tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] }],
+    });
+    const assistant = out[0] as any;
+    expect(assistant.reasoning_details).toEqual(details);
+    expect("reasoning_content" in assistant).toBe(false);
+  });
+
+  // Raw-string reasoning falls back to reasoning_content when no blocks exist.
+  test("edge: falls back to reasoning_content for raw-string reasoning", () => {
+    const out = toChatMessages({
+      messages: [{ role: Role.Assistant, content: "", reasoning: "thought", tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] }],
+    });
+    const assistant = out[0] as any;
+    expect(assistant.reasoning_content).toBe("thought");
+    expect("reasoning_details" in assistant).toBe(false);
   });
 });
 
