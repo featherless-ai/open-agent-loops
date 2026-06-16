@@ -189,6 +189,30 @@ describe("OpenAICompatibleModel", () => {
     expect((events.at(-1) as any).message.content).toBe("hi");
   });
 
+  // Edge: the onRequest tap reports model, params, and system before the call.
+  test("edge: onRequest taps model / params / system", async () => {
+    const fakeClient = {
+      chat: { completions: { create: async () => stream(chunk({ content: "hi" })) } },
+    } as unknown as OpenAI;
+
+    const seen: Array<{ model: string; params: Record<string, unknown>; system?: string }> = [];
+    const model = new OpenAICompatibleModel({
+      model: "deepseek-ai/DeepSeek-V3.1",
+      client: fakeClient,
+      params: { temperature: 0.3 },
+      onRequest: (info) => seen.push(info),
+    });
+
+    await collect(model.stream({ system: "Be brief.", messages: [userMessage({ content: "q" })] }));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({
+      model: "deepseek-ai/DeepSeek-V3.1",
+      params: { temperature: 0.3 },
+      system: "Be brief.",
+    });
+  });
+
   // Edge: chatTemplateKwargs is forwarded in the request body when set.
   test("edge: forwards chat_template_kwargs when configured", async () => {
     let sent: any;

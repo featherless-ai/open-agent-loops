@@ -173,3 +173,21 @@ export type {
   PermissionStore,
 } from "./permissions/permissions.types";
 export { ApprovalChoice, PermissionPolicy } from "./permissions/permissions.types";
+
+// Observability: a passive Tracer that records a run's trajectory off the
+// existing event/model/SSE seams, plus the async batched writer it uses for I/O.
+export { Tracer } from "./observability/tracer";
+export type { FormatOptions, TraceDocument, TracerOptions } from "./observability/tracer";
+export { AsyncWriter } from "./observability/async-writer";
+export type { AsyncWriterOptions } from "./observability/async-writer";
+export type {
+  CompactEntry,
+  DisclosureStep,
+  RawSSE,
+  RequestSnapshot,
+  TraceEntry,
+  TraceMeta,
+  TraceSource,
+  TrajectoryStep,
+  TrajectoryTool,
+} from "./observability/tracer.types";

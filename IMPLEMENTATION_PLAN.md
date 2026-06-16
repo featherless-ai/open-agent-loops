@@ -1,3 +1,38 @@
+# Plan: Port Tracer / observability onto the modern types
+
+Bring `agent-core/observability` (Tracer, AsyncWriter) + its tests over from
+`origin/claude/session-DemlF`. That branch predates the refactors, so it's a
+**port**: string-literal roles/event-types → enums, wide `Message` → the
+discriminated union, single `types.ts` → the `types/` barrel.
+
+## Stage 1: Core seams the tracer taps
+**Goal**: events + provider expose what the tracer reads, additively (no behavior change for existing callers).
+- `types/events.ts`: `AgentStart` += `system?`, `tools?: ToolSpec[]` (type-only import)
+- `primitives/loop.ts`: emit `AgentStart` with `{ system, tools: toolSpecs }`
+- `providers/openai-compatible.ts`: add `onRequest` tap option + fire it in `run()`
+**Success**: `bun run typecheck` clean; existing 225 tests still pass.
+**Status**: Complete (typecheck shows errors ONLY in the un-ported tracer files)
+
+## Stage 2: Port the observability module
+**Goal**: `tracer.ts` / `tracer.types.ts` compile against modern types.
+- `observability/async-writer.ts`: unchanged (pure strings, zero type deps)
+- `observability/tracer.types.ts`: `TrajectoryStep.assistant` → `AssistantMessage`
+- `observability/tracer.ts`: discriminants → `AgentEventType` / `StreamEventType` / `Role`; guard assistant-only fields (`tool_calls`, `reasoning`) via `isAssistantMessage`
+- `index.ts`: export `Tracer` / `AsyncWriter` + their types
+**Success**: `bun run typecheck` clean.
+**Status**: Complete (module compiles; only the test remained)
+
+## Stage 3: Port tests + docs
+**Goal**: tracer/async-writer tests pass; provider `onRequest` test + README.
+- `__tests__/tracer.test.ts`: `FakeModelClient`→`MockModelClient`; enum `type` + `timestamp` on manual `sink()` calls
+- `__tests__/async-writer.test.ts`: unchanged
+- `__tests__/openai-compatible.test.ts`: add `onRequest` test (modern message style)
+- `agent-core/README.md`: add the tracing section
+**Success**: `bun test agent-core` all green; typecheck clean.
+**Status**: Complete (241 pass / 0 fail, typecheck clean; 15 tracer+writer tests)
+
+---
+
 # Plan: Message as a role-discriminated union
 
 **Goal**: Replace the single wide `Message` interface (every role's fields

@@ -5,6 +5,7 @@
  * @module
  */
 
+import type { ToolSpec } from "../model.types";
 import type { Message } from "./message";
 import type { ToolArguments } from "./tool-calls";
 
@@ -53,6 +54,18 @@ export type AgentEventBody =
       type: AgentEventType.AgentStart;
       /** The session whose run is starting. */
       sessionId: string;
+      /**
+       * [observability] The run's system prompt, if any. Carried on this event
+       * so an observer (a tracer, a UI) sees it without having to tap the model
+       * request — the loop already knows it at start.
+       */
+      system?: string;
+      /**
+       * [observability] The full tool specs available to the model this run —
+       * same rationale as {@link system}: surfaced once up front so observers
+       * needn't reconstruct the tool surface from later events.
+       */
+      tools?: ToolSpec[];
     }
   | {
       /** Discriminant; see {@link AgentEventType.TurnStart}. */

@@ -294,7 +294,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const messages: Message[] = [...history, ...prompts];
   await memory.append(sessionId, prompts);
 
-  await emit({ type: AgentEventType.AgentStart, sessionId });
+  await emit({ type: AgentEventType.AgentStart, sessionId, system, tools: toolSpecs });
   for (const prompt of prompts) {
     await emit({ type: AgentEventType.Message, message: prompt });
   }

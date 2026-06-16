@@ -128,6 +128,91 @@ export class MyModel implements ModelClient {
 }
 ```
 
+## Tracing a run (debugging)
+
+`Tracer` is a passive observer that records the run as a timestamped timeline,
+built on the existing seams — it never touches the loop. Tap one or more of:
+
+- `tracer.sink` → `runAgent({ onEvent })` — the agent events (the trajectory),
+  plus the **system prompt** and **available tools** (the loop puts them on the
+  `agent_start` event, so the sink alone captures them — no extra wiring)
+- `tracer.observe(model)` — wrap a `ModelClient` to also capture its
+  `StreamEvent`s, and pull system + tool specs off each request into `meta`
+- `tracer.onRequest` → `OpenAICompatibleModel({ onRequest })` — records the
+  **model id**, **sampling params**, and **system prompt** into `meta`
+- `tracer.onRawSSE` → `OpenAICompatibleModel({ onRawSSE })` — raw wire lines
+
+Two logging paths: **`log`** is synchronous (called inline per entry — use it
+only for cheap sinks like an array or `console.log`); **`write`** is the
+async, queued, batched path for real I/O — lines are buffered and flushed on a
+microtask off the agent loop's hot path (fire-and-forget), with block-until-
+drained backpressure when the queue fills. The queue **auto-drains on
+`agent_end`** — the loop awaits that event, so `runAgent` resolves only once the
+trace is fully written and you never have to call `flush()` yourself (set
+`flushOnEnd: false` to manage it manually, or call `flush()` for non-loop use).
+
+```ts
+import { Tracer } from "~/agent-core";
+import { appendFile } from "node:fs/promises";
+
+// Async, batched, off the hot path. Flush once when the run ends.
+const tracer = new Tracer({ write: (lines) => appendFile("trace.jsonl", lines.join("\n") + "\n") });
+
+const model = new OpenAICompatibleModel({
+  model, baseURL, apiKey,
+  params: { temperature: 0.2 },
+  onRequest: tracer.onRequest,   // capture model + params + system
+  onRawSSE: tracer.onRawSSE,     // capture raw SSE lines
+});
+
+await runAgent({
+  model: tracer.observe(model),  // capture model-boundary stream events too
+  memory, sessionId, system, prompt, tools,
+  onEvent: tracer.sink,          // capture the agent's events
+});
+// async write queue auto-drains on agent_end — no manual flush() needed
+
+console.log(tracer.format());            // timestamped timeline (with meta header)
+console.log(tracer.formatTrajectory());  // per-turn (action → observation) pairs
+const doc = tracer.toJSON();             // { meta, startedAt, durationMs, entries } — one document
+const jsonl = tracer.toJSONL();          // entries only, one JSON object per line
+```
+
+JSON output uses a **compact** shape (`CompactEntry`): the event payload is
+flattened up and the redundant fields dropped — `label` (always `data.type`) and
+the absolute `t` (kept as relative `dt`; absolute time is `startedAt + dt`).
+A line reads `{"seq":2,"dt":7,"source":"agent","type":"turn_start","step":1}` —
+~25% smaller than the in-memory entry, which stays rich for programmatic use.
+
+`meta` records the run's config — `model`, `params`, `system`, `tools` (full
+specs), `sessionId` — so a saved trace is reproducible; `format()` /
+`formatTrajectory()` print it as a header (tools listed with their descriptions).
+
+### Progressive disclosure (over time)
+
+`observe()` snapshots every per-turn `ModelRequest`, so you can watch what's
+disclosed to the model evolve across the run. `disclosure()` diffs consecutive
+snapshots — tools added/removed and how the context window grew — and
+`formatDisclosure()` renders it:
+
+```
+disclosure · 3 turns
+  turn 1 (+0ms)  tools[1]: search +search                      ctx=1 (+1)
+  turn 2 (+0ms)  tools[2]: search, open_file +open_file        ctx=2 (+1)
+  turn 3 (+0ms)  tools[3]: search, open_file, deploy +deploy   ctx=3 (+1)
+```
+
+Note: `runAgent` sends a **fixed tool set** for a run, so within one run the
+tool surface doesn't change — what discloses progressively is the **context**
+(messages accumulate, `transformContext` reshapes it). The tool diff lights up
+when the surface genuinely varies — a custom `ModelClient` that reveals tools
+on demand, or a future per-turn tool hook. `trajectory()` folds the run
+into one `(assistant action → tool observations)` pair per turn, with per-tool
+and per-turn durations — the view you usually read when debugging. `format()`
+interleaves every source (agent / model / sse) into a single ordered timeline.
+Capture is best-effort and non-throwing: a tracer never breaks the run it
+observes. Pass `{ now }` to inject a clock and `{ limit }` for a ring buffer.
+
 ## Tests
 
 ```bash

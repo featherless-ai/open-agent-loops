@@ -75,6 +75,14 @@ export interface OpenAICompatibleOptions {
    */
   onRawSSE?: (line: string) => void;
   /**
+   * Developer tap on the resolved request config, fired once per `stream()` call
+   * just before the request goes out: the model id, the sampling `params`, and
+   * the `system` prompt for this call. Symmetric with {@link onRawSSE} —
+   * observability only; it cannot change the request. (Message history and tools
+   * aren't included here: they already surface through the loop's events.)
+   */
+  onRequest?: (info: { model: string; params: Record<string, unknown>; system?: string }) => void;
+  /**
    * Per-request timeout in milliseconds. A request that exceeds this aborts and
    * surfaces as an {@link StreamEventType.Error} event (the SDK throws
    * `APIConnectionTimeoutError`, which the stream catches). Defaults to 5
@@ -140,6 +148,7 @@ export class OpenAICompatibleModel implements ModelClient {
   private readonly model: string;
   private readonly extra: OpenAICompatibleOptions["params"];
   private readonly chatTemplateKwargs: OpenAICompatibleOptions["chatTemplateKwargs"];
+  private readonly onRequest: OpenAICompatibleOptions["onRequest"];
 
   /**
    * Create a model client for an OpenAI-compatible endpoint.
@@ -149,6 +158,7 @@ export class OpenAICompatibleModel implements ModelClient {
   constructor(options: OpenAICompatibleOptions) {
     this.model = options.model;
     this.extra = options.params;
+    this.onRequest = options.onRequest;
     // Explicit kwargs win; otherwise derive them from the model id for the
     // requested thinking state. Unset `thinking` keeps the legacy behavior
     // (inject nothing).
@@ -194,6 +204,16 @@ export class OpenAICompatibleModel implements ModelClient {
         : {}),
       ...(this.chatTemplateKwargs ? { chat_template_kwargs: this.chatTemplateKwargs } : {}),
     };
+
+    // Observability tap: report the model id, sampling params, and system prompt
+    // for this call. Never let a misbehaving tap break the request.
+    if (this.onRequest) {
+      try {
+        this.onRequest({ model: this.model, params: { ...this.extra }, system: request.system });
+      } catch {
+        // best-effort debugging tap
+      }
+    }
 
     let chunks: AsyncIterable<ChatChunk>;
     try {
