@@ -102,7 +102,12 @@ export { formatShellResult, shellTool } from "./tools/builtin/shell";
 export { formatSearchResults, searchTool } from "./tools/builtin/search";
 export { formatFileContent, formatGlobMatches, globTool, readTool } from "./tools/builtin/file-read";
 export { editTool, formatEditResult, formatWriteResult, writeTool } from "./tools/builtin/file-write";
+export { formatWebFetchResult, formatWebSearchResults, webFetchTool, webSearchTool } from "./tools/builtin/web";
+export { browserTools, formatBrowserSnapshot } from "./tools/builtin/browser";
 export type {
+  BrowserElement,
+  BrowserSession,
+  BrowserSnapshot,
   FileEditRequest,
   FileEditResult,
   FileReadBackend,
@@ -117,6 +122,11 @@ export type {
   SearchQuery,
   ShellBackend,
   ShellResult,
+  WebBackend,
+  WebFetchRequest,
+  WebFetchResult,
+  WebSearchQuery,
+  WebSearchResult,
 } from "./tools/builtin/builtin.types";
 
 // Planning tools: fully shipped (pure in-memory, no host binding), with a
