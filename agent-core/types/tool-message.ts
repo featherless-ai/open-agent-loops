@@ -5,7 +5,7 @@
  */
 
 import type { MessageBase } from "./message-base";
-import type { Role } from "./roles";
+import { Role } from "./roles";
 
 /**
  * A tool-result turn — the **response to a single {@link ToolCall}**.
@@ -44,4 +44,17 @@ export interface ToolMessage extends MessageBase {
    * only plain `content`.
    */
   isError?: boolean;
+}
+
+/**
+ * Construct a {@link ToolMessage} — pins the `role` discriminant and stamps
+ * `timestamp` with the construction time; you supply the rest. `tool_call_id`
+ * stays required (the message is meaningless without the call it answers);
+ * `toolName`, `isError`, and an overriding `timestamp` are optional.
+ *
+ * @param fields - Everything but `role`.
+ * @group Messages & Events
+ */
+export function toolMessage(fields: Omit<ToolMessage, "role">): ToolMessage {
+  return { role: Role.Tool, timestamp: Date.now(), ...fields };
 }

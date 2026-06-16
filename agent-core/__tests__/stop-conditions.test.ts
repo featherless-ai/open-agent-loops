@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { all, any, maxSteps, not, whenToolCalled } from "../stop/conditions";
 import type { StopContext } from "../stop/conditions.types";
-import type { ToolMessage } from "../types";
-import { Role } from "../types";
+import { assistantMessage, toolMessage } from "../types";
 
 /** Build a StopContext with sensible defaults for pure-function testing. */
 const ctx = (over: Partial<StopContext> = {}): StopContext => ({
   step: 1,
-  assistant: { role: Role.Assistant, content: "" },
+  assistant: assistantMessage({ content: "" }),
   toolResults: [],
   messages: [],
   ...over,
@@ -30,12 +29,12 @@ describe("maxSteps", () => {
 describe("whenToolCalled", () => {
   // Base case: true when the named tool produced a result this turn.
   test("base: true when the tool ran", async () => {
-    const result: ToolMessage = { role: Role.Tool, content: "", tool_call_id: "c1", toolName: "search" };
+    const result = toolMessage({ content: "", tool_call_id: "c1", toolName: "search" });
     expect(await whenToolCalled("search")(ctx({ toolResults: [result] }))).toBe(true);
   });
   // Edge: false when a different tool ran.
   test("edge: false for a different tool", async () => {
-    const result: ToolMessage = { role: Role.Tool, content: "", tool_call_id: "c1", toolName: "other" };
+    const result = toolMessage({ content: "", tool_call_id: "c1", toolName: "other" });
     expect(await whenToolCalled("search")(ctx({ toolResults: [result] }))).toBe(false);
   });
 });
@@ -70,7 +69,7 @@ describe("any / all / not (composition)", () => {
   test("edge: combinators nest", async () => {
     const cond = all(maxSteps(2), not(whenToolCalled("x")));
     expect(await cond(ctx({ step: 2, toolResults: [] }))).toBe(true);
-    const withTool = ctx({ step: 2, toolResults: [{ role: Role.Tool, content: "", tool_call_id: "c1", toolName: "x" }] });
+    const withTool = ctx({ step: 2, toolResults: [toolMessage({ content: "", tool_call_id: "c1", toolName: "x" })] });
     expect(await cond(withTool)).toBe(false);
   });
 });

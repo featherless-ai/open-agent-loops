@@ -6,7 +6,7 @@ import type { ModelClient, StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
 import type { Memory } from "../memory/memory.types";
 import type { Message } from "../types";
-import { Role } from "../types";
+import { assistantMessage, userMessage } from "../types";
 
 /**
  * A ModelClient implemented as a plain object — no factory, no class. This is
@@ -16,7 +16,7 @@ const helloModel: ModelClient = {
   stream: () =>
     (async function* (): AsyncGenerator<StreamEvent> {
       yield { type: StreamEventType.TextDelta, text: "hi" };
-      yield { type: StreamEventType.Done, message: { role: Role.Assistant, content: "hi" } };
+      yield { type: StreamEventType.Done, message: assistantMessage({ content: "hi" }) };
     })(),
 };
 
@@ -40,7 +40,7 @@ describe("plain-object seams (no factory needed)", () => {
       append: async (id, msgs) => void map.set(id, [...(map.get(id) ?? []), ...msgs]),
       clear: async (id) => void map.delete(id),
     };
-    await memory.append("s", [{ role: Role.User, content: "x" }]);
+    await memory.append("s", [userMessage({ content: "x" })]);
     expect((await memory.load("s")).map((m) => m.content)).toEqual(["x"]);
   });
 });
@@ -91,7 +91,7 @@ describe("withMemoryNamespace", () => {
   test("base: namespacing prefixes the underlying session id", async () => {
     const base = new SessionMemoryStore();
     const ns = withMemoryNamespace(base, "tenantA");
-    await ns.append("s", [{ role: Role.User, content: "hello" }]);
+    await ns.append("s", [userMessage({ content: "hello" })]);
 
     expect((await base.load("tenantA:s")).map((m) => m.content)).toEqual(["hello"]);
     expect(await base.load("s")).toEqual([]);
@@ -102,8 +102,8 @@ describe("withMemoryNamespace", () => {
     const base = new SessionMemoryStore();
     const a = withMemoryNamespace(base, "a");
     const b = withMemoryNamespace(base, "b");
-    await a.append("s", [{ role: Role.User, content: "from-a" }]);
-    await b.append("s", [{ role: Role.User, content: "from-b" }]);
+    await a.append("s", [userMessage({ content: "from-a" })]);
+    await b.append("s", [userMessage({ content: "from-b" })]);
     expect((await a.load("s"))[0]?.content).toBe("from-a");
     expect((await b.load("s"))[0]?.content).toBe("from-b");
   });
@@ -112,7 +112,7 @@ describe("withMemoryNamespace", () => {
   test("edge: clear is scoped to the namespace", async () => {
     const base = new SessionMemoryStore();
     const a = withMemoryNamespace(base, "a");
-    await a.append("s", [{ role: Role.User, content: "x" }]);
+    await a.append("s", [userMessage({ content: "x" })]);
     await a.clear("s");
     expect(await a.load("s")).toEqual([]);
   });
@@ -128,7 +128,7 @@ describe("withMemoryListeners", () => {
       onClear: (id) => void events.push(`clear:${id}`),
     });
 
-    await mem.append("s", [{ role: Role.User, content: "hi" }]);
+    await mem.append("s", [userMessage({ content: "hi" })]);
     await mem.load("s");
     await mem.clear("s");
 
@@ -139,7 +139,7 @@ describe("withMemoryListeners", () => {
   test("edge: listening does not alter what is stored", async () => {
     const base = new SessionMemoryStore();
     const mem = withMemoryListeners(base, { onAppend: () => "ignored" as never });
-    await mem.append("s", [{ role: Role.User, content: "x" }]);
+    await mem.append("s", [userMessage({ content: "x" })]);
     expect((await base.load("s")).map((m) => m.content)).toEqual(["x"]);
   });
 
@@ -149,7 +149,7 @@ describe("withMemoryListeners", () => {
     const mem = withMemoryListeners(new SessionMemoryStore(), {
       onLoad: () => void (loads += 1),
     });
-    await mem.append("s", [{ role: Role.User, content: "x" }]); // no onAppend — no throw
+    await mem.append("s", [userMessage({ content: "x" })]); // no onAppend — no throw
     await mem.load("s");
     expect(loads).toBe(1);
   });
@@ -163,7 +163,7 @@ describe("withMemoryListeners", () => {
       }),
       { onAppend: () => void seen.push("outer") },
     );
-    await mem.append("s", [{ role: Role.User, content: "x" }]);
+    await mem.append("s", [userMessage({ content: "x" })]);
     expect(seen).toEqual(["inner", "outer"]);
   });
 
@@ -176,7 +176,7 @@ describe("withMemoryListeners", () => {
         done = true;
       },
     });
-    await mem.append("s", [{ role: Role.User, content: "x" }]);
+    await mem.append("s", [userMessage({ content: "x" })]);
     expect(done).toBe(true);
   });
 });

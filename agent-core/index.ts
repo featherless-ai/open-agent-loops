@@ -66,6 +66,10 @@ export { AgentEventType, FinishReason, ReasoningFormat, Role, ToolCallType } fro
 // for `messages.filter(isToolMessage)` before reading role-specific fields.
 export { isAssistantMessage, isToolMessage } from "./types";
 
+// Factories that construct a message of each role: they pin the `role`
+// discriminant and you fill in the rest (`assistantMessage({ content })`).
+export { assistantMessage, systemMessage, toolMessage, userMessage } from "./types";
+
 export type {
   ModelClient,
   ModelRequest,

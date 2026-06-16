@@ -25,7 +25,7 @@ import type {
   ToolCall,
   ToolMessage,
 } from "../types";
-import { AgentEventType, Role } from "../types";
+import { AgentEventType, assistantMessage, Role, toolMessage, userMessage } from "../types";
 import type { ModelClient, ModelRequest } from "../model.types";
 import { StreamEventType } from "../model.types";
 import type { Memory } from "../memory/memory.types";
@@ -463,13 +463,12 @@ async function streamAssistant(
 
   // Prefer the model's assembled message; otherwise rebuild from deltas.
   return (
-    finalMessage ?? {
-      role: Role.Assistant,
+    finalMessage ??
+    assistantMessage({
       content: text,
       ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-      timestamp: Date.now(),
-    }
+    })
   );
 }
 
@@ -509,6 +508,36 @@ async function gateToolBatch(
 }
 
 /**
+ * Emit the `ToolStart` event for a call. Both the denied and executed paths route
+ * through here so the id / name / parsed-args derivation lives in one place.
+ *
+ * @internal
+ */
+function emitToolStart(emit: Emit, call: ToolCall): Promise<void> {
+  return emit({
+    type: AgentEventType.ToolStart,
+    toolCallId: call.id,
+    toolName: call.function.name,
+    args: parseToolArguments(call),
+  });
+}
+
+/**
+ * Emit the `ToolEnd` event for a call — paired with {@link emitToolStart} by id.
+ *
+ * @internal
+ */
+function emitToolEnd(emit: Emit, call: ToolCall, result: string, isError: boolean): Promise<void> {
+  return emit({
+    type: AgentEventType.ToolEnd,
+    toolCallId: call.id,
+    toolName: call.function.name,
+    result,
+    isError,
+  });
+}
+
+/**
  * Emit start/end events and build the error tool-result for a blocked call.
  *
  * @internal
@@ -519,17 +548,14 @@ async function emitDenied(
   emit: Emit,
 ): Promise<ToolMessage> {
   const content = reason ?? "Tool execution denied";
-  const name = call.function.name;
-  await emit({ type: AgentEventType.ToolStart, toolCallId: call.id, toolName: name, args: parseToolArguments(call) });
-  await emit({ type: AgentEventType.ToolEnd, toolCallId: call.id, toolName: name, result: content, isError: true });
-  return {
-    role: Role.Tool,
+  await emitToolStart(emit, call);
+  await emitToolEnd(emit, call, content, true);
+  return toolMessage({
     content,
     tool_call_id: call.id,
-    toolName: name,
+    toolName: call.function.name,
     isError: true,
-    timestamp: Date.now(),
-  };
+  });
 }
 
 /** @internal */
@@ -595,12 +621,7 @@ async function executeOne(
   signal: AbortSignal | undefined,
 ): Promise<FinalizedCall> {
   const name = call.function.name;
-  await emit({
-    type: AgentEventType.ToolStart,
-    toolCallId: call.id,
-    toolName: name,
-    args: parseToolArguments(call),
-  });
+  await emitToolStart(emit, call);
 
   let result: ToolResult;
   let isError = false;
@@ -637,22 +658,14 @@ async function executeOne(
     }
   }
 
-  await emit({
-    type: AgentEventType.ToolEnd,
-    toolCallId: call.id,
-    toolName: name,
-    result: result.content,
-    isError,
-  });
+  await emitToolEnd(emit, call, result.content, isError);
 
-  const message: ToolMessage = {
-    role: Role.Tool,
+  const message = toolMessage({
     content: result.content,
     tool_call_id: call.id,
     toolName: name,
     isError,
-    timestamp: Date.now(),
-  };
+  });
   return { message, terminate: result.terminate === true && !isError };
 }
 
@@ -663,7 +676,7 @@ async function executeOne(
  */
 function normalizePrompt(prompt: string | Message | Message[]): Message[] {
   if (typeof prompt === "string") {
-    return [{ role: Role.User, content: prompt, timestamp: Date.now() }];
+    return [userMessage({ content: prompt })];
   }
   return Array.isArray(prompt) ? prompt : [prompt];
 }

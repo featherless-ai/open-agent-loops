@@ -7,7 +7,7 @@
 import type { FinishReason } from "./finish-reason";
 import type { MessageBase } from "./message-base";
 import type { ReasoningDetail } from "./reasoning";
-import type { Role } from "./roles";
+import { Role } from "./roles";
 import type { ToolCall } from "./tool-calls";
 
 /**
@@ -104,4 +104,17 @@ export interface AssistantMessage extends MessageBase {
    * instead; the wire format carries only plain `content`.
    */
   isError?: boolean;
+}
+
+/**
+ * Construct an {@link AssistantMessage} — pins the `role` discriminant and
+ * stamps `timestamp` with the construction time; you supply the rest. Everything
+ * but `content` is optional (`reasoning`, `reasoning_details`, `finishReason`,
+ * `tool_calls`, `isError`, and an overriding `timestamp`).
+ *
+ * @param fields - Everything but `role`.
+ * @group Messages & Events
+ */
+export function assistantMessage(fields: Omit<AssistantMessage, "role">): AssistantMessage {
+  return { role: Role.Assistant, timestamp: Date.now(), ...fields };
 }

@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { MockModelClient } from "../mocks/mock-model";
 import type { ModelRequest, StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
-import { Role } from "../types";
+import { userMessage } from "../types";
 
-const req: ModelRequest = { messages: [{ role: Role.User, content: "hi" }] };
+const req: ModelRequest = { messages: [userMessage({ content: "hi" })] };
 
 /** Drain a stream into an array of events for inspection. */
 async function collect(stream: AsyncIterable<StreamEvent>): Promise<StreamEvent[]> {
@@ -111,8 +111,8 @@ describe("MockModelClient", () => {
   // Edge: every request is captured for assertions.
   test("edge: requests are recorded in order", async () => {
     const model = new MockModelClient([{ text: "a" }, { text: "b" }]);
-    await collect(model.stream({ messages: [{ role: Role.User, content: "first" }] }));
-    await collect(model.stream({ messages: [{ role: Role.User, content: "second" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "first" })] }));
+    await collect(model.stream({ messages: [userMessage({ content: "second" })] }));
     expect(model.requests).toHaveLength(2);
     expect(model.requests[1]!.messages[0]!.content).toBe("second");
   });

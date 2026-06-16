@@ -13,8 +13,8 @@
  * @module
  */
 
-import type { AssistantMessage, ToolCall } from "../types";
-import { Role, ToolCallType } from "../types";
+import type { ToolCall } from "../types";
+import { assistantMessage, ToolCallType } from "../types";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
 
@@ -170,13 +170,11 @@ export class MockModelClient implements ModelClient {
     }
 
     // 4. Assemble the final assistant message and emit the terminal event.
-    const message: AssistantMessage = {
-      role: Role.Assistant,
+    const message = assistantMessage({
       content: text,
       ...(reasoning ? { reasoning } : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-      timestamp: Date.now(),
-    };
+    });
 
     if (turn.error) {
       yield { type: StreamEventType.Error, error: new Error(turn.error), message };

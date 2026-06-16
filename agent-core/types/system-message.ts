@@ -5,7 +5,7 @@
  */
 
 import type { MessageBase } from "./message-base";
-import type { Role } from "./roles";
+import { Role } from "./roles";
 
 /**
  * A system-prompt turn.
@@ -20,4 +20,16 @@ import type { Role } from "./roles";
 export interface SystemMessage extends MessageBase {
   /** Discriminant: the system-prompt turn. */
   role: Role.System;
+}
+
+/**
+ * Construct a {@link SystemMessage} — pins the `role` discriminant and stamps
+ * `timestamp` with the construction time; you supply the rest (`content`, and a
+ * `timestamp` of your own to override the default).
+ *
+ * @param fields - Everything but `role`.
+ * @group Messages & Events
+ */
+export function systemMessage(fields: Omit<SystemMessage, "role">): SystemMessage {
+  return { role: Role.System, timestamp: Date.now(), ...fields };
 }

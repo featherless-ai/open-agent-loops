@@ -8,7 +8,7 @@ import {
 } from "../providers/openai-compatible";
 import type { StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
-import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
+import { assistantMessage, FinishReason, ReasoningFormat, ToolCallType, userMessage } from "../types";
 
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -184,7 +184,7 @@ describe("OpenAICompatibleModel", () => {
     } as unknown as OpenAI;
 
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
-    const events = await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    const events = await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(events.map((e) => e.type)).toEqual([StreamEventType.TextDelta, StreamEventType.Done]);
     expect((events.at(-1) as any).message.content).toBe("hi");
   });
@@ -208,7 +208,7 @@ describe("OpenAICompatibleModel", () => {
       client: fakeClient,
       chatTemplateKwargs: { enable_thinking: true, clear_thinking: false },
     });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(sent.chat_template_kwargs).toEqual({ enable_thinking: true, clear_thinking: false });
   });
 
@@ -227,7 +227,7 @@ describe("OpenAICompatibleModel", () => {
     } as unknown as OpenAI;
 
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect("chat_template_kwargs" in sent).toBe(false);
   });
 
@@ -235,7 +235,7 @@ describe("OpenAICompatibleModel", () => {
   test("edge: thinking:on derives GLM kwargs from the model id", async () => {
     const { client, sent } = capturingClient();
     const model = new OpenAICompatibleModel({ model: "zai-org/GLM-5.1", client, thinking: "on" });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(sent().chat_template_kwargs).toEqual({ enable_thinking: true, clear_thinking: false });
   });
 
@@ -247,7 +247,7 @@ describe("OpenAICompatibleModel", () => {
       client,
       thinking: "on",
     });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(sent().chat_template_kwargs).toEqual({ thinking: true });
   });
 
@@ -260,7 +260,7 @@ describe("OpenAICompatibleModel", () => {
       thinking: "off",
       chatTemplateKwargs: { enable_thinking: true },
     });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(sent().chat_template_kwargs).toEqual({ enable_thinking: true });
   });
 
@@ -272,7 +272,7 @@ describe("OpenAICompatibleModel", () => {
       client,
       thinking: "on",
     });
-    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect("chat_template_kwargs" in sent()).toBe(false);
   });
 
@@ -289,7 +289,7 @@ describe("OpenAICompatibleModel", () => {
     } as unknown as OpenAI;
 
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
-    const events = await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    const events = await collect(model.stream({ messages: [userMessage({ content: "q" })] }));
     expect(events).toHaveLength(1);
     expect((events[0] as any).type).toBe(StreamEventType.Error);
   });
@@ -302,7 +302,7 @@ describe("toChatMessages (egress)", () => {
       { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text" as const, text: "t", signature: "sig" },
     ];
     const out = toChatMessages({
-      messages: [{ role: Role.Assistant, content: "", reasoning: "t", reasoning_details: details, tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] }],
+      messages: [assistantMessage({ content: "", reasoning: "t", reasoning_details: details, tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] })],
     });
     const assistant = out[0] as any;
     expect(assistant.reasoning_details).toEqual(details);
@@ -312,7 +312,7 @@ describe("toChatMessages (egress)", () => {
   // Raw-string reasoning falls back to reasoning_content when no blocks exist.
   test("edge: falls back to reasoning_content for raw-string reasoning", () => {
     const out = toChatMessages({
-      messages: [{ role: Role.Assistant, content: "", reasoning: "thought", tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] }],
+      messages: [assistantMessage({ content: "", reasoning: "thought", tool_calls: [{ id: "c1", type: ToolCallType.Function, function: { name: "x", arguments: "{}" } }] })],
     });
     const assistant = out[0] as any;
     expect(assistant.reasoning_content).toBe("thought");

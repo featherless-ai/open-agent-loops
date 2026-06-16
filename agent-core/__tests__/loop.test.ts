@@ -6,7 +6,7 @@ import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
 import type { AgentEvent, AssistantMessage, Message } from "../types";
-import { AgentEventType, isAssistantMessage, ReasoningFormat, Role, ToolCallType } from "../types";
+import { AgentEventType, assistantMessage, isAssistantMessage, ReasoningFormat, Role, ToolCallType, userMessage } from "../types";
 import { ExecutionMode } from "../tools/tools.types";
 
 /** Narrow a message to an assistant turn, or fail the test loudly. */
@@ -311,9 +311,9 @@ describe("runAgent", () => {
   // Edge: prepareRequestMessages applies the resend rule purely, no mutation.
   test("edge: prepareRequestMessages strips only no-tool reasoning", () => {
     const input: Message[] = [
-      { role: Role.Assistant, content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
-      { role: Role.Assistant, content: "b", reasoning: "dropped" },
-      { role: Role.User, content: "c" },
+      assistantMessage({ content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] }),
+      assistantMessage({ content: "b", reasoning: "dropped" }),
+      userMessage({ content: "c" }),
     ];
     const out = prepareRequestMessages(input);
     expect(asAssistant(out[0]).reasoning).toBe("kept");
@@ -326,8 +326,8 @@ describe("runAgent", () => {
   test("edge: prepareRequestMessages strips reasoning_details on no-tool turns", () => {
     const block = { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text", text: "t" } as const;
     const input: Message[] = [
-      { role: Role.Assistant, content: "a", reasoning_details: [block], tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
-      { role: Role.Assistant, content: "b", reasoning_details: [block] },
+      assistantMessage({ content: "a", reasoning_details: [block], tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] }),
+      assistantMessage({ content: "b", reasoning_details: [block] }),
     ];
     const out = prepareRequestMessages(input);
     // Kept on the tool-call turn (continuity), dropped on the plain turn.

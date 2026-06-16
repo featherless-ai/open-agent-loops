@@ -34,7 +34,7 @@ import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
 import { StreamEventType } from "../model.types";
 import type { AssistantMessage, Message, ReasoningDetail, ToolCall } from "../types";
-import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
+import { assistantMessage, FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 import type { ThinkingMode } from "./reasoning-kwargs";
 import { reasoningKwargsFor } from "./reasoning-kwargs";
 
@@ -552,15 +552,13 @@ function assemble(acc: StreamAccumulator): AssistantMessage {
     .sort(([a], [b]) => a - b)
     .map(([, draft]) => ({ id: draft.id, type: ToolCallType.Function, function: { name: draft.name, arguments: draft.args } }));
   const reasoningDetails = assembleReasoningDetails(acc.reasoningDrafts);
-  return {
-    role: Role.Assistant,
+  return assistantMessage({
     content: acc.content,
     ...(acc.reasoning ? { reasoning: acc.reasoning } : {}),
     ...(reasoningDetails.length > 0 ? { reasoning_details: reasoningDetails } : {}),
     ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     ...(acc.finishReason ? { finishReason: acc.finishReason } : {}),
-    timestamp: Date.now(),
-  };
+  });
 }
 
 /**
@@ -569,7 +567,7 @@ function assemble(acc: StreamAccumulator): AssistantMessage {
  * @internal
  */
 function emptyAssistant(): AssistantMessage {
-  return { role: Role.Assistant, content: "", timestamp: Date.now() };
+  return assistantMessage({ content: "" });
 }
 
 /**
