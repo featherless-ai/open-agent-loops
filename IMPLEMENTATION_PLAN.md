@@ -1,3 +1,52 @@
+# Plan: per-model reasoning kwargs (lookup table + proxy)
+
+**Goal**: One lookup table maps a model id → the `chat_template_kwargs` that
+enable/disable that model's thinking, handling each family's idiosyncrasies (GLM
+`enable_thinking`+`clear_thinking`, Kimi `thinking`+`preserve_thinking`, DeepSeek
+`thinking`, Qwen/Gemma `enable_thinking`; interleaved + non-reasoning families).
+Consumed at the two places the model id is known: the `OpenAICompatibleModel`
+provider (TS clients) and a thin standalone proxy (any OpenAI-compatible client).
+
+Boring + explicit: first-match ordered rules on the lowercased id, default to
+`undefined` (inject nothing) for unknown/non-reasoning models so it's always safe.
+
+## Stage 1: the lookup table + resolver (pure)
+**Goal**: `reasoning-kwargs.ts` exports `reasoningProfileFor(id)` (capabilities)
+and `reasoningKwargsFor(id, mode)` → the kwargs object or `undefined`. `mode` is
+`"on" | "off" | "auto"` ("auto" = the family's documented default).
+**Files**: `agent-core/providers/reasoning-kwargs.ts`
+**Success Criteria**: Every id in the catalog resolves to the right dialect;
+unknown/non-reasoning → `undefined`; always-on/interleaved models (MiniMax-M2)
+report `interleaved:true` and ignore "off".
+**Tests** (`__tests__/reasoning-kwargs.test.ts`): one assertion per family +
+the catalog ids; on/off/auto; unknown → undefined; Coder/Instruct exclusions.
+**Status**: Complete (17 tests; full suite 160 green, typecheck clean)
+
+## Stage 2: wire into OpenAICompatibleModel
+**Goal**: Add `thinking?: "on" | "off" | "auto"` option. Explicit
+`chatTemplateKwargs` still wins (escape hatch); otherwise derive from the model
+id via the table. `thinking` unset → today's behavior (inject nothing).
+**Files**: `agent-core/providers/openai-compatible.ts`, `agent-core/index.ts`,
+`examples/running-product.ts` (drop the hardcoded GLM literal, use `thinking`).
+**Success Criteria**: existing tests stay green; new tests assert per-model
+derivation + escape hatch + opt-out.
+**Status**: Complete (4 provider tests; example now uses `thinking: "on"`)
+
+## Stage 3: the standalone proxy
+**Goal**: A thin Bun reverse proxy in front of the endpoint. Pure
+`injectReasoningKwargs(body, mode?)` (tested in agent-core) merges the kwargs by
+`body.model`; the HTTP shell streams the response back. Per-request override via
+`x-thinking` header.
+**Files**: `agent-core/providers/reasoning-kwargs.ts` (the pure inject fn),
+`proxy/thinking-proxy.ts` (Bun server, outside core like `bun-backends.ts`).
+**Success Criteria**: `injectReasoningKwargs` unit-tested; proxy forwards +
+streams against the real endpoint; explicit body kwargs pass through untouched.
+**Status**: Complete (4 inject tests in core; proxy verified end-to-end against a
+local echo upstream — per-model injection, `x-thinking` override, explicit-kwargs
+passthrough, non-reasoning skip, server-key fallback all pass)
+
+---
+
 # Plan: agent-built deterministic workflows (plan-as-code)
 
 **Goal**: Let an agent *author* a workflow whose control flow is deterministic
@@ -104,11 +153,11 @@ scrubbed; error message scrubbed; no-placeholder passthrough identical.
 **Status**: Complete
 
 ## Stage 4: public surface + demo
-**Goal**: Export from `agent-core/index.ts`; show a credentialed tool in `main.ts`.
-**Files**: `agent-core/index.ts`, `main.ts`
+**Goal**: Export from `agent-core/index.ts`; show a credentialed tool in `examples/running-product.ts`.
+**Files**: `agent-core/index.ts`, `examples/running-product.ts`
 **Success Criteria**: importable from the public surface; demo passes a `{{...}}`
 placeholder that resolves at exec time; `bun test` + `bun run typecheck` green.
-**Status**: Exports done (typecheck + 132 tests green). main.ts demo deferred —
+**Status**: Exports done (typecheck + 132 tests green). example demo deferred —
 the war-and-peace counting task has no real secret to inject, so a demo there
 would be contrived. Add a realistic example (e.g. an authenticated `curl`) on
 request.

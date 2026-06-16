@@ -35,6 +35,8 @@ import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } fr
 import { StreamEventType } from "../model.types";
 import type { Message, ReasoningDetail, ToolCall } from "../types";
 import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
+import type { ThinkingMode } from "./reasoning-kwargs";
+import { reasoningKwargsFor } from "./reasoning-kwargs";
 
 type ChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
@@ -96,6 +98,16 @@ export interface OpenAICompatibleOptions {
    * endpoints that reject unknown body fields (OpenAI proper, Groq).
    */
   chatTemplateKwargs?: Record<string, unknown>;
+  /**
+   * Derive {@link chatTemplateKwargs} from {@link model} automatically: pick the
+   * right per-family dialect (GLM `enable_thinking`+`clear_thinking`, DeepSeek
+   * `thinking`, Kimi `thinking`+`preserve_thinking`, ...) for the requested
+   * thinking state. `"auto"` uses each family's documented default. Ignored when
+   * {@link chatTemplateKwargs} is set explicitly (that always wins), and a no-op
+   * for non-reasoning or unknown models (nothing is injected).
+   * @see {@link reasoningKwargsFor}
+   */
+  thinking?: ThinkingMode;
 }
 
 /**
@@ -137,7 +149,12 @@ export class OpenAICompatibleModel implements ModelClient {
   constructor(options: OpenAICompatibleOptions) {
     this.model = options.model;
     this.extra = options.params;
-    this.chatTemplateKwargs = options.chatTemplateKwargs;
+    // Explicit kwargs win; otherwise derive them from the model id for the
+    // requested thinking state. Unset `thinking` keeps the legacy behavior
+    // (inject nothing).
+    this.chatTemplateKwargs =
+      options.chatTemplateKwargs ??
+      (options.thinking ? reasoningKwargsFor(options.model, options.thinking) : undefined);
     this.client =
       options.client ??
       new OpenAI({

@@ -33,6 +33,22 @@ async function collect(events: AsyncIterable<StreamEvent>): Promise<StreamEvent[
   return out;
 }
 
+/** A fake OpenAI client that records the params of the last create() call. */
+function capturingClient(): { client: OpenAI; sent: () => any } {
+  let captured: any;
+  const client = {
+    chat: {
+      completions: {
+        create: async (params: any) => {
+          captured = params;
+          return stream(chunk({ content: "hi" }));
+        },
+      },
+    },
+  } as unknown as OpenAI;
+  return { client, sent: () => captured };
+}
+
 describe("chunksToEvents", () => {
   // Base case: text streams as deltas and ends with an assembled done message.
   test("base: content deltas then a done message", async () => {
@@ -213,6 +229,51 @@ describe("OpenAICompatibleModel", () => {
     const model = new OpenAICompatibleModel({ model: "m", client: fakeClient });
     await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
     expect("chat_template_kwargs" in sent).toBe(false);
+  });
+
+  // Edge: `thinking` derives the per-family kwargs from the model id.
+  test("edge: thinking:on derives GLM kwargs from the model id", async () => {
+    const { client, sent } = capturingClient();
+    const model = new OpenAICompatibleModel({ model: "zai-org/GLM-5.1", client, thinking: "on" });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect(sent().chat_template_kwargs).toEqual({ enable_thinking: true, clear_thinking: false });
+  });
+
+  // Edge: the same option picks DeepSeek's `thinking` key for a DeepSeek id.
+  test("edge: thinking:on derives DeepSeek's thinking key", async () => {
+    const { client, sent } = capturingClient();
+    const model = new OpenAICompatibleModel({
+      model: "deepseek-ai/DeepSeek-V4-Flash",
+      client,
+      thinking: "on",
+    });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect(sent().chat_template_kwargs).toEqual({ thinking: true });
+  });
+
+  // Edge: an explicit chatTemplateKwargs always wins over derived `thinking`.
+  test("edge: explicit chatTemplateKwargs overrides thinking", async () => {
+    const { client, sent } = capturingClient();
+    const model = new OpenAICompatibleModel({
+      model: "zai-org/GLM-5.1",
+      client,
+      thinking: "off",
+      chatTemplateKwargs: { enable_thinking: true },
+    });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect(sent().chat_template_kwargs).toEqual({ enable_thinking: true });
+  });
+
+  // Edge: `thinking` on a non-reasoning model injects nothing.
+  test("edge: thinking on a non-reasoning model injects nothing", async () => {
+    const { client, sent } = capturingClient();
+    const model = new OpenAICompatibleModel({
+      model: "meta-llama/Llama-3.3-70B-Instruct",
+      client,
+      thinking: "on",
+    });
+    await collect(model.stream({ messages: [{ role: Role.User, content: "q" }] }));
+    expect("chat_template_kwargs" in sent()).toBe(false);
   });
 
   // Edge: a create() failure surfaces as an error event, not a throw.

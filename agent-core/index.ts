@@ -101,6 +101,13 @@ export type { StopCondition, StopContext } from "./stop/conditions.types";
 
 export { withMemoryListeners, withMemoryNamespace, withModelObserver } from "./compose";
 
+export {
+  injectReasoningKwargs,
+  reasoningKwargsFor,
+  reasoningProfileFor,
+} from "./providers/reasoning-kwargs";
+export type { ReasoningProfile, ThinkingMode } from "./providers/reasoning-kwargs";
+
 export { prepareRequestMessages, runAgent } from "./primitives/loop";
 export type {
   GateDecision,
