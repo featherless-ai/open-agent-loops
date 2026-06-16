@@ -294,7 +294,9 @@ interface ReasoningDraft {
  * Text and reasoning are emitted as deltas the moment they arrive; tool calls
  * (whose arguments stream as string fragments) are accumulated and emitted whole
  * at the end, followed by the assembled `done` message. A mid-stream throw
- * becomes an `error` event carrying whatever was assembled so far.
+ * becomes an `error` event carrying whatever was assembled so far. A stream that
+ * ends with nothing usable — no content, tool call, or reasoning — is likewise
+ * reported as an `error` rather than a blank `done`.
  *
  * @param chunks - The SDK's streamed chat-completion chunks.
  * @returns An async iterable of {@link StreamEvent}s.
@@ -348,8 +350,42 @@ export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGe
   }
 
   const message = assemble(acc);
+  // Some providers close a stream having sent only role/finish chunks — no
+  // content, tool call, or reasoning. That empty turn would otherwise surface as
+  // a successful `done` and silently stall the loop, so report it as an error.
+  if (isBlank(message)) {
+    yield { type: StreamEventType.Error, error: blankMessageError(acc.finishReason), message };
+    return;
+  }
   for (const toolCall of message.tool_calls ?? []) yield { type: StreamEventType.ToolCall, toolCall };
   yield { type: StreamEventType.Done, message, ...(acc.finishReason ? { finishReason: acc.finishReason } : {}) };
+}
+
+/**
+ * True when an assembled turn carries nothing usable — no content (ignoring
+ * whitespace), no tool calls, and no reasoning of either kind.
+ *
+ * @internal
+ */
+function isBlank(message: Message): boolean {
+  return (
+    message.content.trim() === "" &&
+    (message.tool_calls?.length ?? 0) === 0 &&
+    !message.reasoning &&
+    (message.reasoning_details?.length ?? 0) === 0
+  );
+}
+
+/**
+ * The failure raised when a stream completes without producing any content,
+ * tool call, or reasoning. Names the finish reason when the provider sent one,
+ * since `length` / `content_filter` explain an otherwise-mysterious empty turn.
+ *
+ * @internal
+ */
+function blankMessageError(finishReason: FinishReason | undefined): Error {
+  const suffix = finishReason ? ` (finish_reason: ${finishReason})` : "";
+  return new Error(`Model returned an empty message${suffix}`);
 }
 
 /**

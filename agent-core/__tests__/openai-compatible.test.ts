@@ -123,6 +123,29 @@ describe("chunksToEvents", () => {
     expect(done.message.finishReason).toBe(FinishReason.Length);
   });
 
+  // Edge: a stream that produces nothing usable is an error, not a blank done.
+  test("edge: empty stream yields an error, not a blank done", async () => {
+    const events = await collect(chunksToEvents(stream(chunk({ role: "assistant" }), chunk({}, "stop"))));
+    const last = events.at(-1) as any;
+    expect(last.type).toBe(StreamEventType.Error);
+    expect(last.error.message).toBe("Model returned an empty message (finish_reason: stop)");
+    expect(last.message.content).toBe("");
+    // No done event slips out alongside the error.
+    expect(events.some((e) => e.type === StreamEventType.Done)).toBe(false);
+  });
+
+  // Edge: whitespace-only content with no other signal is still treated as blank.
+  test("edge: whitespace-only content is treated as blank", async () => {
+    const events = await collect(chunksToEvents(stream(chunk({ content: "  \n" }))));
+    expect((events.at(-1) as any).type).toBe(StreamEventType.Error);
+  });
+
+  // Edge: reasoning alone keeps the turn alive — it is not blank.
+  test("edge: reasoning-only turn is not blank", async () => {
+    const events = await collect(chunksToEvents(stream(chunk({ reasoning: "think" }), chunk({}, "stop"))));
+    expect((events.at(-1) as any).type).toBe(StreamEventType.Done);
+  });
+
   // Edge: a mid-stream throw becomes an error event with the partial message.
   test("edge: mid-stream failure yields an error with partial content", async () => {
     async function* boom(): AsyncGenerator<ChatChunk> {
