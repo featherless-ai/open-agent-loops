@@ -343,30 +343,29 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     // once, ahead of execution, and never races the parallel phase below.
     const gate = await gateToolBatch(toolCalls, toolsByName, hooks);
 
-    const approved: ToolCall[] = [];
-    const deniedResults: ToolMessage[] = [];
+    // One result slot per call, kept in the original request order so the model
+    // sees one tool-result per call in the order it asked. Denied calls fill
+    // their slot now; approved calls remember their slot and fill it after they
+    // execute below.
+    const results: ToolMessage[] = new Array(toolCalls.length);
+    const approved: Array<{ slot: number; call: ToolCall }> = [];
     for (let i = 0; i < toolCalls.length; i += 1) {
-      if (gate[i]!.allow) approved.push(toolCalls[i]!);
-      else deniedResults.push(await emitDenied(toolCalls[i]!, gate[i]!.reason, emit));
+      if (gate[i]!.allow) approved.push({ slot: i, call: toolCalls[i]! });
+      else results[i] = await emitDenied(toolCalls[i]!, gate[i]!.reason, emit);
     }
 
     // --- phase 2: execute the approved calls (parallel by default) -------
     const { results: executed, terminate } = await executeToolCalls(
-      approved,
+      approved.map((a) => a.call),
       toolsByName,
       hooks,
       toolExecution,
       emit,
       signal,
     );
-
-    // Reassemble results in the original call order (approved + denied), so the
-    // model sees one tool-result per call in the order it requested them.
-    let ai = 0;
-    let di = 0;
-    const results = toolCalls.map((_, i) =>
-      gate[i]!.allow ? executed[ai++]! : deniedResults[di++]!,
-    );
+    approved.forEach((a, k) => {
+      results[a.slot] = executed[k]!;
+    });
 
     for (const result of results) {
       messages.push(result);
