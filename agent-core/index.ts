@@ -96,6 +96,20 @@ export type {
   ShellResult,
 } from "./tools/builtin/builtin.types";
 
+// Planning tools: fully shipped (pure in-memory, no host binding), with a
+// swappable store seam for persistence — the `Memory`/`SessionMemoryStore`
+// shape, not the must-implement shape of the host-binding backends above.
+export { InMemoryScratchpad, scratchpadTools } from "./tools/builtin/scratchpad";
+export type { Scratchpad } from "./tools/builtin/scratchpad";
+export {
+  formatTodoList,
+  InMemoryTodoStore,
+  RETRY_LIMIT,
+  TODO_STATUSES,
+  todoListTools,
+} from "./tools/builtin/todo-list";
+export type { TodoItem, TodoStatus, TodoStore } from "./tools/builtin/todo-list";
+
 export { all, any, maxSteps, not, whenToolCalled } from "./stop/conditions";
 export type { StopCondition, StopContext } from "./stop/conditions.types";
 

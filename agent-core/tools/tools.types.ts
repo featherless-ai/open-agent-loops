@@ -31,6 +31,14 @@ export enum ExecutionMode {
 /**
  * What a tool hands back to the loop.
  *
+ * @remarks
+ * There is deliberately no error field here. A tool signals a *hard* error by
+ * **throwing** from `execute`, not by returning — the loop catches the throw and
+ * produces a tool result with `isError: true` and the error's message as
+ * `content` (see {@link Tool.execute}). Returning a normal result is for success
+ * and for *soft* outcomes the model should read but not treat as a failure (e.g.
+ * a non-zero shell exit, an "already up to date" note).
+ *
  * @group Defining Tools
  */
 export interface ToolResult {
@@ -73,7 +81,19 @@ export interface Tool<S extends z.ZodType = z.ZodType> {
   description: string;
   /** Zod schema for the tool's arguments; also converted to JSON Schema for the model. */
   parameters: S;
-  /** Run the tool against validated `args`, returning its result. */
+  /**
+   * Run the tool against validated `args`, returning its result.
+   *
+   * @remarks
+   * Throw to signal an error: the loop turns a thrown `Error` into a tool result
+   * with `isError: true` and `error.message` as the content the model sees. Any
+   * `Error` works — there is no special error type, and only the message is
+   * surfaced (so make it descriptive). Return a {@link ToolResult} for success,
+   * or for a soft outcome the model should simply read.
+   *
+   * @throws Surfaced to the model as an `isError` tool result, not propagated out
+   * of the run — the loop never lets one tool's throw reject the whole run.
+   */
   execute(args: z.infer<S>, ctx: ToolContext): ToolResult | Promise<ToolResult>;
   /** See {@link ExecutionMode}. Defaults to `Parallel`. */
   executionMode?: ExecutionMode;
