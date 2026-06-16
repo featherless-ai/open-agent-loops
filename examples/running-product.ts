@@ -1,13 +1,13 @@
 /**
  * Runnable example: a tool-calling agent run against a real model.
  *
- * The agent searches a plain text file — the opening 1000 lines of Tolstoy's
- * War and Peace (`war-and-peace.txt`) — and counts how many times a character's
- * name appears. An ordinary "search a document, then count" task: it makes its
- * own sequence of search/shell calls, reading what it finds before answering.
+ * A deliberately long, sequential task: a running product over a list of random
+ * numbers. Each multiplication depends on the previous result, so the agent
+ * can't batch them — it makes its own sequence of shell calls, one step per
+ * number, driving the loop toward `maxSteps`.
  *
  * Run it (LLM_API_KEY and LLM_MODEL come from `.env`):
- *   bun run main.ts
+ *   bun run examples/running-product.ts
  */
 
 import {
@@ -16,14 +16,11 @@ import {
   searchTool,
   SessionMemoryStore,
   shellTool,
-} from "./agent-core/index.ts";
-import { OpenAICompatibleModel } from "./agent-core/providers/openai-compatible.ts";
-import { bunSearchBackend, bunShellBackend } from "./bun-backends.ts";
+} from "../agent-core/index.ts";
+import { OpenAICompatibleModel } from "../agent-core/providers/openai-compatible.ts";
+import { bunSearchBackend, bunShellBackend } from "../bun-backends.ts";
+import { ANSI, color } from "./console-format.ts";
 
-// A deliberately long, sequential task: a running product over a list of random
-// numbers. Each multiplication depends on the previous result, so the agent
-// can't batch them — it takes roughly one step per number, driving the loop
-// toward `maxSteps`.
 const FACTOR_COUNT = 12;
 const FACTORS = Array.from({ length: FACTOR_COUNT }, () => 2 + Math.floor(Math.random() * 98));
 
@@ -33,21 +30,6 @@ if (!apiKey || !model) {
   console.error("Set LLM_API_KEY and LLM_MODEL (see .env.example).");
   process.exit(1);
 }
-
-// ANSI colors, disabled when stdout isn't a TTY (e.g. piped to a file) or when
-// NO_COLOR is set, so redirected output stays free of escape codes.
-const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-const ANSI = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  gray: "\x1b[90m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  blue: "\x1b[34m",
-  cyan: "\x1b[36m",
-} as const;
-const color = (code: string, text: string) => (useColor ? `${code}${text}${ANSI.reset}` : text);
 
 // Streaming deltas arrive token-by-token and alternate between the model's
 // reasoning channel and its text channel. Track which one is currently open so
@@ -70,11 +52,12 @@ const result = await runAgent({
     apiKey,
     model,
     baseURL: process.env.LLM_BASE_URL,
-    // Featherless / GLM-style templates: keep prior-turn reasoning so the
-    // thinking resent as `reasoning_content` on tool-call turns round-trips.
-    // Without `clear_thinking: false` the server strips it before the model
-    // sees it. (Verified empirically against zai-org/GLM-5.1.)
-    chatTemplateKwargs: { enable_thinking: true, clear_thinking: false },
+    // Turn thinking on and let the provider pick the right per-family
+    // chat_template_kwargs from the model id — GLM gets
+    // `enable_thinking`+`clear_thinking`, DeepSeek gets `thinking`, etc. — so
+    // prior-turn reasoning resent on tool-call turns actually round-trips.
+    // (See agent-core/providers/reasoning-kwargs.ts.)
+    thinking: "on",
   }),
   memory: new SessionMemoryStore(),
   sessionId: "running-product-demo",

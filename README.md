@@ -84,6 +84,7 @@ export class MyModel implements ModelClient {
 bun install
 bun test         # run the suite (deterministic, zero network)
 bun run typecheck
+bun run demo     # run examples/running-product.ts against a real model (needs .env)
 ```
 
 The loop, memory, tools, and stop conditions are all verified against the

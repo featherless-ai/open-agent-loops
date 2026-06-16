@@ -12,6 +12,7 @@
     "agent-core"
   ],
   "scripts": {
+    "demo": "bun run examples/running-product.ts",
     "test": "bun test agent-core",
     "typecheck": "tsc --noEmit",
     "docs:site": "cd docs-fuma && bun run dev",

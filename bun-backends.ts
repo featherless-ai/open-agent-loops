@@ -4,7 +4,8 @@
  * tool's model-facing contract but refuses to ship the dangerous part — actually
  * running a command or touching a filesystem (see
  * `agent-core/tools/builtin/builtin.types.ts`). This file is the *consumer*
- * filling those seams, the same role `main.ts` plays for the model.
+ * filling those seams, the same role the runnable examples (e.g.
+ * `examples/running-product.ts`) play for the model.
  *
  * SECURITY: `bunShellBackend` runs arbitrary commands on this machine with no
  * sandbox. Only hand the resulting tool to a model you trust, or route it through
