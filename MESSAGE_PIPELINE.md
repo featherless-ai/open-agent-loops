@@ -6,7 +6,7 @@ and back — traced with a concrete "what's the weather?" example.
 ## The two type worlds
 
 Everything in the loop is expressed in **provider-agnostic domain types**
-(`agent-core/types.ts`). The provider is the only place those get translated to
+(`agent-core/types/`). The provider is the only place those get translated to
 and from the **OpenAI chat-completions wire shape**. The seam is deliberately thin:
 
 | Domain type (ours) | Wire type (OpenAI SDK) | Where it's converted |
@@ -257,7 +257,7 @@ No `tool_calls` ⇒ the loop breaks (step 11) and returns `RunResult { steps: 2 
 
 | Concern | File |
 | --- | --- |
-| Domain message vocabulary (`Message`, `Role`, `ToolCall`, `FinishReason`, `ReasoningDetail`) | [agent-core/types.ts](agent-core/types.ts) |
+| Domain message vocabulary (`Message`, `Role`, `ToolCall`, `FinishReason`, `ReasoningDetail`) | [agent-core/types/](agent-core/types/) |
 | Model boundary (`ModelClient`, `ModelRequest`, `StreamEvent`) | [agent-core/model.types.ts](agent-core/model.types.ts) |
 | The agentic loop + `prepareRequestMessages` | [agent-core/primitives/loop.ts](agent-core/primitives/loop.ts) |
 | Domain ⇄ OpenAI wire conversion (both directions) | [agent-core/providers/openai-compatible.ts](agent-core/providers/openai-compatible.ts) |
