@@ -96,7 +96,18 @@ export { ToolRegistry } from "./tools/registry";
 // the correct security boundary). Mocks live in `./mocks`, imported by tests.
 export { formatShellResult, shellTool } from "./tools/builtin/shell";
 export { formatSearchResults, searchTool } from "./tools/builtin/search";
+export { formatFileContent, formatGlobMatches, globTool, readTool } from "./tools/builtin/file-read";
+export { editTool, formatEditResult, formatWriteResult, writeTool } from "./tools/builtin/file-write";
 export type {
+  FileEditRequest,
+  FileEditResult,
+  FileReadBackend,
+  FileReadRequest,
+  FileReadResult,
+  FileWriteBackend,
+  FileWriteRequest,
+  FileWriteResult,
+  GlobQuery,
   SearchBackend,
   SearchMatch,
   SearchQuery,
