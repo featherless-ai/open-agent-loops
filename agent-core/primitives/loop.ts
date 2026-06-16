@@ -16,7 +16,15 @@
  * @module
  */
 
-import type { AgentEventBody, EventSink, Message, ToolArguments, ToolCall } from "../types";
+import type {
+  AgentEventBody,
+  AssistantMessage,
+  EventSink,
+  Message,
+  ToolArguments,
+  ToolCall,
+  ToolMessage,
+} from "../types";
 import { AgentEventType, Role } from "../types";
 import type { ModelClient, ModelRequest } from "../model.types";
 import { StreamEventType } from "../model.types";
@@ -336,7 +344,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     const gate = await gateToolBatch(toolCalls, toolsByName, hooks);
 
     const approved: ToolCall[] = [];
-    const deniedResults: Message[] = [];
+    const deniedResults: ToolMessage[] = [];
     for (let i = 0; i < toolCalls.length; i += 1) {
       if (gate[i]!.allow) approved.push(toolCalls[i]!);
       else deniedResults.push(await emitDenied(toolCalls[i]!, gate[i]!.reason, emit));
@@ -402,9 +410,12 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
  */
 export function prepareRequestMessages(messages: Message[]): Message[] {
   return messages.map((message) => {
+    // Only assistant turns carry reasoning; narrow first so the role-specific
+    // fields are even accessible.
+    if (message.role !== Role.Assistant) return message;
     const isToolCallTurn = (message.tool_calls?.length ?? 0) > 0;
     const hasReasoning = message.reasoning !== undefined || message.reasoning_details !== undefined;
-    if (message.role === Role.Assistant && hasReasoning && !isToolCallTurn) {
+    if (hasReasoning && !isToolCallTurn) {
       const { reasoning: _dropped, reasoning_details: _droppedDetails, ...rest } = message;
       return rest;
     }
@@ -421,11 +432,11 @@ async function streamAssistant(
   model: ModelClient,
   request: ModelRequest,
   emit: Emit,
-): Promise<Message> {
+): Promise<AssistantMessage> {
   let text = "";
   let reasoning = "";
   const toolCalls: ToolCall[] = [];
-  let finalMessage: Message | undefined;
+  let finalMessage: AssistantMessage | undefined;
 
   for await (const event of model.stream(request)) {
     switch (event.type) {
@@ -506,7 +517,7 @@ async function emitDenied(
   call: ToolCall,
   reason: string | undefined,
   emit: Emit,
-): Promise<Message> {
+): Promise<ToolMessage> {
   const content = reason ?? "Tool execution denied";
   const name = call.function.name;
   await emit({ type: AgentEventType.ToolStart, toolCallId: call.id, toolName: name, args: parseToolArguments(call) });
@@ -523,7 +534,7 @@ async function emitDenied(
 
 /** @internal */
 interface ToolBatchOutcome {
-  results: Message[];
+  results: ToolMessage[];
   /** True when every tool in the batch asked to terminate the run. */
   terminate: boolean;
 }
@@ -567,7 +578,7 @@ async function executeToolCalls(
 
 /** @internal */
 interface FinalizedCall {
-  message: Message;
+  message: ToolMessage;
   terminate: boolean;
 }
 
@@ -634,7 +645,7 @@ async function executeOne(
     isError,
   });
 
-  const message: Message = {
+  const message: ToolMessage = {
     role: Role.Tool,
     content: result.content,
     tool_call_id: call.id,

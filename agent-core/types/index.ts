@@ -8,7 +8,9 @@
  * - {@link ToolCall}, {@link ToolCallType}, {@link ToolArguments} (tool-calls)
  * - {@link FinishReason} (finish-reason)
  * - {@link ReasoningDetail} and friends (reasoning)
- * - {@link Message} (message)
+ * - {@link MessageBase} and the per-role variants ({@link UserMessage},
+ *   {@link SystemMessage}, {@link AssistantMessage}, {@link ToolMessage}), then
+ *   the {@link Message} union + guards (message)
  * - {@link AgentEvent} and friends (events)
  *
  * This barrel re-exports them all, so `import { … } from "../types"` keeps
@@ -21,5 +23,10 @@ export * from "./roles";
 export * from "./tool-calls";
 export * from "./finish-reason";
 export * from "./reasoning";
+export * from "./message-base";
+export * from "./user-message";
+export * from "./system-message";
+export * from "./assistant-message";
+export * from "./tool-message";
 export * from "./message";
 export * from "./events";

@@ -5,9 +5,17 @@ import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
 import { whenToolCalled } from "../stop/conditions";
-import type { AgentEvent } from "../types";
-import { AgentEventType, ReasoningFormat, Role, ToolCallType } from "../types";
+import type { AgentEvent, AssistantMessage, Message } from "../types";
+import { AgentEventType, isAssistantMessage, ReasoningFormat, Role, ToolCallType } from "../types";
 import { ExecutionMode } from "../tools/tools.types";
+
+/** Narrow a message to an assistant turn, or fail the test loudly. */
+function asAssistant(message: Message | undefined): AssistantMessage {
+  if (!message || !isAssistantMessage(message)) {
+    throw new Error("expected an assistant message");
+  }
+  return message;
+}
 
 /** A no-op echo tool used to exercise the tool path. */
 const echo = defineTool({
@@ -273,9 +281,9 @@ describe("runAgent", () => {
         if (e.type === AgentEventType.ReasoningDelta) reasoningText.push(e.text);
       },
     });
-    const assistant = result.messages.at(-1);
-    expect(assistant?.reasoning).toBe("let me think");
-    expect(assistant?.content).toBe("the answer");
+    const assistant = asAssistant(result.messages.at(-1));
+    expect(assistant.reasoning).toBe("let me think");
+    expect(assistant.content).toBe("the answer");
     // The reasoning was also streamed as deltas, distinct from the content.
     expect(reasoningText.join("")).toBe("let me think");
   });
@@ -296,39 +304,37 @@ describe("runAgent", () => {
 
     // The 2nd request carries the prior tool-call assistant turn — with its
     // reasoning preserved (required for tool-call continuity).
-    const secondReqAssistant = model.requests[1]!.messages.find(
-      (m) => m.role === Role.Assistant,
-    );
+    const secondReqAssistant = model.requests[1]!.messages.find(isAssistantMessage);
     expect(secondReqAssistant?.reasoning).toBe("must call echo");
   });
 
   // Edge: prepareRequestMessages applies the resend rule purely, no mutation.
   test("edge: prepareRequestMessages strips only no-tool reasoning", () => {
-    const input = [
+    const input: Message[] = [
       { role: Role.Assistant, content: "a", reasoning: "kept", tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
       { role: Role.Assistant, content: "b", reasoning: "dropped" },
       { role: Role.User, content: "c" },
     ];
     const out = prepareRequestMessages(input);
-    expect(out[0]!.reasoning).toBe("kept");
-    expect(out[1]!.reasoning).toBeUndefined();
+    expect(asAssistant(out[0]).reasoning).toBe("kept");
+    expect(asAssistant(out[1]).reasoning).toBeUndefined();
     // Inputs are not mutated.
-    expect(input[1]!.reasoning).toBe("dropped");
+    expect(asAssistant(input[1]).reasoning).toBe("dropped");
   });
 
   // Edge: structured reasoning_details follow the same resend rule as the string.
   test("edge: prepareRequestMessages strips reasoning_details on no-tool turns", () => {
     const block = { id: "r0", format: ReasoningFormat.AnthropicClaudeV1, index: 0, type: "reasoning.text", text: "t" } as const;
-    const input = [
+    const input: Message[] = [
       { role: Role.Assistant, content: "a", reasoning_details: [block], tool_calls: [{ id: "1", type: ToolCallType.Function, function: { name: "t", arguments: "{}" } }] },
       { role: Role.Assistant, content: "b", reasoning_details: [block] },
     ];
     const out = prepareRequestMessages(input);
     // Kept on the tool-call turn (continuity), dropped on the plain turn.
-    expect(out[0]!.reasoning_details).toEqual([block]);
-    expect(out[1]!.reasoning_details).toBeUndefined();
+    expect(asAssistant(out[0]).reasoning_details).toEqual([block]);
+    expect(asAssistant(out[1]).reasoning_details).toBeUndefined();
     // Input untouched.
-    expect(input[1]!.reasoning_details).toEqual([block]);
+    expect(asAssistant(input[1]).reasoning_details).toEqual([block]);
   });
 
   // Edge: tool_start hands off parsed object args, not the raw JSON string.

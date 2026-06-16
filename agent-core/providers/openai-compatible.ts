@@ -33,7 +33,7 @@
 import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
 import { StreamEventType } from "../model.types";
-import type { Message, ReasoningDetail, ToolCall } from "../types";
+import type { AssistantMessage, Message, ReasoningDetail, ToolCall } from "../types";
 import { FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 import type { ThinkingMode } from "./reasoning-kwargs";
 import { reasoningKwargsFor } from "./reasoning-kwargs";
@@ -235,7 +235,7 @@ function toChatMessage(message: Message): ChatMessage {
     case Role.User:
       return { role: "user", content: message.content };
     case Role.Tool:
-      return { role: "tool", tool_call_id: message.tool_call_id ?? "", content: message.content };
+      return { role: "tool", tool_call_id: message.tool_call_id, content: message.content };
     case Role.Assistant: {
       const out: Record<string, unknown> = { role: "assistant", content: message.content };
       // tool_calls is already the OpenAI wire shape, so it passes straight through.
@@ -253,7 +253,7 @@ function toChatMessage(message: Message): ChatMessage {
       return out as unknown as ChatMessage;
     }
     default: {
-      const unreachable: never = message.role;
+      const unreachable: never = message;
       throw new Error(`Unknown message role: ${String(unreachable)}`);
     }
   }
@@ -384,7 +384,7 @@ export async function* chunksToEvents(chunks: AsyncIterable<ChatChunk>): AsyncGe
  *
  * @internal
  */
-function isBlank(message: Message): boolean {
+function isBlank(message: AssistantMessage): boolean {
   return (
     message.content.trim() === "" &&
     (message.tool_calls?.length ?? 0) === 0 &&
@@ -545,7 +545,7 @@ function mapFinishReason(reason: string | null | undefined): FinishReason | unde
  *
  * @internal
  */
-function assemble(acc: StreamAccumulator): Message {
+function assemble(acc: StreamAccumulator): AssistantMessage {
   // Keep `arguments` as the raw accumulated JSON string (wire format) — the
   // loop JSON-parses and schema-validates it before the tool runs.
   const toolCalls: ToolCall[] = [...acc.toolDrafts.entries()]
@@ -568,7 +568,7 @@ function assemble(acc: StreamAccumulator): Message {
  *
  * @internal
  */
-function emptyAssistant(): Message {
+function emptyAssistant(): AssistantMessage {
   return { role: Role.Assistant, content: "", timestamp: Date.now() };
 }
 

@@ -42,6 +42,7 @@
 export type {
   AgentEvent,
   AgentEventBody,
+  AssistantMessage,
   EventSink,
   Message,
   ReasoningDetail,
@@ -49,14 +50,21 @@ export type {
   ReasoningEncryptedDetail,
   ReasoningSummaryDetail,
   ReasoningTextDetail,
+  SystemMessage,
   ToolArguments,
   ToolCall,
+  ToolMessage,
+  UserMessage,
 } from "./types";
 
 // Value exports: enums referenced at runtime by consumers comparing or
 // constructing values (e.g. `event.type === AgentEventType.ToolStart`,
 // `message.role === Role.User`, `message.finishReason === FinishReason.Length`).
 export { AgentEventType, FinishReason, ReasoningFormat, Role, ToolCallType } from "./types";
+
+// Type guards that narrow a `Message` union to a specific role variant — handy
+// for `messages.filter(isToolMessage)` before reading role-specific fields.
+export { isAssistantMessage, isToolMessage } from "./types";
 
 export type {
   ModelClient,

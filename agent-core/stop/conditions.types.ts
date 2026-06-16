@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { Message } from "../types";
+import type { AssistantMessage, Message, ToolMessage } from "../types";
 
 /**
  * The per-turn snapshot passed to every {@link StopCondition}.
@@ -22,9 +22,9 @@ export interface StopContext {
   /** 1-based count of model turns taken so far in this run. */
   step: number;
   /** The assistant message produced this turn. */
-  assistant: Message;
+  assistant: AssistantMessage;
   /** Tool-result messages produced this turn (empty if no tools ran). */
-  toolResults: Message[];
+  toolResults: ToolMessage[];
   /** Full working history at this point. */
   messages: Message[];
 }

@@ -1,3 +1,38 @@
+# Plan: Message as a role-discriminated union
+
+**Goal**: Replace the single wide `Message` interface (every role's fields
+optional on one shape) with a discriminated union on `role` — `UserMessage`,
+`SystemMessage`, `AssistantMessage`, `ToolMessage` — so illegal states are
+unrepresentable: a tool message *must* carry `tool_call_id`, only assistant turns
+carry `tool_calls`/`reasoning`, and `isError` lives only on the two roles that
+can fail (assistant stream-error + tool). Construction tells you which fields
+apply; reads narrow via `isAssistantMessage` / `isToolMessage`.
+
+## Stage 1: the union + guards
+**Files**: `agent-core/types/message.ts`
+**Success**: `Message = UserMessage | SystemMessage | AssistantMessage |
+ToolMessage`; `tool_call_id` required on `ToolMessage`; `isAssistantMessage` /
+`isToolMessage` type guards exported. Reasoning resend docs preserved.
+**Status**: Complete
+
+## Stage 2: tighten the seams that are role-specific
+**Files**: `model.types.ts` (StreamEvent Done/Error `message` → AssistantMessage),
+`stop/conditions.types.ts` (`assistant` → AssistantMessage, `toolResults` →
+ToolMessage[]), `primitives/loop.ts` (streamAssistant → AssistantMessage,
+tool-result paths → ToolMessage, prepareRequestMessages narrows on role),
+`providers/openai-compatible.ts` (assemble/emptyAssistant/isBlank →
+AssistantMessage), `mocks/mock-model.ts`, `index.ts` exports.
+**Success**: `bun run typecheck` clean; the loop.ts:448 error spread now legal
+because AssistantMessage carries `isError`.
+**Status**: Complete
+
+## Stage 3: update call sites that read role fields off `Message[]`
+**Files**: affected `__tests__/*` (filter/find via guards instead of `role ===`).
+**Success**: `bun test agent-core` green (whole suite).
+**Status**: Complete
+
+---
+
 # Plan: per-model reasoning kwargs (lookup table + proxy)
 
 **Goal**: One lookup table maps a model id → the `chat_template_kwargs` that

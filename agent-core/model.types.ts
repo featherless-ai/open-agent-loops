@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { FinishReason, Message, ToolCall } from "./types";
+import type { AssistantMessage, FinishReason, Message, ToolCall } from "./types";
 
 /**
  * Tool description handed to the model so it knows what it can call.
@@ -100,7 +100,7 @@ export type StreamEvent =
        * `reasoning_details` (when the provider streamed structured blocks) and
        * the `finishReason`, both reassembled from the stream.
        */
-      message: Message;
+      message: AssistantMessage;
       /**
        * Why the turn ended, when the provider reported it. The same value is
        * mirrored onto {@link Message.finishReason}; it is surfaced on the event
@@ -114,7 +114,7 @@ export type StreamEvent =
       /** The failure that ended the turn. */
       error: Error;
       /** Whatever assistant message was assembled before the failure. */
-      message: Message;
+      message: AssistantMessage;
     };
 
 /**
@@ -137,7 +137,7 @@ export type ModelStream = AsyncIterable<StreamEvent>;
  * ```ts
  * const echo: ModelClient = {
  *   async *stream(request) {
- *     const message: Message = { role: Role.Assistant, content: "hi" };
+ *     const message: AssistantMessage = { role: Role.Assistant, content: "hi" };
  *     yield { type: StreamEventType.TextDelta, text: "hi" };
  *     yield { type: StreamEventType.Done, message };
  *   },

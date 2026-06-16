@@ -8,7 +8,7 @@ import { defineTool } from "../tools/tools";
 import { permissionGate } from "../permissions/permission-gate";
 import { InMemoryPermissionStore } from "../permissions/in-memory-permission-store";
 import { PermissionPolicy } from "../permissions/permissions.types";
-import { Role } from "../types";
+import { isToolMessage, Role } from "../types";
 
 /** A tool that records each execution, so we can assert it never ran. */
 const makeTool = (name: string, ran: string[]) =>
@@ -57,7 +57,7 @@ describe("gateToolCalls (loop integration)", () => {
       hooks: { gateToolCalls: () => [{ allow: false, reason: "nope" }] },
     });
     expect(ran).toEqual([]); // never executed
-    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
+    const toolMsg = result.messages.find(isToolMessage);
     expect(toolMsg?.isError).toBe(true);
     expect(toolMsg?.content).toBe("nope");
     expect(result.messages.at(-1)?.content).toBe("recovered");
@@ -90,7 +90,7 @@ describe("gateToolCalls (loop integration)", () => {
       },
     });
     expect(ran).toEqual(["a:1"]); // only the allowed tool ran
-    const toolMsgs = result.messages.filter((m) => m.role === Role.Tool);
+    const toolMsgs = result.messages.filter(isToolMessage);
     expect(toolMsgs.map((m) => m.toolName)).toEqual(["a", "b"]); // original order
     expect(toolMsgs[0]?.content).toBe("a:1");
     expect(toolMsgs[1]?.isError).toBe(true);
@@ -178,6 +178,6 @@ describe("gateToolCalls (loop integration)", () => {
       hooks: { gateToolCalls: permissionGate(store, prompter) },
     });
     expect(ran).toEqual([]);
-    expect(result.messages.find((m) => m.role === Role.Tool)?.isError).toBe(true);
+    expect(result.messages.find(isToolMessage)?.isError).toBe(true);
   });
 });

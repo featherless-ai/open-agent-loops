@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { SessionMemoryStore } from "../memory/session-memory";
 import type { Message } from "../types";
-import { Role, ToolCallType } from "../types";
+import { isAssistantMessage, Role, ToolCallType } from "../types";
 
 const msg = (content: string): Message => ({ role: Role.User, content });
 
@@ -57,10 +57,10 @@ describe("SessionMemoryStore", () => {
     await store.append("s", [assistant]);
 
     const loaded = await store.load("s");
-    loaded[0]!.tool_calls![0]!.function.name = "hacked";
+    loaded.find(isAssistantMessage)!.tool_calls![0]!.function.name = "hacked";
 
     const reloaded = await store.load("s");
-    expect(reloaded[0]!.tool_calls![0]!.function.name).toBe("search");
+    expect(reloaded.find(isAssistantMessage)!.tool_calls![0]!.function.name).toBe("search");
   });
 
   // Edge: clear removes history for a session.
