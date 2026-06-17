@@ -161,7 +161,6 @@ export type {
   Hooks,
   RunAgentOptions,
   RunResult,
-  ToolCallDecision,
   ToolGateRequest,
   ToolResultOverride,
 } from "./primitives/loop";

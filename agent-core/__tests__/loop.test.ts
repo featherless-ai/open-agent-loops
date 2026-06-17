@@ -157,36 +157,6 @@ describe("runAgent", () => {
     expect(toolMsg?.content).toBe("kaboom");
   });
 
-  // Edge: beforeToolCall can block execution.
-  test("edge: beforeToolCall can block a tool", async () => {
-    let executed = false;
-    const tracked = defineTool({
-      name: "echo",
-      description: "Echo",
-      parameters: z.object({ text: z.string() }),
-      execute: ({ text }) => {
-        executed = true;
-        return { content: text };
-      },
-    });
-    const model = new MockModelClient([
-      { toolCalls: [{ name: "echo", arguments: { text: "x" } }] },
-      { text: "after" },
-    ]);
-    const result = await runAgent({
-      model,
-      memory: new SessionMemoryStore(),
-      sessionId: "s",
-      prompt: "go",
-      tools: [tracked],
-      hooks: { beforeToolCall: () => ({ block: true, reason: "denied" }) },
-    });
-    expect(executed).toBe(false);
-    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
-    expect(toolMsg?.content).toBe("denied");
-    expect(toolMsg?.isError).toBe(true);
-  });
-
   // Edge: afterToolCall can rewrite a result.
   test("edge: afterToolCall can override the result", async () => {
     const model = new MockModelClient([

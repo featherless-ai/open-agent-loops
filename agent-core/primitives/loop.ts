@@ -74,22 +74,6 @@ export interface GateDecision {
 }
 
 /**
- * What a {@link Hooks.beforeToolCall} hook returns to admit or block a call.
- *
- * @remarks
- * Returning nothing (or `block` falsy) lets the call proceed.
- *
- * @see {@link Hooks.beforeToolCall}
- * @group Hooks & Gating
- */
-export interface ToolCallDecision {
-  /** When true, block the call instead of executing it. */
-  block?: boolean;
-  /** Optional human-readable reason, surfaced as the blocked call's result. */
-  reason?: string;
-}
-
-/**
  * What a {@link Hooks.afterToolCall} hook returns to override a result.
  *
  * @remarks
@@ -112,8 +96,8 @@ export interface ToolResultOverride {
  * Every hook is optional and may be sync or async. They run at fixed points in
  * a turn: {@link Hooks.transformContext | transformContext} just before the
  * model call, {@link Hooks.gateToolCalls | gateToolCalls} once per turn ahead of
- * execution, then {@link Hooks.beforeToolCall | beforeToolCall} /
- * {@link Hooks.afterToolCall | afterToolCall} around each individual call.
+ * execution — the single point that admits or blocks calls — then
+ * {@link Hooks.afterToolCall | afterToolCall} after each individual call runs.
  *
  * @group Hooks & Gating
  */
@@ -154,16 +138,6 @@ export interface Hooks {
    * @see {@link ToolGateRequest}
    */
   gateToolCalls?(batch: ToolGateRequest[]): GateDecision[] | Promise<GateDecision[]>;
-  /**
-   * Inspect/block a tool call before it executes.
-   *
-   * @param info - The call and its validated `args`.
-   * @returns Nothing to proceed, or a {@link ToolCallDecision} to block it.
-   */
-  beforeToolCall?(info: {
-    toolCall: ToolCall;
-    args: ToolArguments;
-  }): void | ToolCallDecision | Promise<void | ToolCallDecision>;
   /**
    * Inspect/override a tool result after it executes.
    *
@@ -608,7 +582,7 @@ interface FinalizedCall {
 }
 
 /**
- * Validate -> beforeToolCall -> execute -> afterToolCall, never throwing.
+ * Validate -> execute -> afterToolCall, never throwing.
  *
  * @internal
  */
@@ -633,13 +607,7 @@ async function executeOne(
     try {
       const args = validateToolArguments(tool, call);
 
-      const before = await hooks.beforeToolCall?.({ toolCall: call, args });
-      if (before?.block) {
-        result = { content: before.reason ?? "Tool execution blocked" };
-        isError = true;
-      } else {
-        result = await tool.execute(args, { toolCallId: call.id, signal });
-      }
+      result = await tool.execute(args, { toolCallId: call.id, signal });
 
       const after = await hooks.afterToolCall?.({
         toolCall: call,
