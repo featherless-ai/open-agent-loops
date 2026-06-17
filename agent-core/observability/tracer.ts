@@ -18,7 +18,7 @@
  */
 
 import type { AgentEvent, ToolArguments } from "../types";
-import { AgentEventType, isAssistantMessage, Role } from "../types";
+import { AgentEventType, contentToText, isAssistantMessage, Role } from "../types";
 import type { ModelClient, ModelRequest, StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
 import type { EventSink } from "../types";
@@ -459,7 +459,8 @@ function describe(entry: TraceEntry, maxLen: number): string {
     case AgentEventType.Message: {
       const m = data.message;
       const calls = isAssistantMessage(m) && m.tool_calls?.length ? ` tool_calls=${m.tool_calls.length}` : "";
-      const body = m.content ? ` "${truncate(m.content, maxLen)}"` : "";
+      const text = contentToText(m.content);
+      const body = text ? ` "${truncate(text, maxLen)}"` : "";
       return `${m.role}${calls}${body}`;
     }
     case AgentEventType.ToolStart:

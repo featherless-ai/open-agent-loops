@@ -23,6 +23,7 @@ export * from "./roles";
 export * from "./tool-calls";
 export * from "./finish-reason";
 export * from "./reasoning";
+export * from "./content-part";
 export * from "./message-base";
 export * from "./user-message";
 export * from "./system-message";

@@ -26,6 +26,14 @@ export interface AssistantMessage extends MessageBase {
   role: Role.Assistant;
 
   /**
+   * The model's text output (narrows the multimodal base). Assistant turns
+   * stream text plus {@link AssistantMessage.tool_calls | tool calls}; the
+   * chat-completions spec carries no image / audio / file parts back from the
+   * model, so this is always a plain string.
+   */
+  content: string;
+
+  /**
    * The model's reasoning / chain-of-thought for this turn — a channel distinct
    * from `content`, set on assistant turns from reasoning models.
    *

@@ -33,13 +33,14 @@
 import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
 import { StreamEventType } from "../model.types";
-import type { AssistantMessage, Message, ReasoningDetail, ToolCall } from "../types";
+import type { AssistantMessage, ContentPart, Message, ReasoningDetail, ToolCall } from "../types";
 import { assistantMessage, FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 import type { ThinkingMode } from "./reasoning-kwargs";
 import { reasoningKwargsFor } from "./reasoning-kwargs";
 
 type ChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+type ChatContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
 type ChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -256,7 +257,7 @@ function toChatMessage(message: Message): ChatMessage {
     case Role.System:
       return { role: "system", content: message.content };
     case Role.User:
-      return { role: "user", content: message.content };
+      return { role: "user", content: toWireContent(message.content) };
     case Role.Tool:
       return { role: "tool", tool_call_id: message.tool_call_id, content: message.content };
     case Role.Assistant: {
@@ -280,6 +281,18 @@ function toChatMessage(message: Message): ChatMessage {
       throw new Error(`Unknown message role: ${String(unreachable)}`);
     }
   }
+}
+
+/**
+ * Map a user turn's content to the wire. A plain string passes straight through;
+ * a multimodal {@link ContentPart}[] is — by construction (see content-part.ts) —
+ * the exact shape of OpenAI's `ChatCompletionContentPart`, so it crosses the
+ * egress boundary verbatim rather than being remapped field by field.
+ *
+ * @internal
+ */
+function toWireContent(content: string | ContentPart[]): string | ChatContentPart[] {
+  return typeof content === "string" ? content : (content as ChatContentPart[]);
 }
 
 /**

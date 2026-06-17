@@ -20,6 +20,8 @@ import { Role } from "./roles";
 export interface SystemMessage extends MessageBase {
   /** Discriminant: the system-prompt turn. */
   role: Role.System;
+  /** A system prompt is always plain text (narrows the multimodal base). */
+  content: string;
 }
 
 /**

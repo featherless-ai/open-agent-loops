@@ -24,6 +24,9 @@ export interface ToolMessage extends MessageBase {
   /** Discriminant: a tool-result turn. */
   role: Role.Tool;
 
+  /** A tool result is always plain text (narrows the multimodal base). */
+  content: string;
+
   /**
    * Standard wire field: the id of the {@link ToolCall} this message is the
    * response to — equal to that call's `id`. Always set.

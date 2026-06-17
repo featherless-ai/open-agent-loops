@@ -43,7 +43,11 @@ export type {
   AgentEvent,
   AgentEventBody,
   AssistantMessage,
+  AudioPart,
+  ContentPart,
   EventSink,
+  FilePart,
+  ImagePart,
   Message,
   ReasoningDetail,
   ReasoningDetailBase,
@@ -51,6 +55,7 @@ export type {
   ReasoningSummaryDetail,
   ReasoningTextDetail,
   SystemMessage,
+  TextPart,
   ToolArguments,
   ToolCall,
   ToolMessage,
@@ -69,6 +74,10 @@ export { isAssistantMessage, isToolMessage } from "./types";
 // Factories that construct a message of each role: they pin the `role`
 // discriminant and you fill in the rest (`assistantMessage({ content })`).
 export { assistantMessage, systemMessage, toolMessage, userMessage } from "./types";
+
+// Multimodal content parts for a user turn (text / image / audio / file) + their
+// factories, plus `contentToText` to flatten a part array for display/logging.
+export { audioPart, contentToText, filePart, imagePart, textPart } from "./types";
 
 export type {
   ModelClient,

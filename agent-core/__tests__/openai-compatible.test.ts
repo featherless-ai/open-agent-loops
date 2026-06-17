@@ -8,7 +8,7 @@ import {
 } from "../providers/openai-compatible";
 import type { StreamEvent } from "../model.types";
 import { StreamEventType } from "../model.types";
-import { assistantMessage, FinishReason, ReasoningFormat, ToolCallType, userMessage } from "../types";
+import { assistantMessage, filePart, FinishReason, imagePart, ReasoningFormat, textPart, ToolCallType, userMessage } from "../types";
 
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -341,6 +341,23 @@ describe("toChatMessages (egress)", () => {
     const assistant = out[0] as any;
     expect(assistant.reasoning_content).toBe("thought");
     expect("reasoning_details" in assistant).toBe(false);
+  });
+
+  // A plain-string user turn stays a string on the wire.
+  test("a string user turn passes through as a string", () => {
+    const out = toChatMessages({ messages: [userMessage({ content: "hello" })] });
+    expect(out[0]).toEqual({ role: "user", content: "hello" });
+  });
+
+  // A multimodal user turn (image + file parts) crosses egress verbatim.
+  test("a multimodal user turn passes its content parts through verbatim", () => {
+    const content = [
+      textPart("what's in this?"),
+      imagePart("https://x/y.png", "high"),
+      filePart({ file_data: "data:application/pdf;base64,JVB", filename: "report.pdf" }),
+    ];
+    const out = toChatMessages({ messages: [userMessage({ content })] });
+    expect(out[0]).toEqual({ role: "user", content });
   });
 });
 
