@@ -20,6 +20,7 @@ import type {
   AgentEventBody,
   AssistantMessage,
   EventSink,
+  InjectedMessageOrigin,
   Message,
   ToolArguments,
   ToolCall,
@@ -150,6 +151,45 @@ export interface Hooks {
     result: ToolResult;
     isError: boolean;
   }): void | ToolResultOverride | Promise<void | ToolResultOverride>;
+  /**
+   * Pull queued *steering* messages to inject before the next turn.
+   *
+   * @remarks
+   * The loop calls this once per turn, right after the turn's tool results are
+   * recorded — so `tool_use`/`tool_result` pairing is always intact and the next
+   * turn sees `[assistant tool_calls][tool results][steering]`. Returning a
+   * non-empty array redirects the run: the messages are appended (and emitted as
+   * {@link AgentEventType.MessageInjected | message_injected}), and the run takes
+   * another turn even if a tool asked to {@link ToolResult.terminate | terminate}
+   * or a {@link RunAgentOptions.stopWhen | stopWhen} would have fired. It never
+   * overrides the {@link RunAgentOptions.maxSteps | maxSteps} cap — neither queue
+   * is drained once the cap is reached, so queued messages stay for a later run.
+   *
+   * The caller owns the queue; the loop only pulls. Returning how *many* messages
+   * (one vs all queued) is the caller's "one-at-a-time" vs "all" policy. This is
+   * the seam steering only matters across — input that arrives *while a run is in
+   * flight* — so the feeding source must be non-blocking.
+   *
+   * @returns Messages to inject now, or an empty array to leave the run as-is.
+   */
+  drainSteering?(): Message[] | Promise<Message[]>;
+  /**
+   * Pull queued *follow-up* messages when the run would otherwise stop at a
+   * natural final answer (a turn with no tool calls).
+   *
+   * @remarks
+   * Returning a non-empty array continues the run in place — the messages are
+   * appended (and emitted as
+   * {@link AgentEventType.MessageInjected | message_injected}) and another turn
+   * runs — instead of ending. Keeping it one continuous run (rather than a fresh
+   * {@link runAgent} call) is what keeps the trace a single
+   * `agent_start → agent_end` with monotonic steps. Like
+   * {@link Hooks.drainSteering | drainSteering}, it is not consulted once the
+   * {@link RunAgentOptions.maxSteps | maxSteps} cap is reached.
+   *
+   * @returns Messages to inject now, or an empty array to let the run end.
+   */
+  drainFollowUp?(): Message[] | Promise<Message[]>;
 }
 
 /**
@@ -307,9 +347,16 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 
     const toolCalls = assistant.tool_calls ?? [];
 
-    // Natural stop: a turn with no tool calls is the final answer.
+    // Natural stop: a turn with no tool calls is the final answer. Before
+    // ending, drain any queued follow-ups so the run continues in place (one
+    // trace, monotonic steps) instead of ending. Not consulted at the cap, so a
+    // queued follow-up survives for a later run rather than running uncapped.
     if (toolCalls.length === 0) {
-      break;
+      const followUps =
+        steps < maxSteps && hooks.drainFollowUp ? await hooks.drainFollowUp() : [];
+      if (followUps.length === 0) break;
+      await injectMessages("follow_up", followUps, messages, newMessages, memory, sessionId, emit);
+      continue;
     }
 
     // --- phase 1: gate the whole batch up front (serial) -----------------
@@ -347,13 +394,23 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     }
     await memory.append(sessionId, results);
 
-    if (terminate) break;
+    // Steering: now that tool results are recorded (pairing intact), drain any
+    // queued steering messages before deciding whether to stop. Steering is an
+    // explicit redirect, so it overrides a tool's `terminate` and a `stopWhen` —
+    // but never the maxSteps cap, so it isn't drained once the cap is reached.
+    const steering =
+      steps < maxSteps && hooks.drainSteering ? await hooks.drainSteering() : [];
+    if (steering.length > 0) {
+      await injectMessages("steering", steering, messages, newMessages, memory, sessionId, emit);
+    } else {
+      if (terminate) break;
 
-    if (
-      stopWhen &&
-      (await stopWhen({ step: steps, assistant, toolResults: results, messages }))
-    ) {
-      break;
+      if (
+        stopWhen &&
+        (await stopWhen({ step: steps, assistant, toolResults: results, messages }))
+      ) {
+        break;
+      }
     }
 
     // Safety cap last, so a legitimate final turn at the limit still counts.
@@ -634,6 +691,35 @@ async function executeOne(
     isError,
   });
   return { message, terminate: result.terminate === true && !isError };
+}
+
+/**
+ * Append caller-injected messages (steering or follow-up) into the live run:
+ * push onto both the working history and `newMessages`, persist them, and emit a
+ * labeled {@link AgentEventType.MessageInjected} per message. Mirrors how the
+ * run's prompt is appended at the top of {@link runAgent}, so an injected turn
+ * is recorded and observable exactly like a normal one — only tagged with its
+ * `origin` so telemetry can tell *why* it appeared mid-trajectory.
+ *
+ * @internal
+ */
+async function injectMessages(
+  origin: InjectedMessageOrigin,
+  injected: Message[],
+  messages: Message[],
+  newMessages: Message[],
+  memory: Memory,
+  sessionId: string,
+  emit: Emit,
+): Promise<void> {
+  for (const message of injected) {
+    messages.push(message);
+    newMessages.push(message);
+  }
+  await memory.append(sessionId, injected);
+  for (const message of injected) {
+    await emit({ type: AgentEventType.MessageInjected, message, origin });
+  }
 }
 
 /**

@@ -12,7 +12,7 @@
  * the tool results it produced — which is what you usually read when debugging.
  */
 
-import type { AgentEvent, AssistantMessage, ToolArguments } from "../types";
+import type { AgentEvent, AssistantMessage, InjectedMessageOrigin, Message, ToolArguments } from "../types";
 import type { StreamEvent, ToolSpec } from "../model.types";
 
 /** Origin seam of a trace entry. */
@@ -124,6 +124,14 @@ export interface DisclosureStep {
   messagesDelta: number;
 }
 
+/** A caller-injected turn folded onto the step it followed. */
+export interface InjectedTurn {
+  /** Which queue it came from — steering or follow-up. */
+  origin: InjectedMessageOrigin;
+  /** The injected message. */
+  message: Message;
+}
+
 /**
  * One turn of the agent's trajectory: the model's action paired with the
  * observations it produced. `assistant` is the action (text and/or tool calls);
@@ -135,6 +143,12 @@ export interface TrajectoryStep {
   assistant?: AssistantMessage;
   /** Tool calls requested this turn and their results (the observations). */
   tools: TrajectoryTool[];
+  /**
+   * Caller-injected turns (steering / follow-up) that arrived after this turn's
+   * action — recorded here so a redirect is visible in the folded trajectory,
+   * not only in the raw timeline. See {@link InjectedTurn}.
+   */
+  injected?: InjectedTurn[];
   /** Wall-clock ms from this turn's `turn_start` to the next turn / end. */
   durationMs?: number;
 }

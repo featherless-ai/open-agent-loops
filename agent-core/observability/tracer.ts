@@ -286,6 +286,13 @@ export class Tracer {
           if (current && event.message.role === Role.Assistant) current.assistant = event.message;
           break;
         }
+        case AgentEventType.MessageInjected: {
+          // A steering/follow-up turn injected after the current step's action —
+          // attach it so the redirect shows in the folded trajectory, not just
+          // the raw timeline.
+          if (current) (current.injected ??= []).push({ origin: event.origin, message: event.message });
+          break;
+        }
         case AgentEventType.ToolStart: {
           toolStartT.set(event.toolCallId, entry.t);
           current?.tools.push({
@@ -369,6 +376,10 @@ export class Tracer {
         const status = tool.isError ? "ERROR" : "ok";
         out.push(`  → ${tool.toolName}(${args})${td} ${status}`);
         if (tool.result !== undefined) out.push(`      ${truncate(tool.result, maxLen)}`);
+      }
+
+      for (const inj of step.injected ?? []) {
+        out.push(`  ↪ ${inj.origin}: ${truncate(contentToText(inj.message.content), maxLen)}`);
       }
     }
     return out.join("\n");
@@ -462,6 +473,10 @@ function describe(entry: TraceEntry, maxLen: number): string {
       const text = contentToText(m.content);
       const body = text ? ` "${truncate(text, maxLen)}"` : "";
       return `${m.role}${calls}${body}`;
+    }
+    case AgentEventType.MessageInjected: {
+      const text = contentToText(data.message.content);
+      return `${data.origin} ${data.message.role}${text ? ` "${truncate(text, maxLen)}"` : ""}`;
     }
     case AgentEventType.ToolStart:
       return callSig(data.toolName, data.args, maxLen);

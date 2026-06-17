@@ -174,6 +174,9 @@ export type {
   ToolResultOverride,
 } from "./primitives/loop";
 
+export { MessageQueue } from "./primitives/message-queue";
+export type { DrainMode, MessageQueueOptions } from "./primitives/message-queue";
+
 export { withCredentials } from "./credentials/with-credentials";
 export { InMemoryCredentialStore } from "./credentials/in-memory-credential-store";
 export type { InMemoryCredentialStoreOptions } from "./credentials/in-memory-credential-store";

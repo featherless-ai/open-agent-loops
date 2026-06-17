@@ -5,7 +5,7 @@ import { runAgent } from "../primitives/loop";
 import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import { defineTool } from "../tools/tools";
-import { AgentEventType } from "../types";
+import { AgentEventType, userMessage } from "../types";
 
 /** A monotonic fake clock: each read advances by 1ms, so durations are stable. */
 function clock() {
@@ -141,6 +141,31 @@ describe("Tracer: edge inputs", () => {
     const tool = tracer.trajectory()[0]!.tools[0]!;
     expect(tool.isError).toBe(true);
     expect(tool.result).toContain("kaboom");
+  });
+
+  // A steering injection is folded onto the step it followed, so a redirect is
+  // visible in the trajectory (and rendered), not just the raw timeline.
+  test("folds a steering injection onto the trajectory step", async () => {
+    const tracer = new Tracer({ now: clock() });
+    const queue = [userMessage({ content: "actually do B" })];
+    await runAgent({
+      model: new MockModelClient([
+        { toolCalls: [{ name: "weather", arguments: { city: "Paris" } }] },
+        { text: "ok" },
+      ]),
+      memory: new SessionMemoryStore(),
+      sessionId: "demo",
+      prompt: "go",
+      tools: [weather],
+      hooks: { drainSteering: () => queue.splice(0) },
+      onEvent: tracer.sink,
+    });
+
+    const traj = tracer.trajectory();
+    expect(traj[0]!.injected).toHaveLength(1);
+    expect(traj[0]!.injected![0]!.origin).toBe("steering");
+    expect(traj[0]!.injected![0]!.message.content).toBe("actually do B");
+    expect(tracer.formatTrajectory()).toContain("↪ steering: actually do B");
   });
 
   // A ring-buffer limit keeps only the most recent entries.
