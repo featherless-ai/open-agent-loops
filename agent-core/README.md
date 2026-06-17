@@ -2,7 +2,7 @@
 
 A minimal, provider-agnostic agentic loop. Every fundamental piece sits behind
 an interface so it can be swapped without touching the loop — the point of this
-package is to make the **core things plug-and-play and independently testable**.
+package is to make the **components of the agent plug-and-play, independently testable, and reliable**.
 
 ## The seams
 
@@ -32,16 +32,19 @@ load history → append prompt → ┌─ stream assistant turn
 ## Usage
 
 ```ts
-import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
+import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "agent-core";
 // MockModelClient is a test double, not part of the public surface:
-import { MockModelClient } from "~/agent-core/mocks/mock-model";
+import { MockModelClient } from "agent-core/mocks/mock-model";
 import { z } from "zod";
 
 const weather = defineTool({
   name: "weather",
   description: "Get weather for a city",
   parameters: z.object({ city: z.string() }),
-  execute: ({ city }) => ({ content: `Sunny in ${city}` }),
+  execute: async ({ city }) => {
+    // Replace with a real API call to fetch the weather.
+    return { content: `Sunny in ${city}` };
+  },
 });
 
 // In production, pass your own ModelClient instead of this test double.
@@ -56,11 +59,26 @@ const result = await runAgent({
   sessionId: "demo",
   prompt: "What's the weather in Paris?",
   tools: [weather],
-  onEvent: (e) => console.log(e.type),
+  // onEvent is your renderer: the loop is headless and only emits a typed
+  // AgentEvent stream. Render it anywhere — stdout here, the DOM in a browser,
+  // a TUI, a log sink.
+  onEvent: (e) => {
+    if (e.type === AgentEventType.TextDelta) process.stdout.write(e.text);
+    else if (e.type === AgentEventType.ToolStart) console.log(`→ ${e.toolName}`, e.args);
+  },
 });
 
 console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
 ```
+
+## Bring your own renderer
+
+The loop is **headless** — it never writes to a screen. It emits a typed
+`AgentEvent` stream (`onEvent`), and the model emits `StreamEvent`s; *you* decide
+how to present them. The `onEvent` handler above is a renderer — swap stdout for
+DOM nodes in the browser, React state, a TUI, or a log sink without touching the
+loop. For ready-made timeline/trajectory rendering, point a [`Tracer`](#tracing-a-run-debugging)
+at the same events.
 
 ## Gating tool calls (permissions)
 
@@ -83,8 +101,8 @@ import {
   InMemoryPermissionStore,
   PermissionPolicy,
   ApprovalChoice,
-} from "~/agent-core";
-import type { ApprovalPrompter } from "~/agent-core";
+} from "agent-core";
+import type { ApprovalPrompter } from "agent-core";
 
 // Config: read tool policies from anywhere. Ask means prompt the user.
 const store = new InMemoryPermissionStore({
@@ -118,7 +136,7 @@ provider's API, then translate its chunks into `StreamEvent`s. Any
 OpenAI-compatible endpoint works with a raw `fetch`; no extra package needed.
 
 ```ts
-import type { ModelClient, ModelRequest, StreamEvent } from "~/agent-core";
+import type { ModelClient, ModelRequest, StreamEvent } from "agent-core";
 
 export class MyModel implements ModelClient {
   async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
@@ -127,6 +145,11 @@ export class MyModel implements ModelClient {
   }
 }
 ```
+
+Or skip the boilerplate: `OpenAICompatibleModel` from the opt-in
+`agent-core/providers/openai` subpath implements `stream()` against any
+OpenAI-compatible endpoint (install the optional `openai` peer). It's a separate
+subpath so importing `agent-core` never pulls the SDK into a browser bundle.
 
 ## Tracing a run (debugging)
 
@@ -152,7 +175,8 @@ trace is fully written and you never have to call `flush()` yourself (set
 `flushOnEnd: false` to manage it manually, or call `flush()` for non-loop use).
 
 ```ts
-import { Tracer } from "~/agent-core";
+import { Tracer } from "agent-core";
+import { OpenAICompatibleModel } from "agent-core/providers/openai";
 import { appendFile } from "node:fs/promises";
 
 // Async, batched, off the hot path. Flush once when the run ends.

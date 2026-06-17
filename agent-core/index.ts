@@ -22,7 +22,7 @@
  *
  * @example Minimal run
  * ```ts
- * import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
+ * import { runAgent, SessionMemoryStore, defineTool } from "agent-core";
  *
  * const result = await runAgent({
  *   model,                       // your ModelClient

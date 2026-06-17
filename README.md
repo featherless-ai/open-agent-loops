@@ -1,12 +1,16 @@
 # Open Agent OS
 
 A minimal, provider-agnostic **agentic loop**. The whole point of this package
-is to make the core pieces of an agent **plug-and-play and independently
-testable** — every fundamental thing sits behind an interface, so it can be
+is to make the components of the agent **plug-and-play, independently testable, and reliable** — every fundamental thing sits behind an interface, so it can be
 swapped without touching the loop.
 
 One runtime dependency (`zod`, for tool schemas). Everything else is plain
-hand-written TypeScript.
+hand-written TypeScript — no platform APIs, so the same ESM build runs in
+**Node, Bun, Deno, and the browser**.
+
+```sh
+npm install agent-core        # or: bun add / deno add npm:agent-core
+```
 
 ## The seams
 
@@ -31,16 +35,19 @@ load history → append prompt → ┌─ stream assistant turn
 ## Usage
 
 ```ts
-import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
+import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "agent-core";
 // MockModelClient is a test double, not part of the public surface:
-import { MockModelClient } from "~/agent-core/mocks/mock-model";
+import { MockModelClient } from "agent-core/mocks/mock-model";
 import { z } from "zod";
 
 const weather = defineTool({
   name: "weather",
   description: "Get weather for a city",
   parameters: z.object({ city: z.string() }),
-  execute: ({ city }) => ({ content: `Sunny in ${city}` }),
+  execute: async ({ city }) => {
+    // Replace with a real API call to fetch the weather.
+    return { content: `Sunny in ${city}` };
+  },
 });
 
 // In production, pass your own ModelClient instead of this test double.
@@ -55,21 +62,51 @@ const result = await runAgent({
   sessionId: "demo",
   prompt: "What's the weather in Paris?",
   tools: [weather],
-  onEvent: (e) => console.log(e.type),
+  // onEvent is your renderer: the loop is headless and only emits a typed
+  // AgentEvent stream. Render it anywhere — stdout here, the DOM in a browser,
+  // a TUI, a log sink.
+  onEvent: (e) => {
+    if (e.type === AgentEventType.TextDelta) process.stdout.write(e.text);
+    else if (e.type === AgentEventType.ToolStart) console.log(`→ ${e.toolName}`, e.args);
+  },
 });
 
 console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
 ```
 
+## Bring your own renderer
+
+The loop is **headless** — it never writes to a screen. It emits a typed
+`AgentEvent` stream (`onEvent`), and the model emits `StreamEvent`s; *you* decide
+how to present them. The `onEvent` handler above is a renderer — swap stdout for
+DOM nodes in the browser, React state, a TUI, or a log sink without touching the
+loop. For ready-made timeline/trajectory rendering, point a `Tracer` at the same
+events.
+
 ## Adding a real model client
 
-Implement the one method — `stream()`. Map `req.messages`/`req.tools` to your
-provider's API, then translate its chunks into `StreamEvent`s (`text_delta` /
-`tool_call` / `done`). No new package is required to do this against any
-OpenAI-compatible endpoint.
+Batteries included for OpenAI-compatible endpoints: import `OpenAICompatibleModel`
+from the opt-in `agent-core/providers/openai` subpath (kept out of the core entry
+so importing `agent-core` never pulls the `openai` SDK into a browser bundle).
+Install the optional peer — `npm install openai` — and point it anywhere:
 
 ```ts
-import type { ModelClient, ModelRequest, StreamEvent } from "~/agent-core";
+import { OpenAICompatibleModel } from "agent-core/providers/openai";
+
+const model = new OpenAICompatibleModel({
+  model: "deepseek-ai/DeepSeek-V3.1",
+  baseURL: "https://api.featherless.ai/v1",
+  apiKey: process.env.FEATHERLESS_API_KEY,
+});
+```
+
+Or roll your own — implement the one method, `stream()`. Map `req.messages`/
+`req.tools` to your provider's API, then translate its chunks into `StreamEvent`s
+(`text_delta` / `tool_call` / `done`). In the browser, point this at your own
+backend proxy instead of embedding a key.
+
+```ts
+import type { ModelClient, ModelRequest, StreamEvent } from "agent-core";
 
 export class MyModel implements ModelClient {
   async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {

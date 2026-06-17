@@ -5,8 +5,8 @@
  *
  * `openai` is an OPTIONAL peer dependency — install it only if you use this
  * provider. The core loop never imports it; you reach this file by its own
- * path (`~/agent-core/providers/openai-compatible`), so consumers who bring
- * their own ModelClient never pull the SDK in.
+ * subpath (`agent-core/providers/openai`), so consumers who bring their own
+ * ModelClient never pull the SDK in.
  *
  * Reasoning: OpenAI-compatible reasoning models stream chain-of-thought on a
  * non-standard delta field — `reasoning` (current vLLM / OpenAI-style) or
@@ -131,6 +131,9 @@ export interface OpenAICompatibleOptions {
  *
  * @example
  * ```ts
+ * import { OpenAICompatibleModel } from "agent-core/providers/openai";
+ * import { Role, StreamEventType } from "agent-core";
+ *
  * const model = new OpenAICompatibleModel({
  *   model: "deepseek-ai/DeepSeek-V3.1",
  *   baseURL: "https://api.featherless.ai/v1",
