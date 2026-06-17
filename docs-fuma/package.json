@@ -17,6 +17,7 @@
     "entities": "^6"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.0",
     "fumadocs-core": "^16.9.3",
     "fumadocs-mdx": "^15.0.11",
     "fumadocs-ui": "^16.9.3",

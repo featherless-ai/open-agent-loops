@@ -1,5 +1,32 @@
 @import "tailwindcss";
-@import "fumadocs-ui/css/catppuccin.css";
+@import "fumadocs-ui/css/black.css";
 @import "fumadocs-ui/css/preset.css";
 
 @source "../node_modules/fumadocs-ui/dist/**/*.js";
+
+/* ── Yellow & black theme ──────────────────────────────────────────────────
+   `black.css` supplies the neutral black/white base; here we recolor the
+   accent — links, active nav, primary buttons, focus ring — to a vivid yellow.
+   Light mode uses a deeper amber so links stay readable on white; dark mode
+   (the default, set in app/layout.tsx) goes full yellow-on-black. */
+@theme {
+  --color-fd-primary: hsl(43, 96%, 42%);
+  --color-fd-primary-foreground: hsl(0, 0%, 7%);
+  --color-fd-ring: hsl(43, 96%, 42%);
+}
+
+.dark {
+  --color-fd-background: hsl(0, 0%, 4%);
+  --color-fd-primary: hsl(48, 96%, 53%);
+  --color-fd-primary-foreground: hsl(0, 0%, 7%);
+  --color-fd-ring: hsl(48, 96%, 53%);
+  /* warm-tinted hover/selected surfaces so the sidebar reads yellow-on-black */
+  --color-fd-accent: hsl(45, 30%, 12%);
+  --color-fd-accent-foreground: hsl(48, 96%, 60%);
+}
+
+/* Make copy-and-paste obvious: the code-block copy button is hover-only by
+   default — keep it visible so every snippet is clearly copyable. */
+button[aria-label="Copy Text"] {
+  opacity: 1;
+}
