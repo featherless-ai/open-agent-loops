@@ -638,7 +638,7 @@ async function executeOne(
         result = { content: before.reason ?? "Tool execution blocked" };
         isError = true;
       } else {
-        result = await tool.execute(args as never, { toolCallId: call.id, signal });
+        result = await tool.execute(args, { toolCallId: call.id, signal });
       }
 
       const after = await hooks.afterToolCall?.({
