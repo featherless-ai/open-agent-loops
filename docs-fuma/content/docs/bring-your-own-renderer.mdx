@@ -6,7 +6,7 @@ description: A short tutorial — render the agent loop's event stream however y
 The loop is **headless** — it never writes to a screen. It emits a typed
 `AgentEvent` stream (`onEvent`), and the model emits `StreamEvent`s; *you* decide
 how to present them. This tutorial picks up where the
-[Hello World example](/docs/getting-started#hello-world-example) leaves off, and
+[single-turn agent loop](/docs/getting-started#single-turn-agent-loop) leaves off, and
 shows the two ways to render a run.
 
 ## Part 1 — render the event stream yourself
@@ -24,7 +24,7 @@ function render(e: AgentEvent) {
   switch (e.type) {
     case AgentEventType.AgentStart:     console.log(`▶ start · session ${e.sessionId}`); break;
     case AgentEventType.TurnStart:      console.log(`\n— turn ${e.step} —`); break;
-    case AgentEventType.ReasoningDelta:
+    case AgentEventType.ReasoningDelta: process.stdout.write(`\x1b[2m${e.text}\x1b[22m`); break; // dim: the thinking channel
     case AgentEventType.TextDelta:      process.stdout.write(e.text); break;
     case AgentEventType.Message:        console.log(`\n· ${e.message.role} message complete`); break;
     case AgentEventType.ToolStart:      console.log(`→ ${e.toolName}(${JSON.stringify(e.args)})`); break;
