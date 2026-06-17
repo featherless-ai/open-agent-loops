@@ -1,0 +1,62 @@
+---
+title: Bring your own renderer
+description: A short tutorial — render the agent loop's event stream however you like.
+---
+
+The loop is **headless** — it never writes to a screen. It emits a typed
+`AgentEvent` stream (`onEvent`), and the model emits `StreamEvent`s; *you* decide
+how to present them. This tutorial picks up where the
+[Hello World example](/docs/getting-started#hello-world-example) leaves off, and
+shows the two ways to render a run.
+
+## Part 1 — render the event stream yourself
+
+A renderer is just a function over the event stream. Switch on the event `type`
+and present each one however you like — stdout here, but swap it for DOM nodes in
+the browser, React state, a TUI, or a log sink without touching the loop:
+
+```ts
+import { runAgent, AgentEventType } from "agent-core";
+import type { AgentEvent } from "agent-core";
+
+// A renderer is a function over the event stream — pass it as `onEvent`.
+function render(e: AgentEvent) {
+  switch (e.type) {
+    case AgentEventType.AgentStart:     console.log(`▶ start · session ${e.sessionId}`); break;
+    case AgentEventType.TurnStart:      console.log(`\n— turn ${e.step} —`); break;
+    case AgentEventType.ReasoningDelta:
+    case AgentEventType.TextDelta:      process.stdout.write(e.text); break;
+    case AgentEventType.Message:        console.log(`\n· ${e.message.role} message complete`); break;
+    case AgentEventType.ToolStart:      console.log(`→ ${e.toolName}(${JSON.stringify(e.args)})`); break;
+    case AgentEventType.ToolEnd:        console.log(`← ${e.toolName} [${e.isError ? "error" : "ok"}]: ${e.result}`); break;
+    case AgentEventType.AgentEnd:       console.log(`\n■ done · ${e.steps} steps`); break;
+  }
+}
+
+await runAgent({ model, memory, sessionId, prompt, tools, onEvent: render });
+```
+
+Because the loop is platform-free, the same handler drives a CLI or a browser UI
+unchanged — render to the terminal on the server, to the DOM in the client.
+
+## Part 2 — ready-made: the Tracer
+
+Don't want to hand-write a renderer? Point a `Tracer` at the same events for a
+timestamped timeline and a per-turn trajectory view:
+
+```ts
+import { runAgent, Tracer } from "agent-core";
+
+const tracer = new Tracer();
+await runAgent({ model, memory, sessionId, prompt, tools, onEvent: tracer.sink });
+
+console.log(tracer.format());           // timestamped timeline
+console.log(tracer.formatTrajectory()); // per-turn: action → observation
+```
+
+<Callout title="More on the Tracer">
+  The `Tracer` can also wrap your `ModelClient` to capture model-boundary stream
+  events and batch trace I/O off the loop's hot path — see the
+  [API reference](/docs/api). Nothing about the loop assumes a display, so the
+  same run drives a CLI or a browser UI unchanged.
+</Callout>

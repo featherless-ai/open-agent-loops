@@ -34,6 +34,12 @@ is a discriminated union tagged by `AgentEventType`:
 Every event carries a `timestamp` stamped centrally at emit time, so you can
 measure latency between turns, tokens, and tool calls.
 
+The loop never renders — it's **headless**. Subscribe via `onEvent` and present
+the stream however you like (console, DOM, TUI, log sink); rendering is yours to
+bring, not the loop's to impose. The console renderer in
+[Getting started](/docs/getting-started) is one example; a `Tracer` over the
+same events gives a ready-made timeline.
+
 ## Hooks
 
 Hooks are the seam for guardrails and context shaping. They run at fixed points
@@ -69,7 +75,7 @@ A run ends when the model returns a final answer, a tool sets `terminate`, or a
 `StopCondition` fires. Combinators let you build predicates declaratively:
 
 ```ts
-import { runAgent, maxSteps, whenToolCalled, any } from "~/agent-core";
+import { runAgent, maxSteps, whenToolCalled, any } from "agent-core";
 
 await runAgent({
   // ...
@@ -86,3 +92,48 @@ The `with*` helpers wrap a seam to add behavior without changing its callers:
 - **`withMemoryListeners`** — react to memory reads/writes.
 - **`withCredentials`** — substitute secret placeholders into tool arguments on
   the way in and scrub them out of results on the way out.
+
+## Batteries included
+
+You implement the seams, but you rarely start from nothing. The rule of thumb:
+**pure seams ship a ready-to-use implementation; host-binding seams ship the
+wiring but require you to supply the backend** — because the thing that touches
+your machine, network, or secrets is the correct security boundary for *you* to
+own.
+
+Ready to use as-is (pure, in-memory, zero network):
+
+- **Memory** — `SessionMemoryStore`.
+- **Stop conditions** — `maxSteps`, `whenToolCalled`, and the `any` / `all` /
+  `not` combinators.
+- **Composition decorators** — `withModelObserver`, `withMemoryNamespace`,
+  `withMemoryListeners`, `withCredentials`.
+- **Tool authoring** — `defineTool`, `ToolRegistry`, `validateToolArguments`.
+- **Planning tools** — `scratchpadTools` (`InMemoryScratchpad`) and
+  `todoListTools` (`InMemoryTodoStore`): fully shipped, with a swappable store
+  seam if you want to persist them.
+- **Permissions & credentials** — `permissionGate` with
+  `InMemoryPermissionStore`; `withCredentials` with `InMemoryCredentialStore`.
+- **Observability** — `Tracer` (timestamped timeline + per-turn trajectory) and
+  the `AsyncWriter` it batches I/O through.
+- **Reasoning kwargs** — `reasoningProfileFor` / `injectReasoningKwargs` for
+  per-model-family thinking toggles.
+- **Testing** — `MockModelClient`, a scripted `ModelClient` imported from
+  `agent-core/mocks/mock-model`.
+
+Opt-in provider battery:
+
+- **`OpenAICompatibleModel`** — a complete `ModelClient` for any
+  OpenAI-compatible endpoint, from the `agent-core/providers/openai` subpath
+  (kept out of the core entry so the `openai` SDK never lands in a browser
+  bundle). Install the peer: `npm install openai`.
+
+Bring your own backend (the loop ships the tool, you wire the capability):
+
+- The built-in tools — `shellTool`, `searchTool`, `readTool` / `globTool`,
+  `editTool` / `writeTool`, `webFetchTool` / `webSearchTool`, `browserTools` —
+  ship the SDK-owned argument validation and result formatting, but each takes a
+  backend interface (`ShellBackend`, `SearchBackend`, `FileReadBackend`,
+  `FileWriteBackend`, `WebBackend`, `BrowserSession`) that *you* implement. That
+  boundary is deliberate: anything that runs a command, reads a file, or hits the
+  network should be your code, not the SDK's.
