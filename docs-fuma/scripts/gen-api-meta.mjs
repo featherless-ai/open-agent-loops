@@ -78,12 +78,23 @@ const rank = (t) => {
 const groups = [...(project.groups ?? [])].sort((a, b) => rank(a.title) - rank(b.title));
 
 const pages = ["index"];
+const seen = new Set(["index"]); // a symbol re-exported (e.g. `export type {}`) can
+// surface as two TypeDoc reflections with the same name → same page path; dedupe
+// within each group and across groups so the sidebar never lists a page twice.
 for (const group of groups) {
-  const items = (group.children ?? [])
-    .map((id) => relByLowerName.get((nameById.get(id) ?? "").toLowerCase()))
-    .filter(Boolean)
+  const items = [
+    ...new Set(
+      (group.children ?? [])
+        .map((id) => relByLowerName.get((nameById.get(id) ?? "").toLowerCase()))
+        .filter(Boolean),
+    ),
+  ]
+    .filter((p) => !seen.has(p))
     .sort();
-  if (items.length) pages.push(`---${group.title}---`, ...items);
+  if (items.length) {
+    for (const p of items) seen.add(p);
+    pages.push(`---${group.title}---`, ...items);
+  }
 }
 
 writeFileSync(
