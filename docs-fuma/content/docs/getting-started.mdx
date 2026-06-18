@@ -210,14 +210,14 @@ can revise across turns — and the trick is to make it *write to a tool*, since
 tool result stays in the transcript while a turn's private reasoning doesn't. Two
 batteries-included tool sets, `scratchpadTools()` and `todoListTools()`, do
 exactly that, each backed by a swappable in-memory store. They have their own
-short tutorial — **[Planning tools](/docs/planning-tools)** — covering both tool
+short guide — **[Planning tools](/docs/planning-tools)** — covering both tool
 sets and the stores behind them.
 
 ## Bring your own renderer
 
 The loop is **headless**: the `onEvent` handler above is a renderer — `onEvent`
 emits a typed `AgentEvent` stream and you present it however you like (stdout,
-the DOM, a TUI, a log sink). It has its own short tutorial —
+the DOM, a TUI, a log sink). It has its own short guide —
 **[Bring your own renderer](/docs/bring-your-own-renderer)** — covering a custom
 renderer (Part 1) and the ready-made `Tracer` (Part 2).
 
@@ -225,18 +225,18 @@ renderer (Part 1) and the ready-made `Tracer` (Part 2).
 
 The single-turn loop uses the built-in `OpenAICompatibleModel`. For a different
 provider, transport, or wire format, `ModelClient` is just one method —
-implement `stream()` yourself. It has its own short tutorial —
+implement `stream()` yourself. It has its own short guide —
 **[Bring your own model client](/docs/bring-your-own-model-client)** — covering
 the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
 
-## Gating tool calls
+## Permissions & credentials
 
 Some tool calls are risky enough that a human should approve them first. The
 `gateToolCalls` hook is a single admission point — run once per turn, before any
 tool executes — and gating is batteries-included: pair it with the shipped
 `permissionGate` and `InMemoryPermissionStore` for an allow / deny / **ask**
-policy. It has its own short tutorial —
-**[Gating tool calls](/docs/gating-tool-calls)** — covering the permission policy
+policy. It has its own short guide —
+**[Permissions & credentials](/docs/gating-tool-calls)** — covering the permission policy
 and composing it with `withCredentials` for a tool that needs a secret *and*
 approval.
 

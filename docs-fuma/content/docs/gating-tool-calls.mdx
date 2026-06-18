@@ -1,10 +1,10 @@
 ---
-title: Gating tool calls
-description: A short tutorial — admit, deny, or ask before tool calls run, and compose permissions with credentials.
+title: Permissions & credentials
+description: A short guide — admit, deny, or ask before tool calls run, and compose permissions with credentials, the same way you'd guard a skill's tools.
 ---
 
 Some tool calls are risky enough that a human should approve them first. This
-tutorial picks up where the [multi-turn chat
+guide picks up where the [multi-turn chat
 loop](/docs/getting-started#multi-turn-chat-loop) leaves off and adds an admission
 policy: each turn's tool calls pass through the `gateToolCalls` hook *before* any
 of them run, and you allow / deny / **ask**.
@@ -129,16 +129,24 @@ const creds = new InMemoryCredentialStore({
   secrets: { deploy_token: process.env.DEPLOY_TOKEN ?? "" },
 });
 
-// Same chat loop as above — just wrap the tool; the gate is unchanged.
-await runAgent({
-  model,
-  memory,
-  sessionId,
-  prompt,
-  tools: [weather, withCredentials(deploy, creds)], // credential: a per-tool wrapper
-  hooks: { gateToolCalls: permissionGate(store, prompter) }, // permission: a hook over the batch
-  onEvent: render,
-});
+// Same multi-turn chat loop as above — just wrap the tool with its credential;
+// the gate is unchanged.
+while (true) {
+  const prompt = (await rl.question("\nyou › ")).trim();
+  if (prompt === "" || prompt === "exit") break;
+
+  process.stdout.write("bot › ");
+  await runAgent({
+    model,
+    memory,
+    sessionId,
+    prompt,
+    tools: [weather, withCredentials(deploy, creds)], // credential: a per-tool wrapper
+    hooks: { gateToolCalls: permissionGate(store, prompter) }, // permission: a hook over the batch
+    onEvent: render,
+  });
+}
+rl.close();
 ```
 
 When the model calls `deploy`, the gate prompts first (it's still "ask"); on
