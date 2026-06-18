@@ -12,19 +12,13 @@
  *   bun run examples/single-turn-loop/single-turn-loop.ts
  */
 
+// #region single-turn-loop
 import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "../../agent-core/index.ts";
 import type { AgentEvent } from "../../agent-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";
-
-const apiKey = process.env.LLM_API_KEY;
-const modelId = process.env.LLM_MODEL;
-if (!apiKey || !modelId) {
-  console.error("Set LLM_API_KEY and LLM_MODEL (see .env.example).");
-  process.exit(1);
-}
 
 const weather = defineTool({
   name: "weather",
@@ -38,9 +32,9 @@ const weather = defineTool({
 
 // Batteries included: the OpenAI-compatible client, pointed at any endpoint.
 const model = new OpenAICompatibleModel({
-  apiKey,
-  model: modelId,
+  apiKey: process.env.LLM_API_KEY, // set this in your environment
   baseURL: process.env.LLM_BASE_URL ?? "https://api.featherless.ai/v1",
+  model: process.env.LLM_MODEL ?? "zai-org/GLM-5.2",
   thinking: "on", // stream the reasoning channel so `render` actually shows it
 });
 
@@ -92,3 +86,4 @@ const result = await runAgent({
 });
 
 console.log(`\n${result.messages.at(-1)?.content}`);
+// #endregion

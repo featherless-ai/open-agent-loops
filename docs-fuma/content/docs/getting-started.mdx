@@ -38,83 +38,12 @@ Install the provider peer:
 npm install openai
 ```
 
-Then drop in your API key and run it — it prompts you for a question on the
-terminal, where you can write something like "What's the weather in Paris?":
+Then set `LLM_API_KEY` in your environment and run it — it prompts you for a
+question on the terminal, where you can type something like "What's the weather
+in Paris?". This snippet is **embedded from the runnable example**, so it can't
+drift from the code you'd actually run:
 
-```ts
-import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "agent-core";
-import { OpenAICompatibleModel } from "agent-core/providers/openai";
-import type { AgentEvent } from "agent-core";
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
-import { z } from "zod";
-
-const weather = defineTool({
-  name: "weather",
-  description: "Get the current weather for a city.",
-  parameters: z.object({ city: z.string().describe("City to look up.") }),
-  execute: async ({ city }) => {
-    // Replace with a real API call to fetch the weather.
-    return { content: `Sunny in ${city}` };
-  },
-});
-
-// Batteries included: the OpenAI-compatible client, pointed at any endpoint.
-const model = new OpenAICompatibleModel({
-  apiKey: "<replace-here>", // your Featherless API key
-  baseURL: "https://api.featherless.ai/v1",
-  model: "zai-org/GLM-5.2",
-});
-
-// onEvent is your renderer. The loop is headless and emits a typed AgentEvent
-// stream — `render` handles every event that flows through the loop.
-function render(e: AgentEvent) {
-  switch (e.type) {
-    case AgentEventType.AgentStart:
-      console.log(`▶ start · session ${e.sessionId}`);
-      break;
-    case AgentEventType.TurnStart:
-      console.log(`\n— turn ${e.step} —`);
-      break;
-    case AgentEventType.ReasoningDelta:
-      // The reasoning channel — dim it so it reads as distinct from the answer.
-      process.stdout.write(`\x1b[2m${e.text}\x1b[22m`);
-      break;
-    case AgentEventType.TextDelta:
-      process.stdout.write(e.text);
-      break;
-    case AgentEventType.Message:
-      console.log(`\n· ${e.message.role} message complete`);
-      break;
-    case AgentEventType.ToolStart:
-      console.log(`→ ${e.toolName}(${JSON.stringify(e.args)})`);
-      break;
-    case AgentEventType.ToolEnd:
-      console.log(`← ${e.toolName} [${e.isError ? "error" : "ok"}]: ${e.result}`);
-      break;
-    case AgentEventType.AgentEnd:
-      console.log(`\n■ done · ${e.steps} steps`);
-      break;
-  }
-}
-
-// Read the question from the terminal instead of hardcoding it — type something
-// like "What's the weather in Paris?" when prompted.
-const rl = createInterface({ input, output });
-const prompt = await rl.question("you › ");
-rl.close();
-
-const result = await runAgent({
-  model,
-  memory: new SessionMemoryStore(), // batteries-included in-memory conversation store
-  sessionId: "demo",
-  prompt, // whatever you typed above
-  tools: [weather],
-  onEvent: render, // the named renderer defined above
-});
-
-console.log(`\n${result.messages.at(-1)?.content}`);
-```
+<include>../../snippets/single-turn-loop.mdx</include>
 
 <Callout title="A building block for sub-agents">
   Because a single-turn run is just `prompt → result`, it's the natural unit for
@@ -130,77 +59,11 @@ The single-turn loop above sends one prompt. To hold a *conversation*, call
 `runAgent` again with the **same `memory` and `sessionId`** — each run loads the
 prior history, appends the new turn, and writes the model's reply back, so the
 next run already remembers everything before it. A chat loop is just that call
-inside a read-input loop:
+inside a read-input loop, reusing the `model`, `weather` tool, and `render` from
+the single-turn example above. Like that snippet, it's **embedded from the
+runnable example**:
 
-```ts
-import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "agent-core";
-import { OpenAICompatibleModel } from "agent-core/providers/openai";
-import type { AgentEvent } from "agent-core";
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
-import { z } from "zod";
-
-const weather = defineTool({
-  name: "weather",
-  description: "Get the current weather for a city.",
-  parameters: z.object({ city: z.string().describe("City to look up.") }),
-  execute: async ({ city }) => {
-    // Replace with a real API call to fetch the weather.
-    return { content: `Sunny in ${city}` };
-  },
-});
-
-const model = new OpenAICompatibleModel({
-  apiKey: "<replace-here>", // your Featherless API key
-  baseURL: "https://api.featherless.ai/v1",
-  model: "zai-org/GLM-5.2",
-});
-
-// The same named `render` from the single-turn loop above — it handles every
-// event the loop emits.
-function render(e: AgentEvent) {
-  switch (e.type) {
-    case AgentEventType.AgentStart:
-      console.log(`▶ start · session ${e.sessionId}`);
-      break;
-    case AgentEventType.TurnStart:
-      console.log(`\n— turn ${e.step} —`);
-      break;
-    case AgentEventType.ReasoningDelta:
-      // The reasoning channel — dim it so it reads as distinct from the answer.
-      process.stdout.write(`\x1b[2m${e.text}\x1b[22m`);
-      break;
-    case AgentEventType.TextDelta:
-      process.stdout.write(e.text);
-      break;
-    case AgentEventType.Message:
-      console.log(`\n· ${e.message.role} message complete`);
-      break;
-    case AgentEventType.ToolStart:
-      console.log(`→ ${e.toolName}(${JSON.stringify(e.args)})`);
-      break;
-    case AgentEventType.ToolEnd:
-      console.log(`← ${e.toolName} [${e.isError ? "error" : "ok"}]: ${e.result}`);
-      break;
-    case AgentEventType.AgentEnd:
-      console.log(`\n■ done · ${e.steps} steps`);
-      break;
-  }
-}
-
-const memory = new SessionMemoryStore(); // one store, reused every turn
-const sessionId = "chat";                // same id every turn → one conversation
-const rl = createInterface({ input, output });
-
-while (true) {
-  const prompt = (await rl.question("\nyou › ")).trim();
-  if (prompt === "" || prompt === "exit") break;
-
-  process.stdout.write("bot › ");
-  await runAgent({ model, memory, sessionId, prompt, tools: [weather], onEvent: render });
-}
-rl.close();
-```
+<include>../../snippets/multi-turn-chat-loop.mdx</include>
 
 <Callout title="Why it remembers">
   Nothing about multi-turn is special-cased in the loop: `runAgent` reads history

@@ -76,6 +76,7 @@ function render(e: AgentEvent) {
   }
 }
 
+// #region chat-loop
 const memory = new SessionMemoryStore(); // one store, reused every turn
 const sessionId = "chat"; //               same id every turn → one conversation
 const rl = createInterface({ input, output });
@@ -88,3 +89,4 @@ while (true) {
   await runAgent({ model, memory, sessionId, prompt, tools: [weather], onEvent: render });
 }
 rl.close();
+// #endregion
