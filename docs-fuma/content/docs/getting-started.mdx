@@ -18,7 +18,7 @@ The loop (`runAgent`) only ever depends on these interfaces:
 | Capabilities | `Tool`          | `defineTool(...)`               |
 | Stopping     | `StopCondition` | `maxSteps`, `whenToolCalled`    |
 
-## The loop
+## The Core Agentic Loop
 
 <LoopDiagram />
 
@@ -115,6 +115,14 @@ const result = await runAgent({
 
 console.log(`\n${result.messages.at(-1)?.content}`);
 ```
+
+<Callout title="A building block for sub-agents">
+  Because a single-turn run is just `prompt → result`, it's the natural unit for
+  a **sub-agent**: give a focused `runAgent` call its own tools, system prompt,
+  and a fresh `SessionMemoryStore`, then expose it as a tool the parent agent can
+  call. The parent gets back one result, and the sub-agent's intermediate turns
+  stay out of the parent's context.
+</Callout>
 
 ## Multi-turn chat loop
 
