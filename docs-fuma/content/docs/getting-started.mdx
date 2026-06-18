@@ -203,6 +203,16 @@ rl.close();
   restarts.
 </Callout>
 
+## Planning tools
+
+A long, multi-step task needs the model to hold a **plan** and a **to-do list** it
+can revise across turns — and the trick is to make it *write to a tool*, since a
+tool result stays in the transcript while a turn's private reasoning doesn't. Two
+batteries-included tool sets, `scratchpadTools()` and `todoListTools()`, do
+exactly that, each backed by a swappable in-memory store. They have their own
+short tutorial — **[Planning tools](/docs/planning-tools)** — covering both tool
+sets and the stores behind them.
+
 ## Bring your own renderer
 
 The loop is **headless**: the `onEvent` handler above is a renderer — `onEvent`
@@ -213,76 +223,22 @@ renderer (Part 1) and the ready-made `Tracer` (Part 2).
 
 ## Bring your own model client
 
-The single-turn loop uses the built-in `OpenAICompatibleModel`. For a
-different provider, transport, or wire format, `ModelClient` is just one
-method — implement `stream()` yourself. Map `req.messages` / `req.tools` to your
-API, then translate its streamed chunks into `StreamEvent`s; any
-OpenAI-compatible endpoint works with a raw `fetch`, no package needed.
+The single-turn loop uses the built-in `OpenAICompatibleModel`. For a different
+provider, transport, or wire format, `ModelClient` is just one method —
+implement `stream()` yourself. It has its own short tutorial —
+**[Bring your own model client](/docs/bring-your-own-model-client)** — covering
+the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
 
-```ts
-import type { ModelClient, ModelRequest, StreamEvent } from "agent-core";
+## Gating tool calls
 
-export class MyModel implements ModelClient {
-  async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
-    // map req.messages / req.tools → your API, then translate its streamed
-    // chunks into { type: "text_delta" } / { type: "tool_call" } / { type: "done" }.
-  }
-}
-```
-
-## Gating tool calls (permissions)
-
-Tool gating is **batteries-included**: pair the `gateToolCalls` hook with the
-shipped `permissionGate` and `InMemoryPermissionStore` for an allow / deny /
-**ask** policy — no custom gate to write.
-
-The whole turn's tool calls arrive together, so admission is a **batch**
-concern. The `gateToolCalls` hook runs once per turn — serially, *before* the
-parallel execution phase — and returns one decision per call. Denied calls
-never run; they become error tool-results the model can react to. Because
-gating happens in this single up-front phase, an interactive permission prompt
-never races the parallel tool execution.
-
-`permissionGate` implements the hook as an allow / deny / **ask** policy from
-two small seams: a `PermissionStore` (the config the loop reads, and where
-"always" choices are persisted) and an `ApprovalPrompter` (how you ask the user
-when the policy is "ask").
-
-```ts
-import {
-  runAgent,
-  permissionGate,
-  InMemoryPermissionStore,
-  PermissionPolicy,
-  ApprovalChoice,
-} from "agent-core";
-import type { ApprovalPrompter } from "agent-core";
-
-// Config: read tool policies from anywhere. Ask means prompt the user.
-const store = new InMemoryPermissionStore({
-  fallback: PermissionPolicy.Ask,
-  rules: {
-    read_file: PermissionPolicy.Allow,
-    deploy: PermissionPolicy.Deny,
-  },
-});
-
-// CLI prompter: present the pending calls and return a choice each.
-const prompter: ApprovalPrompter = {
-  async ask(batch) {
-    return batch.map(() => ApprovalChoice.AllowOnce);
-  },
-};
-
-await runAgent({
-  // model, memory, sessionId, prompt, tools,
-  hooks: { gateToolCalls: permissionGate(store, prompter) },
-});
-```
-
-An `AllowAlways` / `DenyAlways` choice is written back to the store, so the next
-run — even a fresh CLI process backed by a file store — won't ask again. Swap
-`InMemoryPermissionStore` for a durable store to persist decisions across runs.
+Some tool calls are risky enough that a human should approve them first. The
+`gateToolCalls` hook is a single admission point — run once per turn, before any
+tool executes — and gating is batteries-included: pair it with the shipped
+`permissionGate` and `InMemoryPermissionStore` for an allow / deny / **ask**
+policy. It has its own short tutorial —
+**[Gating tool calls](/docs/gating-tool-calls)** — covering the permission policy
+and composing it with `withCredentials` for a tool that needs a secret *and*
+approval.
 
 ## Tests
 
