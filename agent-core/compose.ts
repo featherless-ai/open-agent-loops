@@ -14,7 +14,7 @@
  * @module
  */
 
-import type { ModelClient, StreamEvent } from "./model.types";
+import type { ModelClient, ModelRequest, StreamEvent } from "./model.types";
 import type { Memory, MemoryListener } from "./memory/memory.types";
 
 /**
@@ -48,6 +48,61 @@ export function withModelObserver(
           onEvent(event);
           yield event;
         }
+      })();
+    },
+  };
+}
+
+/**
+ * A pre-call admission gate awaited before each model request.
+ *
+ * @remarks
+ * Receives the outgoing {@link ModelRequest} — including its `signal` — and
+ * resolves to admit the call or rejects to refuse it. A gate that *waits* for
+ * capacity (a live concurrency budget) MUST honor `request.signal`, so a run
+ * cancelled while parked in the gate unwinds instead of hanging.
+ *
+ * @param request - The request about to be sent.
+ * @group Composition
+ */
+export type ModelGate = (request: ModelRequest) => void | Promise<void>;
+
+/**
+ * Wrap a {@link ModelClient} so a {@link ModelGate} runs before each stream —
+ * the "can I make this call?" seam.
+ *
+ * @remarks
+ * The gate is awaited *before* `model.stream` is even invoked, so a gate that
+ * backpressures on a full concurrency budget holds the turn at the model boundary
+ * without converting messages or touching the wire. Once it resolves, the call
+ * proceeds and every {@link StreamEvent} is forwarded unchanged; if it rejects
+ * (e.g. the run was aborted while waiting), the stream rejects and the inner
+ * model is never called.
+ *
+ * Composition, not a subclass — stack it with {@link withModelObserver} freely.
+ *
+ * @param model - The model client to wrap.
+ * @param gate - The admission gate awaited before each request.
+ * @returns A {@link ModelClient} that gates every stream on `gate`.
+ * @example
+ * ```ts
+ * // Park the call until the live Featherless budget has room; cancel-aware.
+ * const gated = withModelGate(model, async (req) => {
+ *   while (meter.limit !== null && meter.used >= meter.limit) {
+ *     req.signal?.throwIfAborted();
+ *     await meter.nextFrame();
+ *   }
+ * });
+ * ```
+ * @see {@link withModelObserver}
+ * @group Composition
+ */
+export function withModelGate(model: ModelClient, gate: ModelGate): ModelClient {
+  return {
+    stream(request) {
+      return (async function* () {
+        await gate(request);
+        yield* model.stream(request);
       })();
     },
   };

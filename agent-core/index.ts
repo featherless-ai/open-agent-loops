@@ -155,7 +155,13 @@ export type { TodoItem, TodoStatus, TodoStore } from "./tools/builtin/todo-list"
 export { all, any, maxSteps, not, whenToolCalled } from "./stop/conditions";
 export type { StopCondition, StopContext } from "./stop/conditions.types";
 
-export { withMemoryListeners, withMemoryNamespace, withModelObserver } from "./compose";
+export {
+  withMemoryListeners,
+  withMemoryNamespace,
+  withModelGate,
+  withModelObserver,
+  type ModelGate,
+} from "./compose";
 
 export {
   injectReasoningKwargs,
