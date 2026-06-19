@@ -1,5 +1,5 @@
 ---
-title: Permissions & credentials
+title: Permissions & Credentials
 description: A short guide — admit, deny, or ask before tool calls run, and compose permissions with credentials, the same way you'd guard a skill's tools.
 ---
 
@@ -94,7 +94,7 @@ Return `ApprovalChoice.AllowAlways` / `DenyAlways` instead of the "once" variant
 and `permissionGate` writes that policy back to the store, so the next turn — or,
 with a file-backed store, the next run — won't ask again.
 
-## Both at once: a tool that needs a secret *and* approval
+## Both at Once: A Tool That Needs a Secret *and* Approval
 
 A real `deploy` also needs a **credential** to authenticate — and you don't want
 the token in the model's view or the transcript. That's a second, independent

@@ -1,5 +1,5 @@
 ---
-title: Bring your own model client
+title: Bring Your Own Model Client
 description: A short guide — implement the one-method ModelClient seam for any provider, transport, or wire format.
 ---
 
@@ -21,7 +21,7 @@ async iterable of `StreamEvent`s. You emit:
 - `error` — instead of `done`, if the turn fails; it carries whatever was
   assembled so far.
 
-## Part 1 — the contract
+## Part 1 — The Contract
 
 The smallest possible client emits nothing but the answer and the terminal
 `done`. No network — just the shape, so you can see every moving part:
@@ -57,7 +57,7 @@ await runAgent({
 That's a complete, loop-compatible model client. Everything else is mapping a
 *real* provider onto these same four event types.
 
-## Part 2 — a real provider over raw `fetch`
+## Part 2 — A Real Provider Over Raw `fetch`
 
 Any OpenAI-compatible endpoint works with a raw `fetch` — no package needed.
 Map `req.messages` / `req.tools` to the wire on the way in, then translate the

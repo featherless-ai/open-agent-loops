@@ -1,5 +1,5 @@
 ---
-title: Bring your own renderer
+title: Bring Your Own Renderer
 description: A short guide — render the agent loop's event stream however you like.
 ---
 
@@ -9,7 +9,7 @@ how to present them. This guide picks up where the
 [single-turn agent loop](/docs/getting-started#single-turn-agent-loop) leaves off, and
 shows the two ways to render a run.
 
-## Part 1 — render the event stream yourself
+## Part 1 — Render the Event Stream Yourself
 
 A renderer is just a function over the event stream. Switch on the event `type`
 and present each one however you like — stdout here, but swap it for DOM nodes in
@@ -39,7 +39,7 @@ await runAgent({ model, memory, sessionId, prompt, tools, onEvent: render });
 Because the loop is platform-free, the same handler drives a CLI or a browser UI
 unchanged — render to the terminal on the server, to the DOM in the client.
 
-## Part 2 — ready-made: the Tracer
+## Part 2 — Ready-Made: The Tracer
 
 Don't want to hand-write a renderer? Point a `Tracer` at the same events for a
 timestamped timeline and a per-turn trajectory view:

@@ -1,5 +1,5 @@
 ---
-title: Getting started
+title: Getting Started
 description: Run your first agent loop, add a real model client, and gate tool calls.
 ---
 
@@ -7,7 +7,7 @@ description: Run your first agent loop, add a real model client, and gate tool c
 piece sits behind an interface so it can be swapped without touching the loop —
 the point of the package is to make the **components of the agent plug-and-play, independently testable, and reliable**.
 
-## The seams
+## The Seams
 
 The loop (`runAgent`) only ever depends on these interfaces:
 
@@ -26,7 +26,7 @@ Each turn streams an assistant message; if it makes tool calls, the loop runs
 them, appends the results, and repeats — until the model returns a final answer,
 a tool sets `terminate`, or a `stopWhen` / `maxSteps` condition fires.
 
-## Single-turn agent loop
+## Single-Turn Agent Loop
 
 This talks to a **real API out of the box** with two batteries-included pieces:
 the `OpenAICompatibleModel` client (here pointed at Featherless, though any
@@ -53,7 +53,7 @@ drift from the code you'd actually run:
   stay out of the parent's context.
 </Callout>
 
-## Multi-turn chat loop
+## Multi-Turn Chat Loop
 
 The single-turn loop above sends one prompt. To hold a *conversation*, call
 `runAgent` again with the **same `memory` and `sessionId`** — each run loads the
@@ -74,40 +74,40 @@ runnable example**:
   restarts.
 </Callout>
 
-## Planning tools
+## Planning Tools
 
 A long, multi-step task needs the model to hold a **plan** and a **to-do list** it
 can revise across turns — and the trick is to make it *write to a tool*, since a
 tool result stays in the transcript while a turn's private reasoning doesn't. Two
 batteries-included tool sets, `scratchpadTools()` and `todoListTools()`, do
 exactly that, each backed by a swappable in-memory store. They have their own
-short guide — **[Planning tools](/docs/planning-tools)** — covering both tool
+short guide — **[Planning Tools](/docs/planning-tools)** — covering both tool
 sets and the stores behind them.
 
-## Bring your own renderer
+## Bring Your Own Renderer
 
 The loop is **headless**: the `onEvent` handler above is a renderer — `onEvent`
 emits a typed `AgentEvent` stream and you present it however you like (stdout,
 the DOM, a TUI, a log sink). It has its own short guide —
-**[Bring your own renderer](/docs/bring-your-own-renderer)** — covering a custom
+**[Bring Your Own Renderer](/docs/bring-your-own-renderer)** — covering a custom
 renderer (Part 1) and the ready-made `Tracer` (Part 2).
 
-## Bring your own model client
+## Bring Your Own Model Client
 
 The single-turn loop uses the built-in `OpenAICompatibleModel`. For a different
 provider, transport, or wire format, `ModelClient` is just one method —
 implement `stream()` yourself. It has its own short guide —
-**[Bring your own model client](/docs/bring-your-own-model-client)** — covering
+**[Bring Your Own Model Client](/docs/bring-your-own-model-client)** — covering
 the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
 
-## Permissions & credentials
+## Permissions & Credentials
 
 Some tool calls are risky enough that a human should approve them first. The
 `gateToolCalls` hook is a single admission point — run once per turn, before any
 tool executes — and gating is batteries-included: pair it with the shipped
 `permissionGate` and `InMemoryPermissionStore` for an allow / deny / **ask**
 policy. It has its own short guide —
-**[Permissions & credentials](/docs/gating-tool-calls)** — covering the permission policy
+**[Permissions & Credentials](/docs/gating-tool-calls)** — covering the permission policy
 and composing it with `withCredentials` for a tool that needs a secret *and*
 approval.
 

@@ -6,7 +6,7 @@ description: How the loop, events, hooks, tools, and composition fit together.
 This page is the mental model. For exact signatures, see the
 [API reference](/docs/api).
 
-## Composition over inheritance
+## Composition Over Inheritance
 
 Every piece sits behind an interface that you satisfy with a plain
 object/function, then optionally wrap with a decorator (the `with*` helpers) —
@@ -69,7 +69,7 @@ Use a `ToolRegistry` to keep a named catalog and resolve subsets by name (the
 workflow seam needs name → tool resolution because authored workflow code is a
 string).
 
-## Stop conditions
+## Stop Conditions
 
 A run ends when the model returns a final answer, a tool sets `terminate`, or a
 `StopCondition` fires. Combinators let you build predicates declaratively:
@@ -83,7 +83,7 @@ await runAgent({
 });
 ```
 
-## Composition decorators
+## Composition Decorators
 
 The `with*` helpers wrap a seam to add behavior without changing its callers:
 
@@ -93,7 +93,7 @@ The `with*` helpers wrap a seam to add behavior without changing its callers:
 - **`withCredentials`** — substitute secret placeholders into tool arguments on
   the way in and scrub them out of results on the way out.
 
-## Batteries included
+## Batteries Included
 
 You implement the seams, but you rarely start from nothing. The rule of thumb:
 **pure seams ship a ready-to-use implementation; host-binding seams ship the
