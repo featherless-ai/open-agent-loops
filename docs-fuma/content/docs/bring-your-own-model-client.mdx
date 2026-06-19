@@ -1,0 +1,174 @@
+---
+title: Bring Your Own Model Client
+description: A short guide — implement the one-method ModelClient seam for any provider, transport, or wire format.
+---
+
+The loop's only LLM dependency is **`ModelClient`** — and it is just one method,
+`stream()`. The built-in `OpenAICompatibleModel` is one implementation; this
+guide picks up where the
+[single-turn agent loop](/docs/getting-started#single-turn-agent-loop) leaves off
+and shows how to write your own for any provider, transport, or wire format.
+
+The contract is small. `stream()` receives a `ModelRequest` (the `system`
+prompt, the `messages` history, and any `tools` for this turn) and returns an
+async iterable of `StreamEvent`s. You emit:
+
+- `text_delta` / `reasoning_delta` — chunks of the answer and the thinking
+  channel, the moment they arrive;
+- `tool_call` — one per fully-formed call the model wants to make;
+- `done` — the terminal event, carrying the assembled assistant message (build
+  it with `assistantMessage(...)`);
+- `error` — instead of `done`, if the turn fails; it carries whatever was
+  assembled so far.
+
+## Part 1 — The Contract
+
+The smallest possible client emits nothing but the answer and the terminal
+`done`. No network — just the shape, so you can see every moving part:
+
+```ts
+import { runAgent, SessionMemoryStore, StreamEventType, assistantMessage } from "agent-core";
+import type { ModelClient, ModelRequest, StreamEvent } from "agent-core";
+
+// The whole interface is this one method.
+const echo: ModelClient = {
+  async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
+    const last = req.messages.at(-1);
+    const reply = `You said: ${typeof last?.content === "string" ? last.content : ""}`;
+
+    // Stream the answer (here, one chunk — a real client yields many).
+    yield { type: StreamEventType.TextDelta, text: reply };
+
+    // Terminal event: hand back the assembled assistant message for the turn.
+    yield { type: StreamEventType.Done, message: assistantMessage({ content: reply }) };
+  },
+};
+
+// Plug it in exactly where OpenAICompatibleModel went — the loop can't tell.
+await runAgent({
+  model: echo,
+  memory: new SessionMemoryStore(),
+  sessionId: "demo",
+  prompt: "hello",
+  tools: [],
+});
+```
+
+That's a complete, loop-compatible model client. Everything else is mapping a
+*real* provider onto these same four event types.
+
+## Part 2 — A Real Provider Over Raw `fetch`
+
+Any OpenAI-compatible endpoint works with a raw `fetch` — no package needed.
+Map `req.messages` / `req.tools` to the wire on the way in, then translate the
+streamed chunks into events on the way out. Tool-call arguments stream as string
+fragments, so accumulate them and emit each call whole at the end, just before
+the terminal `done`:
+
+```ts
+import { StreamEventType, ToolCallType, assistantMessage } from "agent-core";
+import type { ModelClient, ModelRequest, StreamEvent, ToolSpec, ToolCall } from "agent-core";
+
+export class MyModel implements ModelClient {
+  constructor(private readonly opts: { baseURL: string; apiKey: string; model: string }) {}
+
+  async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
+    // 1. Map the request to your provider's wire shape.
+    const body = {
+      model: this.opts.model,
+      stream: true,
+      messages: [
+        ...(req.system ? [{ role: "system", content: req.system }] : []),
+        ...req.messages, // already OpenAI-shaped here; remap field-by-field for other APIs
+      ],
+      ...(req.tools?.length ? { tools: req.tools.map(toWireTool) } : {}),
+    };
+
+    const res = await fetch(`${this.opts.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${this.opts.apiKey}` },
+      body: JSON.stringify(body),
+      signal: req.signal, // honor cancellation — the loop may abort the turn
+    });
+
+    // 2. Translate streamed chunks → StreamEvents.
+    let content = "";
+    const drafts = new Map<number, { id: string; name: string; args: string }>();
+
+    for await (const data of sseLines(res.body!)) {
+      if (data === "[DONE]") break;
+      const delta = JSON.parse(data).choices[0]?.delta;
+      if (!delta) continue;
+
+      if (delta.content) {
+        content += delta.content;
+        yield { type: StreamEventType.TextDelta, text: delta.content };
+      }
+      for (const call of delta.tool_calls ?? []) {
+        const d = drafts.get(call.index) ?? { id: "", name: "", args: "" };
+        if (call.id) d.id = call.id;
+        if (call.function?.name) d.name = call.function.name;
+        if (call.function?.arguments) d.args += call.function.arguments; // arguments stream in fragments
+        drafts.set(call.index, d);
+      }
+    }
+
+    // 3. Emit accumulated tool calls, then the terminal `done` message.
+    const toolCalls: ToolCall[] = [...drafts.values()].map((d) => ({
+      id: d.id,
+      type: ToolCallType.Function,
+      function: { name: d.name, arguments: d.args }, // keep `arguments` as the raw JSON string
+    }));
+    for (const toolCall of toolCalls) yield { type: StreamEventType.ToolCall, toolCall };
+
+    yield {
+      type: StreamEventType.Done,
+      message: assistantMessage({
+        content,
+        ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+      }),
+    };
+  }
+}
+
+// A ToolSpec is provider-neutral — map it to whatever shape your API expects.
+function toWireTool(spec: ToolSpec) {
+  return {
+    type: "function",
+    function: { name: spec.name, description: spec.description, parameters: spec.parameters },
+  };
+}
+
+// Decode an SSE byte stream into the JSON payload after each `data:` line.
+async function* sseLines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line.startsWith("data: ")) yield line.slice(6);
+    }
+  }
+}
+```
+
+Wrap the loop body in a `try/catch` and `yield { type: StreamEventType.Error, error, message }`
+on a mid-stream throw — the loop reads the partial `message` and surfaces the
+failure instead of stalling on a silent empty turn.
+
+<Callout title="Already OpenAI-compatible? Use the battery.">
+  If your endpoint speaks the OpenAI chat-completions wire format, you don't need
+  any of this — `OpenAICompatibleModel` from `agent-core/providers/openai` is a
+  complete `ModelClient` for Featherless, vLLM, Together, Groq, Fireworks,
+  DeepSeek, and more. Reach for a hand-written client only when your provider
+  isn't OpenAI-compatible, or you want a different transport. Reasoning models
+  add one wrinkle the battery already handles — they stream chain-of-thought on a
+  non-standard field and accept it back on another — see
+  [Concepts](/docs/concepts) and the [API reference](/docs/api).
+</Callout>

@@ -22,7 +22,7 @@
  *
  * @example Minimal run
  * ```ts
- * import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
+ * import { runAgent, SessionMemoryStore, defineTool } from "agent-core";
  *
  * const result = await runAgent({
  *   model,                       // your ModelClient
@@ -43,7 +43,11 @@ export type {
   AgentEvent,
   AgentEventBody,
   AssistantMessage,
+  AudioPart,
+  ContentPart,
   EventSink,
+  FilePart,
+  ImagePart,
   Message,
   ReasoningDetail,
   ReasoningDetailBase,
@@ -51,6 +55,7 @@ export type {
   ReasoningSummaryDetail,
   ReasoningTextDetail,
   SystemMessage,
+  TextPart,
   ToolArguments,
   ToolCall,
   ToolMessage,
@@ -69,6 +74,10 @@ export { isAssistantMessage, isToolMessage } from "./types";
 // Factories that construct a message of each role: they pin the `role`
 // discriminant and you fill in the rest (`assistantMessage({ content })`).
 export { assistantMessage, systemMessage, toolMessage, userMessage } from "./types";
+
+// Multimodal content parts for a user turn (text / image / audio / file) + their
+// factories, plus `contentToText` to flatten a part array for display/logging.
+export { audioPart, contentToText, filePart, imagePart, textPart } from "./types";
 
 export type {
   ModelClient,
@@ -102,7 +111,12 @@ export { formatShellResult, shellTool } from "./tools/builtin/shell";
 export { formatSearchResults, searchTool } from "./tools/builtin/search";
 export { formatFileContent, formatGlobMatches, globTool, readTool } from "./tools/builtin/file-read";
 export { editTool, formatEditResult, formatWriteResult, writeTool } from "./tools/builtin/file-write";
+export { formatWebFetchResult, formatWebSearchResults, webFetchTool, webSearchTool } from "./tools/builtin/web";
+export { browserTools, formatBrowserSnapshot } from "./tools/builtin/browser";
 export type {
+  BrowserElement,
+  BrowserSession,
+  BrowserSnapshot,
   FileEditRequest,
   FileEditResult,
   FileReadBackend,
@@ -117,6 +131,11 @@ export type {
   SearchQuery,
   ShellBackend,
   ShellResult,
+  WebBackend,
+  WebFetchRequest,
+  WebFetchResult,
+  WebSearchQuery,
+  WebSearchResult,
 } from "./tools/builtin/builtin.types";
 
 // Planning tools: fully shipped (pure in-memory, no host binding), with a
@@ -136,7 +155,13 @@ export type { TodoItem, TodoStatus, TodoStore } from "./tools/builtin/todo-list"
 export { all, any, maxSteps, not, whenToolCalled } from "./stop/conditions";
 export type { StopCondition, StopContext } from "./stop/conditions.types";
 
-export { withMemoryListeners, withMemoryNamespace, withModelObserver } from "./compose";
+export {
+  withMemoryListeners,
+  withMemoryNamespace,
+  withModelGate,
+  withModelObserver,
+  type ModelGate,
+} from "./compose";
 
 export {
   injectReasoningKwargs,
@@ -151,10 +176,12 @@ export type {
   Hooks,
   RunAgentOptions,
   RunResult,
-  ToolCallDecision,
   ToolGateRequest,
   ToolResultOverride,
 } from "./primitives/loop";
+
+export { MessageQueue } from "./primitives/message-queue";
+export type { DrainMode, MessageQueueOptions } from "./primitives/message-queue";
 
 export { withCredentials } from "./credentials/with-credentials";
 export { InMemoryCredentialStore } from "./credentials/in-memory-credential-store";
@@ -173,3 +200,21 @@ export type {
   PermissionStore,
 } from "./permissions/permissions.types";
 export { ApprovalChoice, PermissionPolicy } from "./permissions/permissions.types";
+
+// Observability: a passive Tracer that records a run's trajectory off the
+// existing event/model/SSE seams, plus the async batched writer it uses for I/O.
+export { Tracer } from "./observability/tracer";
+export type { FormatOptions, TraceDocument, TracerOptions } from "./observability/tracer";
+export { AsyncWriter } from "./observability/async-writer";
+export type { AsyncWriterOptions } from "./observability/async-writer";
+export type {
+  CompactEntry,
+  DisclosureStep,
+  RawSSE,
+  RequestSnapshot,
+  TraceEntry,
+  TraceMeta,
+  TraceSource,
+  TrajectoryStep,
+  TrajectoryTool,
+} from "./observability/tracer.types";

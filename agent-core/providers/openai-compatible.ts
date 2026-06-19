@@ -5,8 +5,8 @@
  *
  * `openai` is an OPTIONAL peer dependency — install it only if you use this
  * provider. The core loop never imports it; you reach this file by its own
- * path (`~/agent-core/providers/openai-compatible`), so consumers who bring
- * their own ModelClient never pull the SDK in.
+ * subpath (`agent-core/providers/openai`), so consumers who bring their own
+ * ModelClient never pull the SDK in.
  *
  * Reasoning: OpenAI-compatible reasoning models stream chain-of-thought on a
  * non-standard delta field — `reasoning` (current vLLM / OpenAI-style) or
@@ -33,13 +33,14 @@
 import OpenAI from "openai";
 import type { ModelClient, ModelRequest, ModelStream, StreamEvent, ToolSpec } from "../model.types";
 import { StreamEventType } from "../model.types";
-import type { AssistantMessage, Message, ReasoningDetail, ToolCall } from "../types";
+import type { AssistantMessage, ContentPart, Message, ReasoningDetail, ToolCall } from "../types";
 import { assistantMessage, FinishReason, ReasoningFormat, Role, ToolCallType } from "../types";
 import type { ThinkingMode } from "./reasoning-kwargs";
 import { reasoningKwargsFor } from "./reasoning-kwargs";
 
 type ChatParams = OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+type ChatContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
 type ChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
@@ -74,6 +75,14 @@ export interface OpenAICompatibleOptions {
    * only — it cannot change what the loop receives.
    */
   onRawSSE?: (line: string) => void;
+  /**
+   * Developer tap on the resolved request config, fired once per `stream()` call
+   * just before the request goes out: the model id, the sampling `params`, and
+   * the `system` prompt for this call. Symmetric with {@link onRawSSE} —
+   * observability only; it cannot change the request. (Message history and tools
+   * aren't included here: they already surface through the loop's events.)
+   */
+  onRequest?: (info: { model: string; params: Record<string, unknown>; system?: string }) => void;
   /**
    * Per-request timeout in milliseconds. A request that exceeds this aborts and
    * surfaces as an {@link StreamEventType.Error} event (the SDK throws
@@ -123,6 +132,9 @@ export interface OpenAICompatibleOptions {
  *
  * @example
  * ```ts
+ * import { OpenAICompatibleModel } from "agent-core/providers/openai";
+ * import { Role, StreamEventType } from "agent-core";
+ *
  * const model = new OpenAICompatibleModel({
  *   model: "deepseek-ai/DeepSeek-V3.1",
  *   baseURL: "https://api.featherless.ai/v1",
@@ -140,6 +152,7 @@ export class OpenAICompatibleModel implements ModelClient {
   private readonly model: string;
   private readonly extra: OpenAICompatibleOptions["params"];
   private readonly chatTemplateKwargs: OpenAICompatibleOptions["chatTemplateKwargs"];
+  private readonly onRequest: OpenAICompatibleOptions["onRequest"];
 
   /**
    * Create a model client for an OpenAI-compatible endpoint.
@@ -149,6 +162,7 @@ export class OpenAICompatibleModel implements ModelClient {
   constructor(options: OpenAICompatibleOptions) {
     this.model = options.model;
     this.extra = options.params;
+    this.onRequest = options.onRequest;
     // Explicit kwargs win; otherwise derive them from the model id for the
     // requested thinking state. Unset `thinking` keeps the legacy behavior
     // (inject nothing).
@@ -195,6 +209,16 @@ export class OpenAICompatibleModel implements ModelClient {
       ...(this.chatTemplateKwargs ? { chat_template_kwargs: this.chatTemplateKwargs } : {}),
     };
 
+    // Observability tap: report the model id, sampling params, and system prompt
+    // for this call. Never let a misbehaving tap break the request.
+    if (this.onRequest) {
+      try {
+        this.onRequest({ model: this.model, params: { ...this.extra }, system: request.system });
+      } catch {
+        // best-effort debugging tap
+      }
+    }
+
     let chunks: AsyncIterable<ChatChunk>;
     try {
       chunks = await this.client.chat.completions.create(params, { signal: request.signal });
@@ -233,7 +257,7 @@ function toChatMessage(message: Message): ChatMessage {
     case Role.System:
       return { role: "system", content: message.content };
     case Role.User:
-      return { role: "user", content: message.content };
+      return { role: "user", content: toWireContent(message.content) };
     case Role.Tool:
       return { role: "tool", tool_call_id: message.tool_call_id, content: message.content };
     case Role.Assistant: {
@@ -257,6 +281,18 @@ function toChatMessage(message: Message): ChatMessage {
       throw new Error(`Unknown message role: ${String(unreachable)}`);
     }
   }
+}
+
+/**
+ * Map a user turn's content to the wire. A plain string passes straight through;
+ * a multimodal {@link ContentPart}[] is — by construction (see content-part.ts) —
+ * the exact shape of OpenAI's `ChatCompletionContentPart`, so it crosses the
+ * egress boundary verbatim rather than being remapped field by field.
+ *
+ * @internal
+ */
+function toWireContent(content: string | ContentPart[]): string | ChatContentPart[] {
+  return typeof content === "string" ? content : (content as ChatContentPart[]);
 }
 
 /**

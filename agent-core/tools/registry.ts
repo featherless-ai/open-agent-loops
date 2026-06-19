@@ -18,10 +18,9 @@ import type { Tool } from "./tools.types";
  * the loop.
  *
  * Why it exists: tools are authored as objects, but some callers only have
- * *names*. The workflow seam is the prime example — authored workflow code is a
- * string and can only name the tools a step may use (see
- * `../workflow/workflow.types.ts`), so it needs a name → {@link Tool} resolver.
- * That resolver is this registry.
+ * *names* — config, a CLI flag, or a stored list that names the tools a given
+ * run may use. Those callers need a name → {@link Tool} resolver; that resolver
+ * is this registry.
  *
  * Fail fast (per the project's error-handling rule): registering a duplicate
  * name ({@link ToolRegistry.register}) or resolving an unknown one
@@ -121,9 +120,9 @@ export class ToolRegistry {
    * Resolve a list of names to their tools, in the order requested.
    *
    * @remarks
-   * Throws on the first unknown name (listing what *is* available), so a
-   * workflow step that asks for a tool the executor never registered fails
-   * loudly at wiring time instead of silently running without it.
+   * Throws on the first unknown name (listing what *is* available), so a caller
+   * that asks for a tool that was never registered fails loudly at wiring time
+   * instead of silently running without it.
    *
    * @param names - The tool names to resolve, in the order they should appear.
    * @returns The matching tools, in the requested order.

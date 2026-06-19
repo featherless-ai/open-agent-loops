@@ -20,6 +20,7 @@ import type {
   AgentEventBody,
   AssistantMessage,
   EventSink,
+  InjectedMessageOrigin,
   Message,
   ToolArguments,
   ToolCall,
@@ -74,22 +75,6 @@ export interface GateDecision {
 }
 
 /**
- * What a {@link Hooks.beforeToolCall} hook returns to admit or block a call.
- *
- * @remarks
- * Returning nothing (or `block` falsy) lets the call proceed.
- *
- * @see {@link Hooks.beforeToolCall}
- * @group Hooks & Gating
- */
-export interface ToolCallDecision {
-  /** When true, block the call instead of executing it. */
-  block?: boolean;
-  /** Optional human-readable reason, surfaced as the blocked call's result. */
-  reason?: string;
-}
-
-/**
  * What a {@link Hooks.afterToolCall} hook returns to override a result.
  *
  * @remarks
@@ -112,8 +97,8 @@ export interface ToolResultOverride {
  * Every hook is optional and may be sync or async. They run at fixed points in
  * a turn: {@link Hooks.transformContext | transformContext} just before the
  * model call, {@link Hooks.gateToolCalls | gateToolCalls} once per turn ahead of
- * execution, then {@link Hooks.beforeToolCall | beforeToolCall} /
- * {@link Hooks.afterToolCall | afterToolCall} around each individual call.
+ * execution — the single point that admits or blocks calls — then
+ * {@link Hooks.afterToolCall | afterToolCall} after each individual call runs.
  *
  * @group Hooks & Gating
  */
@@ -155,16 +140,6 @@ export interface Hooks {
    */
   gateToolCalls?(batch: ToolGateRequest[]): GateDecision[] | Promise<GateDecision[]>;
   /**
-   * Inspect/block a tool call before it executes.
-   *
-   * @param info - The call and its validated `args`.
-   * @returns Nothing to proceed, or a {@link ToolCallDecision} to block it.
-   */
-  beforeToolCall?(info: {
-    toolCall: ToolCall;
-    args: ToolArguments;
-  }): void | ToolCallDecision | Promise<void | ToolCallDecision>;
-  /**
    * Inspect/override a tool result after it executes.
    *
    * @param info - The call, its `args`, the produced `result`, and `isError`.
@@ -176,6 +151,45 @@ export interface Hooks {
     result: ToolResult;
     isError: boolean;
   }): void | ToolResultOverride | Promise<void | ToolResultOverride>;
+  /**
+   * Pull queued *steering* messages to inject before the next turn.
+   *
+   * @remarks
+   * The loop calls this once per turn, right after the turn's tool results are
+   * recorded — so `tool_use`/`tool_result` pairing is always intact and the next
+   * turn sees `[assistant tool_calls][tool results][steering]`. Returning a
+   * non-empty array redirects the run: the messages are appended (and emitted as
+   * {@link AgentEventType.MessageInjected | message_injected}), and the run takes
+   * another turn even if a tool asked to {@link ToolResult.terminate | terminate}
+   * or a {@link RunAgentOptions.stopWhen | stopWhen} would have fired. It never
+   * overrides the {@link RunAgentOptions.maxSteps | maxSteps} cap — neither queue
+   * is drained once the cap is reached, so queued messages stay for a later run.
+   *
+   * The caller owns the queue; the loop only pulls. Returning how *many* messages
+   * (one vs all queued) is the caller's "one-at-a-time" vs "all" policy. This is
+   * the seam steering only matters across — input that arrives *while a run is in
+   * flight* — so the feeding source must be non-blocking.
+   *
+   * @returns Messages to inject now, or an empty array to leave the run as-is.
+   */
+  drainSteering?(): Message[] | Promise<Message[]>;
+  /**
+   * Pull queued *follow-up* messages when the run would otherwise stop at a
+   * natural final answer (a turn with no tool calls).
+   *
+   * @remarks
+   * Returning a non-empty array continues the run in place — the messages are
+   * appended (and emitted as
+   * {@link AgentEventType.MessageInjected | message_injected}) and another turn
+   * runs — instead of ending. Keeping it one continuous run (rather than a fresh
+   * {@link runAgent} call) is what keeps the trace a single
+   * `agent_start → agent_end` with monotonic steps. Like
+   * {@link Hooks.drainSteering | drainSteering}, it is not consulted once the
+   * {@link RunAgentOptions.maxSteps | maxSteps} cap is reached.
+   *
+   * @returns Messages to inject now, or an empty array to let the run end.
+   */
+  drainFollowUp?(): Message[] | Promise<Message[]>;
 }
 
 /**
@@ -294,7 +308,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const messages: Message[] = [...history, ...prompts];
   await memory.append(sessionId, prompts);
 
-  await emit({ type: AgentEventType.AgentStart, sessionId });
+  await emit({ type: AgentEventType.AgentStart, sessionId, system, tools: toolSpecs });
   for (const prompt of prompts) {
     await emit({ type: AgentEventType.Message, message: prompt });
   }
@@ -333,9 +347,16 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
 
     const toolCalls = assistant.tool_calls ?? [];
 
-    // Natural stop: a turn with no tool calls is the final answer.
+    // Natural stop: a turn with no tool calls is the final answer. Before
+    // ending, drain any queued follow-ups so the run continues in place (one
+    // trace, monotonic steps) instead of ending. Not consulted at the cap, so a
+    // queued follow-up survives for a later run rather than running uncapped.
     if (toolCalls.length === 0) {
-      break;
+      const followUps =
+        steps < maxSteps && hooks.drainFollowUp ? await hooks.drainFollowUp() : [];
+      if (followUps.length === 0) break;
+      await injectMessages("follow_up", followUps, messages, newMessages, memory, sessionId, emit);
+      continue;
     }
 
     // --- phase 1: gate the whole batch up front (serial) -----------------
@@ -343,30 +364,29 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     // once, ahead of execution, and never races the parallel phase below.
     const gate = await gateToolBatch(toolCalls, toolsByName, hooks);
 
-    const approved: ToolCall[] = [];
-    const deniedResults: ToolMessage[] = [];
+    // One result slot per call, kept in the original request order so the model
+    // sees one tool-result per call in the order it asked. Denied calls fill
+    // their slot now; approved calls remember their slot and fill it after they
+    // execute below.
+    const results: ToolMessage[] = new Array(toolCalls.length);
+    const approved: Array<{ slot: number; call: ToolCall }> = [];
     for (let i = 0; i < toolCalls.length; i += 1) {
-      if (gate[i]!.allow) approved.push(toolCalls[i]!);
-      else deniedResults.push(await emitDenied(toolCalls[i]!, gate[i]!.reason, emit));
+      if (gate[i]!.allow) approved.push({ slot: i, call: toolCalls[i]! });
+      else results[i] = await emitDenied(toolCalls[i]!, gate[i]!.reason, emit);
     }
 
     // --- phase 2: execute the approved calls (parallel by default) -------
     const { results: executed, terminate } = await executeToolCalls(
-      approved,
+      approved.map((a) => a.call),
       toolsByName,
       hooks,
       toolExecution,
       emit,
       signal,
     );
-
-    // Reassemble results in the original call order (approved + denied), so the
-    // model sees one tool-result per call in the order it requested them.
-    let ai = 0;
-    let di = 0;
-    const results = toolCalls.map((_, i) =>
-      gate[i]!.allow ? executed[ai++]! : deniedResults[di++]!,
-    );
+    approved.forEach((a, k) => {
+      results[a.slot] = executed[k]!;
+    });
 
     for (const result of results) {
       messages.push(result);
@@ -374,13 +394,23 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
     }
     await memory.append(sessionId, results);
 
-    if (terminate) break;
+    // Steering: now that tool results are recorded (pairing intact), drain any
+    // queued steering messages before deciding whether to stop. Steering is an
+    // explicit redirect, so it overrides a tool's `terminate` and a `stopWhen` —
+    // but never the maxSteps cap, so it isn't drained once the cap is reached.
+    const steering =
+      steps < maxSteps && hooks.drainSteering ? await hooks.drainSteering() : [];
+    if (steering.length > 0) {
+      await injectMessages("steering", steering, messages, newMessages, memory, sessionId, emit);
+    } else {
+      if (terminate) break;
 
-    if (
-      stopWhen &&
-      (await stopWhen({ step: steps, assistant, toolResults: results, messages }))
-    ) {
-      break;
+      if (
+        stopWhen &&
+        (await stopWhen({ step: steps, assistant, toolResults: results, messages }))
+      ) {
+        break;
+      }
     }
 
     // Safety cap last, so a legitimate final turn at the limit still counts.
@@ -609,7 +639,7 @@ interface FinalizedCall {
 }
 
 /**
- * Validate -> beforeToolCall -> execute -> afterToolCall, never throwing.
+ * Validate -> execute -> afterToolCall, never throwing.
  *
  * @internal
  */
@@ -634,13 +664,7 @@ async function executeOne(
     try {
       const args = validateToolArguments(tool, call);
 
-      const before = await hooks.beforeToolCall?.({ toolCall: call, args });
-      if (before?.block) {
-        result = { content: before.reason ?? "Tool execution blocked" };
-        isError = true;
-      } else {
-        result = await tool.execute(args as never, { toolCallId: call.id, signal });
-      }
+      result = await tool.execute(args, { toolCallId: call.id, signal });
 
       const after = await hooks.afterToolCall?.({
         toolCall: call,
@@ -667,6 +691,35 @@ async function executeOne(
     isError,
   });
   return { message, terminate: result.terminate === true && !isError };
+}
+
+/**
+ * Append caller-injected messages (steering or follow-up) into the live run:
+ * push onto both the working history and `newMessages`, persist them, and emit a
+ * labeled {@link AgentEventType.MessageInjected} per message. Mirrors how the
+ * run's prompt is appended at the top of {@link runAgent}, so an injected turn
+ * is recorded and observable exactly like a normal one — only tagged with its
+ * `origin` so telemetry can tell *why* it appeared mid-trajectory.
+ *
+ * @internal
+ */
+async function injectMessages(
+  origin: InjectedMessageOrigin,
+  injected: Message[],
+  messages: Message[],
+  newMessages: Message[],
+  memory: Memory,
+  sessionId: string,
+  emit: Emit,
+): Promise<void> {
+  for (const message of injected) {
+    messages.push(message);
+    newMessages.push(message);
+  }
+  await memory.append(sessionId, injected);
+  for (const message of injected) {
+    await emit({ type: AgentEventType.MessageInjected, message, origin });
+  }
 }
 
 /**

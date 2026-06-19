@@ -77,67 +77,67 @@ export function toToolSpec(tool: Tool): ToolSpec {
 }
 
 /**
- * Validate a tool call against the tool's schema, returning the parsed arguments.
- *
- * @remarks
- * The call carries its arguments as a JSON *string* (the OpenAI wire format), so
- * this JSON-parses it first, then schema-checks. The loop converts a thrown
- * error into an error tool-result rather than crashing the run.
- *
- * @param tool - The tool whose schema the call is checked against.
- * @param call - The model-emitted tool call, whose `function.arguments` is a JSON string.
- * @returns The parsed, schema-valid arguments as an object.
- * @throws `Error` if the arguments are not valid JSON.
- * @throws `Error` if the parsed arguments fail the tool's Zod schema (the message lists the failing paths).
- * @see `tryValidateToolArguments` for a non-throwing variant.
- * @group Defining Tools
- */
-export function validateToolArguments(tool: Tool, call: ToolCall): ToolArguments {
-  let raw: unknown;
-  try {
-    raw = parseArgumentsJson(call.function.arguments);
-  } catch {
-    throw new Error(
-      `Arguments for tool "${call.function.name}" are not valid JSON: ${call.function.arguments}`,
-    );
-  }
-  const parsed = tool.parameters.safeParse(raw);
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-      .join("; ");
-    throw new Error(`Invalid arguments for tool "${tool.name}": ${issues}`);
-  }
-  // Object by construction: function-calling schemas are JSON Schema objects.
-  return parsed.data as ToolArguments;
-}
-
-/**
  * Parse and schema-check a tool call, reporting success without throwing.
  *
  * @remarks
- * Non-throwing counterpart of {@link validateToolArguments}. Used to decide
- * whether a call is well-formed (e.g. before presenting it to the permission
- * gate) when an exception would be awkward.
+ * The single source of truth for validating a call's arguments: the call carries
+ * them as a JSON *string* (the OpenAI wire format), so this JSON-parses first,
+ * then schema-checks. Used directly to decide whether a call is well-formed (e.g.
+ * before presenting it to the permission gate) when an exception would be
+ * awkward; {@link validateToolArguments} is the throwing wrapper over it. The
+ * `error` message on failure carries the same diagnostic that wrapper throws.
  *
  * @param tool - The tool whose schema the call is checked against.
  * @param call - The model-emitted tool call, whose `function.arguments` is a JSON string.
- * @returns `{ ok: true, value }` with the parsed arguments on success, or `{ ok: false }` on bad JSON or a schema mismatch.
+ * @returns `{ ok: true, value }` with the parsed arguments on success, or `{ ok: false, error }` — naming the failing JSON or schema paths — on a malformed call.
  * @see {@link validateToolArguments}
  * @group Defining Tools
  */
 export function tryValidateToolArguments(
   tool: Tool,
   call: ToolCall,
-): { ok: true; value: ToolArguments } | { ok: false } {
+): { ok: true; value: ToolArguments } | { ok: false; error: string } {
   let raw: unknown;
   try {
     raw = parseArgumentsJson(call.function.arguments);
   } catch {
-    return { ok: false };
+    return {
+      ok: false,
+      error: `Arguments for tool "${call.function.name}" are not valid JSON: ${call.function.arguments}`,
+    };
   }
   const parsed = tool.parameters.safeParse(raw);
-  return parsed.success ? { ok: true, value: parsed.data as ToolArguments } : { ok: false };
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+    return { ok: false, error: `Invalid arguments for tool "${tool.name}": ${issues}` };
+  }
+  // Object by construction: function-calling schemas are JSON Schema objects.
+  return { ok: true, value: parsed.data as ToolArguments };
+}
+
+/**
+ * Validate a tool call against the tool's schema, returning the parsed arguments.
+ *
+ * @remarks
+ * The throwing counterpart of {@link tryValidateToolArguments}: it delegates the
+ * parse-and-check there and throws the reported `error` on failure. The loop
+ * converts that thrown error into an error tool-result rather than crashing the
+ * run.
+ *
+ * @param tool - The tool whose schema the call is checked against.
+ * @param call - The model-emitted tool call, whose `function.arguments` is a JSON string.
+ * @returns The parsed, schema-valid arguments as an object.
+ * @throws `Error` if the arguments are not valid JSON.
+ * @throws `Error` if the parsed arguments fail the tool's Zod schema (the message lists the failing paths).
+ * @see {@link tryValidateToolArguments} for the non-throwing variant.
+ * @group Defining Tools
+ */
+export function validateToolArguments(tool: Tool, call: ToolCall): ToolArguments {
+  const parsed = tryValidateToolArguments(tool, call);
+  if (!parsed.ok) throw new Error(parsed.error);
+  return parsed.value;
 }
 
 /**

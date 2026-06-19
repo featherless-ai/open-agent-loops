@@ -1,0 +1,160 @@
+---
+title: Permissions & Credentials
+description: A short guide — admit, deny, or ask before tool calls run, and compose permissions with credentials, the same way you'd guard a skill's tools.
+---
+
+Some tool calls are risky enough that a human should approve them first. This
+guide picks up where the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) leaves off and adds an admission
+policy: each turn's tool calls pass through the `gateToolCalls` hook *before* any
+of them run, and you allow / deny / **ask**.
+
+Gating is **batteries-included** — pair the hook with the shipped `permissionGate`
+and `InMemoryPermissionStore`, no custom gate to write. `permissionGate` builds the
+hook from two small seams: a `PermissionStore` (the configured policy, and where
+"always" choices are persisted) and an `ApprovalPrompter` (how you ask the user
+when the policy is "ask").
+
+Wire both into the chat loop. Here `weather` runs freely, anything else falls
+through to "ask", and the prompter reuses the loop's own `readline` for a y/n:
+
+```ts
+import {
+  runAgent,
+  SessionMemoryStore,
+  defineTool,
+  permissionGate,
+  InMemoryPermissionStore,
+  PermissionPolicy,
+  ApprovalChoice,
+} from "agent-core";
+import type { ApprovalPrompter } from "agent-core";
+import { z } from "zod";
+// ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
+// loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
+
+// A tool worth gating: deploying to production shouldn't run unattended.
+const deploy = defineTool({
+  name: "deploy",
+  description: "Deploy the current build to an environment.",
+  parameters: z.object({ env: z.enum(["staging", "production"]) }),
+  execute: async ({ env }) => ({ content: `deployed → ${env}` }),
+});
+
+const memory = new SessionMemoryStore(); // one store, reused every turn
+const sessionId = "chat";                // same id every turn → one conversation
+const rl = createInterface({ input, output });
+
+// Config: weather is always allowed; everything else falls through to "ask".
+const store = new InMemoryPermissionStore({
+  fallback: PermissionPolicy.Ask,
+  rules: { weather: PermissionPolicy.Allow },
+});
+
+// Prompter: reuse the loop's readline to ask y/n when the policy is "ask".
+const prompter: ApprovalPrompter = {
+  async ask(batch) {
+    const choices: ApprovalChoice[] = [];
+    for (const { toolCall, args } of batch) {
+      const reply = (
+        await rl.question(`\nallow ${toolCall.function.name}(${JSON.stringify(args)})? [y/N] `)
+      ).trim().toLowerCase();
+      choices.push(reply === "y" ? ApprovalChoice.AllowOnce : ApprovalChoice.DenyOnce);
+    }
+    return choices;
+  },
+};
+
+while (true) {
+  const prompt = (await rl.question("\nyou › ")).trim();
+  if (prompt === "" || prompt === "exit") break;
+
+  process.stdout.write("bot › ");
+  await runAgent({
+    model,
+    memory,
+    sessionId,
+    prompt,
+    tools: [weather, deploy],
+    hooks: { gateToolCalls: permissionGate(store, prompter) },
+    onEvent: render,
+  });
+}
+rl.close();
+```
+
+Ask about the weather and it just runs; ask it to "deploy to production" and you
+get a `[y/N]` prompt before the tool runs. The whole turn's calls arrive together,
+so the hook runs **once per turn** — serially, *before* the parallel execution
+phase — one round-trip even if the model requested several gated calls, and the
+prompt never races tool execution. A denied call never runs; it becomes an error
+tool-result the model can react to.
+
+Return `ApprovalChoice.AllowAlways` / `DenyAlways` instead of the "once" variants
+and `permissionGate` writes that policy back to the store, so the next turn — or,
+with a file-backed store, the next run — won't ask again.
+
+## Both at Once: A Tool That Needs a Secret *and* Approval
+
+A real `deploy` also needs a **credential** to authenticate — and you don't want
+the token in the model's view or the transcript. That's a second, independent
+seam: `withCredentials` wraps the tool, resolving `{{placeholder}}` args on the
+way *in* and scrubbing the secret out of the result on the way *out*. It composes
+with the gate without either knowing about the other — the credential wraps the
+tool, the permission gates the batch:
+
+```ts
+import { withCredentials, InMemoryCredentialStore } from "agent-core";
+
+// deploy now authenticates with a token it never sees in the clear: the model
+// passes the placeholder `{{deploy_token}}`, resolved only inside execute.
+const deploy = defineTool({
+  name: "deploy",
+  description: "Deploy the current build to an environment.",
+  parameters: z.object({
+    env: z.enum(["staging", "production"]),
+    token: z.string().describe("Auth token — pass the placeholder {{deploy_token}}"),
+  }),
+  execute: async ({ env, token }) => {
+    const res = await fetch(`https://deploy.example.com/${env}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    return { content: `deploy → ${env}: ${res.status}` };
+  },
+});
+
+// Credential seam: where the real secret lives (loaded from env at startup).
+const creds = new InMemoryCredentialStore({
+  secrets: { deploy_token: process.env.DEPLOY_TOKEN ?? "" },
+});
+
+// Same multi-turn chat loop as above — just wrap the tool with its credential;
+// the gate is unchanged.
+while (true) {
+  const prompt = (await rl.question("\nyou › ")).trim();
+  if (prompt === "" || prompt === "exit") break;
+
+  process.stdout.write("bot › ");
+  await runAgent({
+    model,
+    memory,
+    sessionId,
+    prompt,
+    tools: [weather, withCredentials(deploy, creds)], // credential: a per-tool wrapper
+    hooks: { gateToolCalls: permissionGate(store, prompter) }, // permission: a hook over the batch
+    onEvent: render,
+  });
+}
+rl.close();
+```
+
+When the model calls `deploy`, the gate prompts first (it's still "ask"); on
+approval, `withCredentials` swaps `{{deploy_token}}` for the real token for that
+one call and scrubs it from the result. Deny it, and the call never runs — it
+comes back as an error tool-result the model can react to.
+
+A **skill** guards the same way: its bundled tools are just tools, so wrap each
+with `withCredentials` and let the same `gateToolCalls` hook admit them. (Skills
+are a design sketch — `agent-core/docs/skills.md` — for now; the composition
+above is what they build on.)

@@ -1,3 +1,14 @@
 {
-  "pages": ["index", "getting-started", "concepts", "api"]
+  "pages": [
+    "index",
+    "getting-started",
+    "---Guides---",
+    "planning-tools",
+    "bring-your-own-renderer",
+    "bring-your-own-model-client",
+    "gating-tool-calls",
+    "---Reference---",
+    "concepts",
+    "api"
+  ]
 }

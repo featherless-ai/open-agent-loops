@@ -157,36 +157,6 @@ describe("runAgent", () => {
     expect(toolMsg?.content).toBe("kaboom");
   });
 
-  // Edge: beforeToolCall can block execution.
-  test("edge: beforeToolCall can block a tool", async () => {
-    let executed = false;
-    const tracked = defineTool({
-      name: "echo",
-      description: "Echo",
-      parameters: z.object({ text: z.string() }),
-      execute: ({ text }) => {
-        executed = true;
-        return { content: text };
-      },
-    });
-    const model = new MockModelClient([
-      { toolCalls: [{ name: "echo", arguments: { text: "x" } }] },
-      { text: "after" },
-    ]);
-    const result = await runAgent({
-      model,
-      memory: new SessionMemoryStore(),
-      sessionId: "s",
-      prompt: "go",
-      tools: [tracked],
-      hooks: { beforeToolCall: () => ({ block: true, reason: "denied" }) },
-    });
-    expect(executed).toBe(false);
-    const toolMsg = result.messages.find((m) => m.role === Role.Tool);
-    expect(toolMsg?.content).toBe("denied");
-    expect(toolMsg?.isError).toBe(true);
-  });
-
   // Edge: afterToolCall can rewrite a result.
   test("edge: afterToolCall can override the result", async () => {
     const model = new MockModelClient([
@@ -250,7 +220,9 @@ describe("runAgent", () => {
       prompt: "secret",
       hooks: {
         transformContext: (messages) =>
-          messages.map((m) => ({ ...m, content: m.content.toUpperCase() })),
+          messages.map((m) =>
+            typeof m.content === "string" ? { ...m, content: m.content.toUpperCase() } : m,
+          ),
       },
     });
     expect(model.requests[0]!.messages[0]!.content).toBe("SECRET");
@@ -421,5 +393,126 @@ describe("runAgent", () => {
     expect(types[0]).toBe(AgentEventType.AgentStart);
     expect(types).toContain(AgentEventType.TurnStart);
     expect(types.at(-1)).toBe(AgentEventType.AgentEnd);
+  });
+
+  // Edge: a steering message drained after a tool batch redirects the run — it's
+  // appended (after the tool result, pairing intact), the model sees it next
+  // turn, and a `message_injected` event marks it.
+  test("edge: drainSteering injects after a tool batch and drives another turn", async () => {
+    const model = new MockModelClient([
+      { toolCalls: [{ name: "echo", arguments: { text: "a" } }] },
+      { text: "redirected" },
+    ]);
+    const queue = [userMessage({ content: "actually do B" })];
+    const events: AgentEvent[] = [];
+
+    const result = await runAgent({
+      model,
+      memory: new SessionMemoryStore(),
+      sessionId: "s",
+      prompt: "go",
+      tools: [echo],
+      hooks: { drainSteering: () => queue.splice(0) },
+      onEvent: (e) => {
+        events.push(e);
+      },
+    });
+
+    expect(result.steps).toBe(2);
+    expect(result.messages.at(-1)?.content).toBe("redirected");
+
+    // The steering turn lands after the tool result, not before it.
+    const roles = result.messages.map((m) => m.role);
+    expect(roles).toEqual([Role.User, Role.Assistant, Role.Tool, Role.User, Role.Assistant]);
+
+    // The model actually saw the steering message on the next turn.
+    expect(
+      model.requests[1]!.messages.some((m) => m.role === Role.User && m.content === "actually do B"),
+    ).toBe(true);
+
+    // It was emitted as a labeled injection event, not a plain message.
+    const injected = events.find((e) => e.type === AgentEventType.MessageInjected);
+    expect(injected).toMatchObject({ origin: "steering" });
+    expect(injected && injected.type === AgentEventType.MessageInjected && injected.message.content).toBe(
+      "actually do B",
+    );
+  });
+
+  // Edge: a follow-up drained at the natural stop continues the run in place
+  // (one run, monotonic steps) rather than letting it end.
+  test("edge: drainFollowUp continues the run past a natural stop", async () => {
+    const model = new MockModelClient([{ text: "done" }, { text: "and the summary" }]);
+    const queue = [userMessage({ content: "also summarize" })];
+    const memory = new SessionMemoryStore();
+    const events: AgentEvent[] = [];
+
+    const result = await runAgent({
+      model,
+      memory,
+      sessionId: "s",
+      prompt: "go",
+      hooks: { drainFollowUp: () => queue.splice(0) },
+      onEvent: (e) => {
+        events.push(e);
+      },
+    });
+
+    expect(result.steps).toBe(2);
+    expect(result.messages.at(-1)?.content).toBe("and the summary");
+    // The follow-up was persisted to history like a normal turn.
+    expect((await memory.load("s")).some((m) => m.content === "also summarize")).toBe(true);
+    expect(events.find((e) => e.type === AgentEventType.MessageInjected)).toMatchObject({
+      origin: "follow_up",
+    });
+  });
+
+  // Edge: steering is an explicit redirect, so it outranks a tool that asked to
+  // terminate — the run takes another turn instead of stopping.
+  test("edge: steering overrides a terminating tool", async () => {
+    const stop = defineTool({
+      name: "stop",
+      description: "Stop the run",
+      parameters: z.object({}),
+      execute: () => ({ content: "stopped", terminate: true }),
+    });
+    const model = new MockModelClient([{ toolCalls: [{ name: "stop" }] }, { text: "after steer" }]);
+    const queue = [userMessage({ content: "keep going" })];
+
+    const result = await runAgent({
+      model,
+      memory: new SessionMemoryStore(),
+      sessionId: "s",
+      prompt: "go",
+      tools: [stop],
+      hooks: { drainSteering: () => queue.splice(0) },
+    });
+
+    expect(result.steps).toBe(2);
+    expect(result.messages.at(-1)?.content).toBe("after steer");
+  });
+
+  // Edge: the maxSteps cap outranks the queues — neither is even drained once the
+  // cap is reached, so a still-full queue survives instead of running uncapped.
+  test("edge: maxSteps caps follow-up and leaves the queue undrained at the cap", async () => {
+    const model = new MockModelClient(() => ({ text: "more" })); // natural stop every turn
+    let drains = 0;
+
+    const result = await runAgent({
+      model,
+      memory: new SessionMemoryStore(),
+      sessionId: "s",
+      prompt: "go",
+      maxSteps: 3,
+      hooks: {
+        drainFollowUp: () => {
+          drains += 1;
+          return [userMessage({ content: "keep going" })];
+        },
+      },
+    });
+
+    expect(result.steps).toBe(3);
+    // Drained on steps 1 and 2 (steps < maxSteps); skipped on step 3 (at the cap).
+    expect(drains).toBe(2);
   });
 });

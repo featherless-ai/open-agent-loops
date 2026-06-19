@@ -1,4 +1,5 @@
 node_modules
+dist
 *.log
 .DS_Store
 .env
@@ -7,3 +8,6 @@ node_modules
 # Generated API docs (run `bun run docs`)
 docs/api
 docs/api-md
+
+# Generated doc snippets (from examples, via docs-fuma `bun run snippets`)
+docs-fuma/snippets

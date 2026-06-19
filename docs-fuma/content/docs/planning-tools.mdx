@@ -1,0 +1,78 @@
+---
+title: Planning Tools
+description: A short guide — give the model durable working memory with a scratchpad and a to-do list.
+---
+
+The [multi-turn chat loop](/docs/getting-started#multi-turn-chat-loop) remembers
+*messages*. But a long, multi-step task also needs the model to hold a **plan**
+and a **to-do list** it can revise over many turns. There's a catch that makes
+this non-trivial: a turn's private reasoning is dropped from later requests, so
+the model can't rely on "thinking" to carry a plan forward. A **tool result**, on
+the other hand, stays in the transcript — so the way to give the model durable
+working memory is to make it *write to a tool*. Two batteries-included tool sets
+do exactly that:
+
+| Tool set            | Tools it returns                          | What it's for                                          |
+| ------------------- | ----------------------------------------- | ------------------------------------------------------ |
+| `scratchpadTools()` | `read_scratchpad`, `write_scratchpad`     | One free-form text slot for a plan or running notes.   |
+| `todoListTools()`   | `todo_append`, `todo_list`, `todo_update` | A task tracker with a `pending → in_progress → done` (plus `cancelled` / `failed`) lifecycle and retry counting. |
+
+Each set is backed by a store you construct **once and reuse** — exactly like
+`memory` + `sessionId` — so the plan and the list persist across the whole
+conversation. Add them to the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) by extending the `tools` array:
+
+```ts
+import {
+  runAgent,
+  SessionMemoryStore,
+  InMemoryScratchpad,
+  InMemoryTodoStore,
+  scratchpadTools,
+  todoListTools,
+  defineTool,
+  AgentEventType,
+} from "agent-core";
+// ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
+// loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
+
+const memory = new SessionMemoryStore(); // one store, reused every turn
+const sessionId = "chat";                // same id every turn → one conversation
+
+// Construct the planning stores once and reuse them — like `memory`, this is
+// what makes the plan and the list survive from one turn to the next. (Pass no
+// argument and each set spins up its own fresh in-memory store.)
+const scratchpad = new InMemoryScratchpad();
+const todos = new InMemoryTodoStore();
+
+// Spread each set into the model's tool list alongside your own tools.
+const tools = [weather, ...scratchpadTools(scratchpad), ...todoListTools(todos)];
+
+const rl = createInterface({ input, output });
+while (true) {
+  const prompt = (await rl.question("\nyou › ")).trim();
+  if (prompt === "" || prompt === "exit") break;
+
+  process.stdout.write("bot › ");
+  await runAgent({ model, memory, sessionId, prompt, tools, onEvent: render });
+}
+rl.close();
+```
+
+Now give it work that spans turns — "Plan a 3-stop day trip to Kyoto, then book
+each stop one at a time." The model can `write_scratchpad` its plan, `todo_append`
+a step per stop, flip each to `in_progress` / `done` with `todo_update`, and
+`read_scratchpad` / `todo_list` on a later turn to pick up exactly where it left
+off.
+
+<Callout title="Two layers of memory">
+  These tools and `memory` persist *different* things. `memory` records the
+  **transcript** — every message, including each scratchpad/to-do tool call and
+  its result. The scratchpad and to-do **stores** hold the *current canonical
+  state*, queried fresh with `read_scratchpad` / `todo_list` instead of
+  reconstructed from the history. Both tool sets run their tools sequentially,
+  since the tools in a set share one mutable store and the model may call several
+  in a single turn. And like `SessionMemoryStore`, the in-memory stores are a
+  swappable seam — back `Scratchpad` / `TodoStore` with a file or DB to share a
+  plan across sessions or survive a restart.
+</Callout>

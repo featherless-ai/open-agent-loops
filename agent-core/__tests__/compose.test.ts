@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { withMemoryListeners, withMemoryNamespace, withModelObserver } from "../compose";
+import {
+  withMemoryListeners,
+  withMemoryNamespace,
+  withModelGate,
+  withModelObserver,
+} from "../compose";
+import type { ModelGate } from "../compose";
+import { MockModelClient } from "../mocks/mock-model";
 import { SessionMemoryStore } from "../memory/session-memory";
 import { runAgent } from "../primitives/loop";
 import type { ModelClient, StreamEvent } from "../model.types";
@@ -178,5 +185,56 @@ describe("withMemoryListeners", () => {
     });
     await mem.append("s", [userMessage({ content: "x" })]);
     expect(done).toBe(true);
+  });
+});
+
+describe("withModelGate", () => {
+  const tick = () => Promise.resolve();
+
+  // The gate holds the call: model.stream isn't invoked until the gate resolves.
+  test("base: the model is not called until the gate resolves", async () => {
+    const model = new MockModelClient([{ text: "ok" }]);
+    let open!: () => void;
+    const gate: ModelGate = () => new Promise<void>((resolve) => (open = resolve));
+    const it = withModelGate(model, gate).stream({ messages: [] })[Symbol.asyncIterator]();
+
+    const first = it.next(); // starts the generator → parks on the gate
+    await tick();
+    expect(model.requests.length).toBe(0); // gate still closed → no call yet
+
+    open();
+    await first;
+    expect(model.requests.length).toBe(1); // admitted → model called
+  });
+
+  // Abort while parked rejects the stream; the inner model is never reached.
+  test("cancel: an abort while waiting rejects and never calls the model", async () => {
+    const model = new MockModelClient([{ text: "ok" }]);
+    const controller = new AbortController();
+    // A gate that waits indefinitely unless its request is aborted.
+    const gate: ModelGate = (req) =>
+      new Promise<void>((_resolve, reject) =>
+        req.signal?.addEventListener("abort", () => reject(req.signal!.reason), { once: true }),
+      );
+
+    const stream = withModelGate(model, gate).stream({ messages: [], signal: controller.signal });
+    const drain = (async () => {
+      for await (const event of stream) void event;
+    })();
+
+    controller.abort(new Error("cancelled"));
+    await expect(drain).rejects.toThrow("cancelled");
+    expect(model.requests.length).toBe(0);
+  });
+
+  // Transparent when the gate is a no-op: output matches the ungated run.
+  test("edge: a no-op gate is transparent", async () => {
+    const result = await runAgent({
+      model: withModelGate(helloModel, () => {}),
+      memory: new SessionMemoryStore(),
+      sessionId: "s",
+      prompt: "q",
+    });
+    expect(result.messages.at(-1)?.content).toBe("hi");
   });
 });

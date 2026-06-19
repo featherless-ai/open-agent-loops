@@ -297,3 +297,185 @@ export interface FileWriteBackend {
    */
   edit(request: FileEditRequest, ctx: ToolContext): Promise<FileEditResult>;
 }
+
+/**
+ * A single hit from a web search.
+ *
+ * @group Built-in Tools
+ */
+export interface WebSearchResult {
+  /** Page title as the search engine reported it. */
+  title: string;
+  /** Absolute URL of the result. */
+  url: string;
+  /** Short excerpt / description the engine returned for the hit. */
+  snippet: string;
+}
+
+/**
+ * A web-search request handed to the backend.
+ *
+ * @group Built-in Tools
+ */
+export interface WebSearchQuery {
+  /** The free-text query string. */
+  query: string;
+  /** Upper bound on the number of results to return; the backend decides the default. */
+  maxResults?: number;
+}
+
+/**
+ * A request to fetch one URL's contents.
+ *
+ * @group Built-in Tools
+ */
+export interface WebFetchRequest {
+  /** Absolute URL to fetch. */
+  url: string;
+  /** Upper bound on the number of content bytes to return; the backend decides the default. */
+  maxBytes?: number;
+}
+
+/**
+ * The contents fetched from a URL.
+ *
+ * @group Built-in Tools
+ */
+export interface WebFetchResult {
+  /** Final URL after any redirects (echoes the request when there were none). */
+  url: string;
+  /** HTTP status code of the final response. */
+  status: number;
+  /** MIME type of the body, e.g. `text/html`. */
+  contentType: string;
+  /** Extracted, text/markdown body — the backend decides how HTML is reduced to text. */
+  text: string;
+}
+
+/**
+ * The read-only web capability seam — implement this against an online service.
+ *
+ * @remarks
+ * Backs the two read-only web tools (`web_search` and `web_fetch`). It is the
+ * network counterpart to {@link FileReadBackend}: both bundle two read-only
+ * lookups (there: `read` + `glob`; here: `search` + `fetch`) over a resource the
+ * core knows nothing about, hence a seam rather than a shipped implementation.
+ * Wire `search` to e.g. Brave / Tavily / Exa / Bing, and `fetch` to an HTTP
+ * client plus an HTML-to-text extractor.
+ *
+ * SECURITY: `fetch` dereferences a model-supplied URL, so it can reach internal
+ * addresses (SSRF) and exfiltrate via the request. The backend owns allow-listing
+ * and redirect limits; route the resulting `web_fetch` tool through the
+ * permission gate (`../../permissions`) before granting it to a model you do not
+ * fully trust — the same advice as for {@link ShellBackend}. `search` is inert by
+ * comparison, like {@link SearchBackend}.
+ *
+ * @see {@link FileReadBackend} — its filesystem analog; back this the same way.
+ * @see {@link webSearchTool} and {@link webFetchTool} which wrap this seam in model-facing tools.
+ * @group Built-in Tools
+ */
+export interface WebBackend {
+  /**
+   * Run a web search and return the ranked hits.
+   *
+   * @param query - The search request (query string and optional cap).
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the search.
+   * @returns The ranked results.
+   */
+  search(query: WebSearchQuery, ctx: ToolContext): Promise<WebSearchResult[]>;
+  /**
+   * Fetch one URL and return its extracted contents.
+   *
+   * @param request - The URL plus an optional byte cap.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the fetch.
+   * @returns The final URL, status, content type, and extracted text.
+   */
+  fetch(request: WebFetchRequest, ctx: ToolContext): Promise<WebFetchResult>;
+}
+
+/**
+ * One interactive element exposed in a {@link BrowserSnapshot}.
+ *
+ * @remarks
+ * The model targets elements by their {@link ref} — a stable handle the backend
+ * assigns — rather than by CSS selector or pixel coordinate. This is the
+ * accessibility/DOM-snapshot flavor of browser control (as in Playwright), the
+ * better fit for a text-first agent than a screenshot/pixel flavor.
+ *
+ * @group Built-in Tools
+ */
+export interface BrowserElement {
+  /** Opaque handle the model passes back to `browser_click` / `browser_type`. */
+  ref: string;
+  /** ARIA role, e.g. `button`, `link`, `textbox`. */
+  role: string;
+  /** Accessible name / visible label of the element. */
+  name: string;
+}
+
+/**
+ * A structured view of the page after a browser action.
+ *
+ * @remarks
+ * Returned by every {@link BrowserSession} method so the model always sees the
+ * resulting page state — the browser analog of how each built-in file tool
+ * returns the slice it produced.
+ *
+ * @group Built-in Tools
+ */
+export interface BrowserSnapshot {
+  /** Current page URL. */
+  url: string;
+  /** Current page title. */
+  title: string;
+  /** The interactive elements the model can target by `ref`. */
+  elements: BrowserElement[];
+}
+
+/**
+ * The browser capability seam — implement this against a real browser.
+ *
+ * @remarks
+ * Unlike every other seam here, this is **stateful**: it drives one persistent
+ * page (cookies, history, scroll position) across calls, so each method mutates a
+ * live session rather than answering an isolated request. Wire it to e.g.
+ * Playwright / Puppeteer driving Chromium, or a hosted browser (Browserbase,
+ * computer-use).
+ *
+ * SECURITY: `navigate` dereferences a model-supplied URL with the same SSRF /
+ * exfiltration surface as {@link WebBackend.fetch}, and a live session carries
+ * cookies and credentials from prior steps. Route the resulting tools through the
+ * permission gate (`../../permissions`) before granting them to a model you do not
+ * fully trust.
+ *
+ * @see {@link BrowserSnapshot}
+ * @see {@link browserTools} which wraps this seam in model-facing tools.
+ * @group Built-in Tools
+ */
+export interface BrowserSession {
+  /**
+   * Navigate to a URL and return the resulting page.
+   *
+   * @param url - Absolute URL to load.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the navigation.
+   * @returns A snapshot of the loaded page.
+   */
+  navigate(url: string, ctx: ToolContext): Promise<BrowserSnapshot>;
+  /**
+   * Click the element identified by `ref` and return the resulting page.
+   *
+   * @param ref - A `ref` from the current snapshot's elements.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the click.
+   * @returns A snapshot of the page after the click.
+   */
+  click(ref: string, ctx: ToolContext): Promise<BrowserSnapshot>;
+  /**
+   * Type `text` into the element identified by `ref` and return the resulting page.
+   *
+   * @param ref - A `ref` from the current snapshot's elements (a text field).
+   * @param text - The text to type into it.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the input.
+   * @returns A snapshot of the page after typing.
+   */
+  type(ref: string, text: string, ctx: ToolContext): Promise<BrowserSnapshot>;
+}

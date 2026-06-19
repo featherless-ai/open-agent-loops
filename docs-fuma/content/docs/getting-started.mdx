@@ -1,140 +1,115 @@
 ---
-title: Getting started
+title: Getting Started
 description: Run your first agent loop, add a real model client, and gate tool calls.
 ---
 
 **Open Agent OS** is a minimal, provider-agnostic agentic loop. Every fundamental
 piece sits behind an interface so it can be swapped without touching the loop —
-the point of the package is to make the **core things plug-and-play and
-independently testable**.
+the point of the package is to make the **components of the agent plug-and-play, independently testable, and reliable**.
 
-## The seams
+## The Seams
 
 The loop (`runAgent`) only ever depends on these interfaces:
 
 | Seam         | Interface       | Ships with                      |
 | ------------ | --------------- | ------------------------------- |
-| LLM boundary | `ModelClient`   | `MockModelClient` (test double) |
+| LLM boundary | `ModelClient`   | `OpenAICompatibleModel` (+ `MockModelClient` for tests) |
 | Memory       | `Memory`        | `SessionMemoryStore`            |
 | Capabilities | `Tool`          | `defineTool(...)`               |
 | Stopping     | `StopCondition` | `maxSteps`, `whenToolCalled`    |
 
-## The loop
+## The Core Agentic Loop
 
-```text
-load history → append prompt → ┌─ stream assistant turn
-                               │   any tool calls? ─ no → final answer ✓
-                               │        │ yes
-                               │   run tools → append results
-                               └── repeat (until terminate / stopWhen / maxSteps)
+<LoopDiagram />
+
+Each turn streams an assistant message; if it makes tool calls, the loop runs
+them, appends the results, and repeats — until the model returns a final answer,
+a tool sets `terminate`, or a `stopWhen` / `maxSteps` condition fires.
+
+## Single-Turn Agent Loop
+
+This talks to a **real API out of the box** with two batteries-included pieces:
+the `OpenAICompatibleModel` client (here pointed at Featherless, though any
+OpenAI-compatible endpoint works) and the in-memory `SessionMemoryStore`.
+
+Install the provider peer:
+
+```bash
+npm install openai
 ```
 
-## Your first run
+Then set `LLM_API_KEY` in your environment and run it — it prompts you for a
+question on the terminal, where you can type something like "What's the weather
+in Paris?". This snippet is **embedded from the runnable example**, so it can't
+drift from the code you'd actually run:
 
-`MockModelClient` is a scripted test double (not part of the public surface) —
-perfect for a runnable example. In production you pass your own `ModelClient`.
+<include>../../snippets/single-turn-loop.mdx</include>
 
-```ts
-import { runAgent, SessionMemoryStore, defineTool } from "~/agent-core";
-import { MockModelClient } from "~/agent-core/mocks/mock-model";
-import { z } from "zod";
-
-const weather = defineTool({
-  name: "weather",
-  description: "Get the current weather for a city.",
-  parameters: z.object({ city: z.string().describe("City to look up.") }),
-  execute: ({ city }) => ({ content: `Sunny in ${city}` }),
-});
-
-// A scripted model: first turn calls the tool, second turn answers.
-const model = new MockModelClient([
-  { toolCalls: [{ name: "weather", arguments: { city: "Paris" } }] },
-  { text: "It's sunny in Paris." },
-]);
-
-const result = await runAgent({
-  model,
-  memory: new SessionMemoryStore(),
-  sessionId: "demo",
-  prompt: "What's the weather in Paris?",
-  tools: [weather],
-  onEvent: (e) => console.log(e.type),
-});
-
-console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
-```
-
-## Adding a real model client
-
-Implement the one method — `stream()`. Map `req.messages` / `req.tools` to your
-provider's API, then translate its streamed chunks into `StreamEvent`s. Any
-OpenAI-compatible endpoint works with a raw `fetch`; no extra package needed.
-
-```ts
-import type { ModelClient, ModelRequest, StreamEvent } from "~/agent-core";
-
-export class MyModel implements ModelClient {
-  async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
-    // map req.messages / req.tools → your API, then translate its streamed
-    // chunks into { type: "text_delta" } / { type: "tool_call" } / { type: "done" }.
-  }
-}
-```
-
-<Callout title="Already provided">
-  An OpenAI-compatible client ships with the package — see `OpenAICompatibleModel`
-  in the [API reference](/docs/api).
+<Callout title="A building block for sub-agents">
+  Because a single-turn run is just `prompt → result`, it's the natural unit for
+  a **sub-agent**: give a focused `runAgent` call its own tools, system prompt,
+  and a fresh `SessionMemoryStore`, then expose it as a tool the parent agent can
+  call. The parent gets back one result, and the sub-agent's intermediate turns
+  stay out of the parent's context.
 </Callout>
 
-## Gating tool calls (permissions)
+## Multi-Turn Chat Loop
 
-The whole turn's tool calls arrive together, so admission is a **batch**
-concern. The `gateToolCalls` hook runs once per turn — serially, *before* the
-parallel execution phase — and returns one decision per call. Denied calls
-never run; they become error tool-results the model can react to. Because
-gating happens in this single up-front phase, an interactive permission prompt
-never races the parallel tool execution.
+The single-turn loop above sends one prompt. To hold a *conversation*, call
+`runAgent` again with the **same `memory` and `sessionId`** — each run loads the
+prior history, appends the new turn, and writes the model's reply back, so the
+next run already remembers everything before it. A chat loop is just that call
+inside a read-input loop, reusing the `model`, `weather` tool, and `render` from
+the single-turn example above. Like that snippet, it's **embedded from the
+runnable example**:
 
-`permissionGate` implements the hook as an allow / deny / **ask** policy from
-two small seams: a `PermissionStore` (the config the loop reads, and where
-"always" choices are persisted) and an `ApprovalPrompter` (how you ask the user
-when the policy is "ask").
+<include>../../snippets/multi-turn-chat-loop.mdx</include>
 
-```ts
-import {
-  runAgent,
-  permissionGate,
-  InMemoryPermissionStore,
-  PermissionPolicy,
-  ApprovalChoice,
-} from "~/agent-core";
-import type { ApprovalPrompter } from "~/agent-core";
+<Callout title="Why it remembers">
+  Nothing about multi-turn is special-cased in the loop: `runAgent` reads history
+  from `memory` at the start of every run and persists the prompt, assistant
+  reply, and tool results back. Reuse the store and `sessionId` to continue a
+  conversation; change the `sessionId` — or call `memory.clear(sessionId)` — to
+  start a fresh one. Swap `SessionMemoryStore` for a durable backend to survive
+  restarts.
+</Callout>
 
-// Config: read tool policies from anywhere. Ask means prompt the user.
-const store = new InMemoryPermissionStore({
-  fallback: PermissionPolicy.Ask,
-  rules: {
-    read_file: PermissionPolicy.Allow,
-    deploy: PermissionPolicy.Deny,
-  },
-});
+## Planning Tools
 
-// CLI prompter: present the pending calls and return a choice each.
-const prompter: ApprovalPrompter = {
-  async ask(batch) {
-    return batch.map(() => ApprovalChoice.AllowOnce);
-  },
-};
+A long, multi-step task needs the model to hold a **plan** and a **to-do list** it
+can revise across turns — and the trick is to make it *write to a tool*, since a
+tool result stays in the transcript while a turn's private reasoning doesn't. Two
+batteries-included tool sets, `scratchpadTools()` and `todoListTools()`, do
+exactly that, each backed by a swappable in-memory store. They have their own
+short guide — **[Planning Tools](/docs/planning-tools)** — covering both tool
+sets and the stores behind them.
 
-await runAgent({
-  // model, memory, sessionId, prompt, tools,
-  hooks: { gateToolCalls: permissionGate(store, prompter) },
-});
-```
+## Bring Your Own Renderer
 
-An `AllowAlways` / `DenyAlways` choice is written back to the store, so the next
-run — even a fresh CLI process backed by a file store — won't ask again. Swap
-`InMemoryPermissionStore` for a durable store to persist decisions across runs.
+The loop is **headless**: the `onEvent` handler above is a renderer — `onEvent`
+emits a typed `AgentEvent` stream and you present it however you like (stdout,
+the DOM, a TUI, a log sink). It has its own short guide —
+**[Bring Your Own Renderer](/docs/bring-your-own-renderer)** — covering a custom
+renderer (Part 1) and the ready-made `Tracer` (Part 2).
+
+## Bring Your Own Model Client
+
+The single-turn loop uses the built-in `OpenAICompatibleModel`. For a different
+provider, transport, or wire format, `ModelClient` is just one method —
+implement `stream()` yourself. It has its own short guide —
+**[Bring Your Own Model Client](/docs/bring-your-own-model-client)** — covering
+the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
+
+## Permissions & Credentials
+
+Some tool calls are risky enough that a human should approve them first. The
+`gateToolCalls` hook is a single admission point — run once per turn, before any
+tool executes — and gating is batteries-included: pair it with the shipped
+`permissionGate` and `InMemoryPermissionStore` for an allow / deny / **ask**
+policy. It has its own short guide —
+**[Permissions & Credentials](/docs/gating-tool-calls)** — covering the permission policy
+and composing it with `withCredentials` for a tool that needs a secret *and*
+approval.
 
 ## Tests
 

@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "bun run sidebar",
-    "dev": "next dev",
-    "prebuild": "bun run sidebar",
+    "predev": "bun run sidebar && bun run snippets",
+    "dev": "node scripts/gen-snippets.mjs --watch & next dev",
+    "prebuild": "bun run sidebar && bun run snippets",
     "build": "next build",
     "start": "next start",
     "sidebar": "node scripts/gen-api-meta.mjs",
+    "snippets": "node scripts/gen-snippets.mjs",
     "postinstall": "fumadocs-mdx"
   },
   "comment": "entities pinned to v6 so parse5 (needs `entities/escape`) resolves under bun's hoisting; only parse5 (v6 subpaths) and markdown-it (bare, v6-compatible) use it.",
@@ -17,6 +18,7 @@
     "entities": "^6"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.0",
     "fumadocs-core": "^16.9.3",
     "fumadocs-mdx": "^15.0.11",
     "fumadocs-ui": "^16.9.3",

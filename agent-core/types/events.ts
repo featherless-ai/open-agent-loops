@@ -5,6 +5,7 @@
  * @module
  */
 
+import type { ToolSpec } from "../model.types";
 import type { Message } from "./message";
 import type { ToolArguments } from "./tool-calls";
 
@@ -29,6 +30,13 @@ export enum AgentEventType {
   TextDelta = "text_delta",
   /** A complete message was added to the conversation. */
   Message = "message",
+  /**
+   * A caller-supplied message was injected into a live run — drained from a
+   * steering or follow-up hook — rather than arriving as the run's prompt.
+   * Carries the message and which queue it came from, so telemetry can mark
+   * *why* a turn appeared mid-trajectory.
+   */
+  MessageInjected = "message_injected",
   /** A tool call is about to execute. */
   ToolStart = "tool_start",
   /** A tool call finished, carrying its result. */
@@ -36,6 +44,18 @@ export enum AgentEventType {
   /** The run has ended. */
   AgentEnd = "agent_end",
 }
+
+/**
+ * Which caller-owned queue an injected message was drained from.
+ *
+ * @remarks
+ * `"steering"` — drained after a tool batch to redirect the run before its next
+ * turn. `"follow_up"` — drained at a natural stop to extend the run past its
+ * final answer. See {@link AgentEventType.MessageInjected}.
+ *
+ * @group Messages & Events
+ */
+export type InjectedMessageOrigin = "steering" | "follow_up";
 
 /**
  * The payload of an event, minus the timestamp.
@@ -53,6 +73,18 @@ export type AgentEventBody =
       type: AgentEventType.AgentStart;
       /** The session whose run is starting. */
       sessionId: string;
+      /**
+       * [observability] The run's system prompt, if any. Carried on this event
+       * so an observer (a tracer, a UI) sees it without having to tap the model
+       * request — the loop already knows it at start.
+       */
+      system?: string;
+      /**
+       * [observability] The full tool specs available to the model this run —
+       * same rationale as {@link system}: surfaced once up front so observers
+       * needn't reconstruct the tool surface from later events.
+       */
+      tools?: ToolSpec[];
     }
   | {
       /** Discriminant; see {@link AgentEventType.TurnStart}. */
@@ -77,6 +109,14 @@ export type AgentEventBody =
       type: AgentEventType.Message;
       /** The complete message that was appended to the conversation. */
       message: Message;
+    }
+  | {
+      /** Discriminant; see {@link AgentEventType.MessageInjected}. */
+      type: AgentEventType.MessageInjected;
+      /** The caller-supplied message injected into the live run. */
+      message: Message;
+      /** Which queue it was drained from — steering or follow-up. */
+      origin: InjectedMessageOrigin;
     }
   | {
       /** Discriminant; see {@link AgentEventType.ToolStart}. */

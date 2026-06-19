@@ -32,6 +32,29 @@ const GROUP_ORDER = [
   "Testing",
 ];
 
+// TypeDoc kind folder → the `icon` slug written into each page's frontmatter;
+// lib/source.tsx maps these to a small kind badge in the sidebar.
+const KIND_BY_FOLDER = {
+  classes: "class",
+  interfaces: "interface",
+  enumerations: "enum",
+  "type-aliases": "type",
+  functions: "function",
+  variables: "variable",
+};
+
+// The five swappable loop seams, by exported name → seam category. Kept in sync
+// with the loop diagram's palette (components/loop-diagram.tsx). A seam type's
+// kind badge gets a ring in its seam color; the icon frontmatter encodes it as
+// `<kind>:<seam>` (e.g. `interface:memory`).
+const SEAM_BY_NAME = {
+  Memory: "memory",
+  ModelClient: "model",
+  Tool: "tool",
+  StopCondition: "stop",
+  Hooks: "hook",
+};
+
 const bin = (args, opts = {}) =>
   execFileSync("bunx", args, { cwd: root, stdio: "inherit", ...opts });
 
@@ -65,7 +88,13 @@ for (const file of walk(apiDir)) {
   let body = readFileSync(file, "utf8");
   if (!body.startsWith("---")) {
     body = body.replace(/^\s*# .*\n+/, ""); // drop leading H1 (now the frontmatter title)
-    writeFileSync(file, `---\ntitle: "${esc(title)}"\n---\n\n${body}`);
+    const fm = [`title: "${esc(title)}"`];
+    const kind = isIndex ? null : KIND_BY_FOLDER[rel.split("/")[0]];
+    if (kind) {
+      const seam = SEAM_BY_NAME[name];
+      fm.push(`icon: ${seam ? `${kind}:${seam}` : kind}`);
+    }
+    writeFileSync(file, `---\n${fm.join("\n")}\n---\n\n${body}`);
   }
   if (!isIndex) relByLowerName.set(name.toLowerCase(), rel);
 }
@@ -78,12 +107,35 @@ const rank = (t) => {
 const groups = [...(project.groups ?? [])].sort((a, b) => rank(a.title) - rank(b.title));
 
 const pages = ["index"];
+const seen = new Set(["index"]); // a symbol re-exported (e.g. `export type {}`) can
+// surface as two TypeDoc reflections with the same name → same page path; dedupe
+// within each group and across groups so the sidebar never lists a page twice.
+const isFunction = (p) => p.startsWith("functions/");
 for (const group of groups) {
-  const items = (group.children ?? [])
-    .map((id) => relByLowerName.get((nameById.get(id) ?? "").toLowerCase()))
-    .filter(Boolean)
+  const items = [
+    ...new Set(
+      (group.children ?? [])
+        .map((id) => relByLowerName.get((nameById.get(id) ?? "").toLowerCase()))
+        .filter(Boolean),
+    ),
+  ]
+    .filter((p) => !seen.has(p))
     .sort();
-  if (items.length) pages.push(`---${group.title}---`, ...items);
+  if (!items.length) continue;
+  for (const p of items) seen.add(p);
+
+  // Split each group into types (PascalCase: classes, interfaces, enums, type
+  // aliases, variables) and functions (camelCase), under their own sub-headings.
+  // A single-kind group reads fine under its heading alone, so only sub-label
+  // when both kinds are present.
+  pages.push(`---${group.title}---`);
+  const fns = items.filter(isFunction);
+  const types = items.filter((p) => !isFunction(p));
+  if (fns.length && types.length) {
+    pages.push("---Types---", ...types, "---Functions---", ...fns);
+  } else {
+    pages.push(...items);
+  }
 }
 
 writeFileSync(
