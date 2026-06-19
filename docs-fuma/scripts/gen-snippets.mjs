@@ -29,6 +29,30 @@ const SNIPPETS = [
     title: "examples/multi-turn-chat/multi-turn-chat.ts",
   },
   {
+    src: "examples/tool-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/tool-step1.mdx",
+    title: "examples/tool-tutorial/step1.ts",
+  },
+  {
+    src: "examples/tool-tutorial/step2.ts",
+    region: "step2",
+    out: "snippets/tool-step2.mdx",
+    title: "examples/tool-tutorial/step2.ts",
+  },
+  {
+    src: "examples/tool-tutorial/step3.ts",
+    region: "step3",
+    out: "snippets/tool-step3.mdx",
+    title: "examples/tool-tutorial/step3.ts",
+  },
+  {
+    src: "examples/tool-tutorial/step4.ts",
+    region: "step4",
+    out: "snippets/tool-step4.mdx",
+    title: "examples/tool-tutorial/step4.ts",
+  },
+  {
     src: "examples/skill-tutorial/step1.ts",
     region: "step1",
     out: "snippets/skill-step1.mdx",
