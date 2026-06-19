@@ -173,14 +173,13 @@ because AssistantMessage carries `isError`.
 
 ---
 
-# Plan: per-model reasoning kwargs (lookup table + proxy)
+# Plan: per-model reasoning kwargs (lookup table)
 
 **Goal**: One lookup table maps a model id → the `chat_template_kwargs` that
 enable/disable that model's thinking, handling each family's idiosyncrasies (GLM
 `enable_thinking`+`clear_thinking`, Kimi `thinking`+`preserve_thinking`, DeepSeek
 `thinking`, Qwen/Gemma `enable_thinking`; interleaved + non-reasoning families).
-Consumed at the two places the model id is known: the `OpenAICompatibleModel`
-provider (TS clients) and a thin standalone proxy (any OpenAI-compatible client).
+Consumed where the model id is known: the `OpenAICompatibleModel` provider.
 
 Boring + explicit: first-match ordered rules on the lowercased id, default to
 `undefined` (inject nothing) for unknown/non-reasoning models so it's always safe.
@@ -206,19 +205,6 @@ id via the table. `thinking` unset → today's behavior (inject nothing).
 **Success Criteria**: existing tests stay green; new tests assert per-model
 derivation + escape hatch + opt-out.
 **Status**: Complete (4 provider tests; example now uses `thinking: "on"`)
-
-## Stage 3: the standalone proxy
-**Goal**: A thin Bun reverse proxy in front of the endpoint. Pure
-`injectReasoningKwargs(body, mode?)` (tested in agent-core) merges the kwargs by
-`body.model`; the HTTP shell streams the response back. Per-request override via
-`x-thinking` header.
-**Files**: `agent-core/providers/reasoning-kwargs.ts` (the pure inject fn),
-`proxy/thinking-proxy.ts` (Bun server, outside core like `bun-backends.ts`).
-**Success Criteria**: `injectReasoningKwargs` unit-tested; proxy forwards +
-streams against the real endpoint; explicit body kwargs pass through untouched.
-**Status**: Complete (4 inject tests in core; proxy verified end-to-end against a
-local echo upstream — per-model injection, `x-thinking` override, explicit-kwargs
-passthrough, non-reasoning skip, server-key fallback all pass)
 
 ---
 
