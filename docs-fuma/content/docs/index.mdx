@@ -24,5 +24,7 @@ package is to make the **components of the agent plug-and-play, independently te
   anywhere — the same run drives a CLI or a browser UI unchanged.
 - **Provider-agnostic** — nothing in the core references a specific LLM SDK. Any
   OpenAI-compatible endpoint works with a raw `fetch`.
+- **Runs anywhere** — the core has no platform APIs and a single dependency
+  (`zod`), so the same ESM build runs in **Node, Bun, Deno, and the browser**.
 - **Independently testable** — each seam is verified in isolation with
   deterministic test doubles; zero network.
