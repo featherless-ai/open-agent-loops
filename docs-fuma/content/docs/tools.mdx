@@ -1,0 +1,211 @@
+---
+title: Tools
+description: A short guide — give the model capabilities with defineTool, handle errors, organize them in a ToolRegistry, reach for the built-in tools, and control how they run.
+---
+
+A **tool** is a capability you hand the model: a `name`, a one-line
+`description`, a Zod schema for its arguments, and an `execute` handler. The loop
+validates each call against the schema *before* `execute` runs, so your handler
+can trust its input — and both the description and every field's `.describe()`
+flow into the JSON Schema the model sees, so documenting a tool well directly
+improves how the model uses it.
+
+Tools are the `Tool` seam from [Getting
+Started](/docs/getting-started#the-seams). This guide starts from the [multi-turn
+chat loop](/docs/getting-started#multi-turn-chat-loop) — which already wires up
+one `weather` tool — and works outward through the whole seam:
+
+1. **Define a tool** the model can call.
+2. **Signal errors and soft outcomes** from a tool.
+3. **Organize tools** in a `ToolRegistry`.
+4. **Reach for the built-in tools** — batteries over a backend you supply.
+5. **Control how tools run** — parallel by default, sequential when it matters.
+
+## Step 1 — Define a Tool
+
+Author every tool through `defineTool`. It's an identity function at runtime; its
+job is to infer the `args` type of `execute` from the schema, so you get full
+type-safety inside the handler for free. A tool returns a `ToolResult` whose
+`content` string is folded back into the conversation as the tool's result.
+
+```ts
+import { defineTool } from "@open-agent-os/core";
+import { z } from "zod";
+
+const weather = defineTool({
+  name: "weather",
+  description: "Get the current weather for a city.",
+  parameters: z.object({
+    city: z.string().describe("City to look up."),
+  }),
+  // `args` is inferred from the schema as { city: string } — no annotation needed.
+  execute: async ({ city }) => {
+    const data = await fetchWeather(city); // your code
+    return { content: `${data.summary} in ${city}, ${data.tempC}°C` };
+  },
+});
+```
+
+Add it to a run by listing it in `tools` — exactly what the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) does with `tools: [weather]`.
+The model sees `weather` and its schema every turn, and calls it whenever the
+conversation needs the weather.
+
+<Callout title="Descriptions are the model's only documentation">
+  The `description` and each schema field's `.describe()` are *all* the model
+  knows about a tool. A vague `"do stuff"` schema produces vague calls; a precise
+  one — units, formats, what's required vs optional — produces precise calls.
+  Treat tool descriptions as prompt engineering, because they are.
+</Callout>
+
+## Step 2 — Signal Errors and Soft Outcomes
+
+There is deliberately no `error` field on a result. A tool signals a **hard
+error** by *throwing* from `execute`: the loop catches it and produces a tool
+result with `isError: true` and the error's message as the content the model
+sees — so the run keeps going and the model can react, rather than the whole run
+rejecting. Any `Error` works, and only its message is surfaced, so make it
+descriptive.
+
+```ts
+const transfer = defineTool({
+  name: "transfer",
+  description: "Move funds between two of the user's accounts.",
+  parameters: z.object({
+    from: z.string().describe("Source account id."),
+    to: z.string().describe("Destination account id."),
+    amount: z.number().positive().describe("Amount to move, in dollars."),
+  }),
+  execute: async ({ from, to, amount }) => {
+    const balance = await balanceOf(from);
+    if (balance < amount) {
+      // Throw for a hard error → the model reads it as an `isError` result and
+      // can recover (ask the user, pick another account). The run continues.
+      throw new Error(`Insufficient funds: ${from} has ${balance}, needs ${amount}.`);
+    }
+    await move(from, to, amount);
+    return { content: `Transferred $${amount} from ${from} to ${to}.` };
+  },
+});
+```
+
+A normal return is for success *and* for **soft outcomes** the model should read
+but not treat as a failure — a non-zero shell exit, an "already up to date" note.
+Two optional fields shape the result further:
+
+```ts
+execute: async (args) => ({
+  content: "Done — final answer recorded.",
+  details: { recordId: 42 }, // structured payload for hooks; never sent to the model
+  terminate: true,           // stop the loop after this result (a "final answer" tool)
+});
+```
+
+## Step 3 — Organize Tools with a Registry
+
+Once you have more than a handful of tools, a `ToolRegistry` keeps a named
+catalog you build once and resolve from by name. It's a composition helper, **not
+a loop dependency** — `runAgent` still takes a plain `Tool[]`; the registry just
+produces that array, so you can adopt it incrementally and drop it anytime.
+
+```ts
+import { ToolRegistry } from "@open-agent-os/core";
+
+const registry = new ToolRegistry([weather, transfer, search]);
+
+// Every registered tool…
+await runAgent({ ...opts, tools: registry.list() });
+
+// …or just a named subset for this run or step:
+await runAgent({ ...opts, tools: registry.resolve(["weather", "search"]) });
+```
+
+Both ends fail fast, per the project's error rule: registering a duplicate name
+throws (it's almost always a wiring bug, not an update), and `resolve` throws on
+the first unknown name, listing what *is* registered — so a typo surfaces loudly
+at wiring time instead of silently running without the tool.
+
+## Step 4 — Reach for the Built-in Tools
+
+You rarely start from nothing. The SDK ships the common agent tools —
+`search`, `shell`, file read/write, web fetch/search, a browser — but with a
+deliberate split: the SDK owns the **model-facing contract** (the name, the
+argument schema, the result formatting), and **you supply the backend** that does
+the work. Each tool is a factory that takes its backend:
+
+| Tool                          | Backend you implement | Does                              |
+| ----------------------------- | --------------------- | --------------------------------- |
+| `searchTool(backend)`         | `SearchBackend`       | Regex search over file contents   |
+| `shellTool(backend)`          | `ShellBackend`        | Run a shell command               |
+| `readTool` / `globTool`       | `FileReadBackend`     | Read a file / glob for paths      |
+| `editTool` / `writeTool`      | `FileWriteBackend`    | Edit / write a file               |
+| `webFetchTool` / `webSearchTool` | `WebBackend`       | Fetch a URL / search the web      |
+| `browserTools(session)`       | `BrowserSession`      | Drive a headless browser          |
+
+```ts
+import { searchTool, shellTool } from "@open-agent-os/core";
+
+// You write the backend — the part that actually touches your machine.
+const search = searchTool(mySearchBackend); // implements SearchBackend
+const shell = shellTool(myShellBackend);    // implements ShellBackend
+
+await runAgent({ ...opts, tools: [search, shell] });
+// The model can now call: search({ pattern: "TODO", path: "src", ignoreCase: true })
+```
+
+<Callout title="Why you bring the backend">
+  Anything that runs a command, reads a file, or hits the network is the correct
+  security boundary for *you* to own, not the SDK's to assume. So the host-binding
+  tools ship the validation and formatting but require a backend. The exception is
+  the **[Planning Tools](/docs/planning-tools)** — `scratchpadTools` and
+  `todoListTools` — which are pure in-memory and ship ready to use, with a
+  swappable store seam only if you want to persist them.
+</Callout>
+
+## Step 5 — Control How Tools Run
+
+When a single turn makes several tool calls, the loop runs them **in parallel by
+default** — read-only tools like `search` can all fire at once. Set
+`executionMode: ExecutionMode.Sequential` to force the whole batch of that turn's
+calls to run one-at-a-time, which you want when calls share mutable state or their
+order matters.
+
+```ts
+import { defineTool, ExecutionMode } from "@open-agent-os/core";
+
+const migrate = defineTool({
+  name: "migrate",
+  description: "Apply the next pending database migration.",
+  parameters: z.object({ confirm: z.boolean().describe("Must be true to proceed.") }),
+  execute: async ({ confirm }) => {
+    /* apply exactly one migration */
+    return { content: "Applied migration 0042." };
+  },
+  // Migrations must not interleave — run this turn's calls one at a time.
+  executionMode: ExecutionMode.Sequential,
+});
+```
+
+This is exactly why the [planning tools](/docs/planning-tools) run sequentially:
+the tools in a set share one mutable store and the model may call several in a
+single turn.
+
+## Recap
+
+A tool is a name, a description, a schema, and an `execute` — and from that small
+shape the whole seam follows: throw for errors the model can recover from, return
+for success and soft outcomes, organize many tools with a `ToolRegistry`, lean on
+the built-in tools over a backend you own, and reach for `Sequential` when a turn's
+calls can't safely interleave. The loop never changes — tools are just values you
+hand it.
+
+From here:
+
+- **[Skills](/docs/skills)** bundle tools with instructions the model loads on
+  demand — the next level of progressive disclosure.
+- **[Planning Tools](/docs/planning-tools)** are batteries-included tools that give
+  the model durable working memory.
+- **[Permissions & Credentials](/docs/gating-tool-calls)** gate a tool's calls
+  behind an approval, and feed it a secret the model never sees.
+- The **[API reference](/docs/api)** has the exact signatures for `defineTool`,
+  `ToolRegistry`, and every built-in tool and backend.

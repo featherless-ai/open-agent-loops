@@ -1,3 +1,108 @@
+# Plan: in-loop steering + follow-up (kernel pull-seams)
+
+**Goal**: Let a caller inject messages into a *live* run — **steering** (redirect
+mid-task, drained after a tool batch) and **follow-up** (extend a run past its
+natural final answer) — as two optional pull-hooks the loop calls at its existing
+boundaries.
+
+**Why in-loop (not re-run/layer-above)**: the Tracer is built around a single
+`agent_start → agent_end` with monotonic `step`s and one disclosure timeline
+(`trajectory()` opens a step per `turn_start`; `disclosure()` diffs consecutive
+requests; `startedAt`/`durationMs` assume one origin). Re-running to inject input
+fragments one interaction into N runs with resetting step numbers — messy
+telemetry. One continuous run = one clean trace. The hooks are the same shape as
+the existing kernel hooks (`transformContext`/`gateToolCalls`/`afterToolCall`), so
+they fit the kernel's seam pattern rather than violating "the kernel stays
+untouched".
+
+**Design**: the caller owns the queue (host-binding input feeds it → BYO); the
+loop only *pulls*. Steering drains right after tool results are recorded (so
+`tool_use`/`tool_result` pairing is intact), and **overrides** a tool `terminate`
+and a `stopWhen`, but **never** the `maxSteps` safety cap (neither hook is even
+drained once `steps >= maxSteps`). Follow-up drains at the natural stop. Injected
+turns emit a labeled `message_injected` event so they're visible in telemetry and
+distinguishable from a normal prompt.
+
+## Stage 1: loop pull-seams + injection event
+**Files**: `agent-core/types/events.ts` (`AgentEventType.MessageInjected` +
+`InjectedMessageOrigin` + union arm), `agent-core/primitives/loop.ts`
+(`Hooks.drainSteering`/`drainFollowUp`, an `injectMessages` helper, drain at the
+two boundaries with the precedence above).
+**Success**: hooks drain at the right boundaries; steering overrides
+terminate/stopWhen but not maxSteps; injected msgs are pushed to
+`messages`/`newMessages`, persisted via `memory.append`, and emitted as
+`message_injected`; behavior byte-identical when both hooks are unset.
+**Tests** (`__tests__/loop.test.ts`): steering injects after a batch and drives
+another turn; follow-up continues past a natural stop; steering overrides a
+terminating tool; maxSteps caps and the queue is *not* drained at the cap.
+**Status**: Complete (4 tests; full suite green, typecheck clean)
+
+## Stage 2: tracer folds `message_injected`
+**Files**: `agent-core/observability/tracer.ts` (fold the event onto the current
+`TrajectoryStep`, origin-labeled; render in `describe()`),
+`agent-core/observability/tracer.types.ts` (`TrajectoryStep.injected?`).
+**Success**: an injected turn shows in `trajectory()`/`formatTrajectory()` with
+its origin, not just the raw `format()` timeline; steps stay monotonic.
+**Tests** (`__tests__/tracer.test.ts`): a steering injection appears on the step.
+**Status**: Complete (folds onto the step, origin-labeled; rendered as `↪`)
+
+## Stage 3: MessageQueue battery (pure)
+**Files**: `agent-core/primitives/message-queue.ts` (or `concurrency/`-style
+sibling), `agent-core/index.ts` export.
+**Success**: `push` / `drain` / `size` / `clear` with `mode: "one-at-a-time" |
+"all"`; `drain` returns one or all queued messages per the mode; this is pi's
+whole `steeringMode`/`followUpMode`/`clear*Queue` surface, caller-owned.
+**Tests** (`__tests__/message-queue.test.ts`): mode drains; clear; FIFO order.
+**Status**: Complete (6 tests incl. a runAgent integration drain)
+
+## Stage 4: runnable example + docs note
+**Files**: `examples/steering/` (non-blocking input — the readline loop is
+blocking and *cannot* steer), docs note capturing "what we learned" (steering ≠
+cancellation; it's additive injection at a boundary; follow-up vs steering vs
+abort).
+**Success**: demo steers a live run and follows up, with a tracer showing both
+injections inline; `bun test` + `bun run typecheck` green.
+**Status**: Complete (`examples/steering/` + README; example typechecks under
+project settings)
+
+---
+
+# Plan: Multimodal user content (OpenAI-compatible parts)
+
+**Goal**: A user turn can carry images, audio, and files — not just text —
+mirroring OpenAI chat-completions content parts exactly, so the existing egress
+passes them straight to the wire. Multimodal is INPUT-only and `user`-only in the
+chat-completions spec (assistant turns stream string content + tool calls), so
+only `UserMessage.content` widens; system/assistant/tool stay `string`, keeping
+"an assistant can't carry an image" a compile error.
+
+## Stage 1: the ContentPart union + factories (pure)
+**Files**: `agent-core/types/content-part.ts`, `agent-core/types/index.ts`.
+**Success**: `ContentPart = TextPart | ImagePart | AudioPart | FilePart`, each
+shape identical to OpenAI's `ChatCompletionContentPart` member; `textPart` /
+`imagePart` / `audioPart` / `filePart` factories; `contentToText` flattens a
+`string | ContentPart[]` to a display string (text verbatim, non-text →
+`[image]`/`[audio]`/`[file: name]`).
+**Tests** (`__tests__/content-part.test.ts`): each factory's shape; contentToText
+string passthrough + mixed-parts flatten.
+**Status**: Complete
+
+## Stage 2: widen UserMessage.content + wire egress/tracer
+**Files**: `agent-core/types/message-base.ts` (base `content: string |
+ContentPart[]`), `system-message.ts` / `assistant-message.ts` / `tool-message.ts`
+(pin `content: string`), `user-message.ts` (explicit wide override + doc),
+`providers/openai-compatible.ts` (user egress passes parts through),
+`observability/tracer.ts` (flatten via contentToText), `agent-core/index.ts`
+(export the parts + factories).
+**Success**: `tsc --noEmit` clean; egress emits `content: ContentPart[]` for a
+multimodal user turn; string turns unchanged; assistant/system/tool still
+compile against `string`.
+**Tests** (`__tests__/openai-compatible.test.ts`): a user turn with image+file
+parts round-trips through `toChatMessages` verbatim.
+**Status**: Complete
+
+---
+
 # Plan: Port Tracer / observability onto the modern types
 
 Bring `agent-core/observability` (Tracer, AsyncWriter) + its tests over from
@@ -174,3 +279,205 @@ placeholder that resolves at exec time; `bun test` + `bun run typecheck` green.
 the war-and-peace counting task has no real secret to inject, so a demo there
 would be contrived. Add a realistic example (e.g. an authenticated `curl`) on
 request.
+
+---
+
+# Plan: background agents (Supervisor + ParentAgent)
+
+**Goal**: A detached, observable, cancellable agent run — a *background agent* —
+plus the layer that owns many of them. Today's `runAgent` is the *special case*:
+one consumer that also `await`s the result and holds the control flow. The
+background case relaxes all three (zero-or-many late-joining consumers, result as
+a `Promise` on a handle, a supervisor holding the run), and that is where the
+machinery lives. The loop (`primitives/loop.ts`) is the kernel and stays untouched.
+
+**Design**: Two layers, kept distinct.
+- **`Supervisor`** — the mechanism. A registry of live runs, the
+  `BackgroundAgent` handles, and a multicast event broker. It does not reason; it
+  tracks lifecycles. `Supervisor.spawn(spec)` runs a detached `runAgent` and
+  catches failure into handle status rather than letting it escape. Concurrency is
+  *not* capped here — it's enforced upstream by the shared Featherless gate (own
+  plan) wrapping the model client every agent uses.
+- **`ParentAgent`** — a *role*, not a new class: any `runAgent` wired with the
+  supervisor's bridge tools (`poolTools`) and a profile. It reasons, calls
+  `spawn_agent` / `list_agents` / `follow_up`, and decides follow-ups by judgment.
+  "Parent" is relational and recursive — a child holding `poolTools` is itself a
+  parent to *its* spawns (turtles all the way down). Every agent shares **one**
+  Featherless concurrency gate at the model client, so model requests across the
+  whole tree contend for a single budget — a recursive spawn-storm throttles
+  itself.
+
+Two lines held deliberately:
+- **Follow-ups are reactive, never a pre-authored DAG.** A follow-up is decided at
+  settle time from the actual result and enqueued as a plain `spawn`/`continue` —
+  not a static dependency graph declared up front. That graph was the
+  `workflow.types.ts` seam removed in e0f7fa3; we are not resurrecting it.
+- **Profile is not the transcript.** "What is durably true about the user" is a
+  second serializable seam (`ProfileStore`, JSON) beside conversation `Memory`
+  (`Message[]`), delivered ambiently via the system prompt and snapshotted into a
+  context pack at spawn (detachment forces serialization).
+
+The one genuinely new primitive is **multicast events**: foreground has a single
+synchronous `onEvent`; a background run may have zero or many late-joining
+subscribers and must never block on a consumer. Hence an event broker that fans
+each `AgentEvent` to N subscribers and keeps a ring buffer for late joiners.
+
+## Stage 1: multicast event broker (pure)
+**Goal**: The pure primitive the supervisor needs for late-joining observers — no
+model, no time. (Concurrency is its own plan — the Featherless gate.)
+**Files**: `agent-core/supervisor/event-broker.ts` (`EventBroker`: `publish`,
+`subscribe → unsubscribe`, `recent()`).
+**Success Criteria**: `EventBroker` fans one event to every live subscriber, drops
+one on unsubscribe, keeps the last K events for a late joiner, and never awaits a
+slow sink (publish is non-blocking).
+**Tests** (`__tests__/event-broker.test.ts`): broker delivers to two subscribers;
+late subscriber replays last K; unsubscribe stops delivery; a slow sink doesn't
+block publish.
+**Status**: Not Started
+
+## Stage 2: BackgroundAgent handle + Supervisor
+**Goal**: A detached `runAgent` behind a handle, owned by a registry that caps
+concurrency and survives child failure.
+**Files**: `agent-core/supervisor/supervisor.types.ts` (`BackgroundAgent`,
+`AgentTaskSpec`, `TaskStatus`, `SupervisorEvent`),
+`agent-core/supervisor/background-agent.ts` (handle: tees the run's `onEvent` into
+an `EventBroker`, owns an `AbortController`),
+`agent-core/supervisor/supervisor.ts` (`Supervisor`:
+`spawn`/`get`/`list`/`running`/`cancel`), `agent-core/index.ts` (exports).
+**Success Criteria**: `spawn(spec)` returns immediately with a `BackgroundAgent`
+(`status` `pending`→`running`); `result` resolves to the run's `RunResult`;
+`subscribe` streams live `AgentEvent`s and `recentEvents()` replays; `cancel()`
+aborts the run (`status: cancelled`); a thrown run becomes `status: failed` with
+the error on the handle, not an unhandled rejection; with the limiter full an
+extra `spawn` is `queued` and starts when a slot frees; `running().length` equals
+`limiter.active`.
+**Tests** (`__tests__/supervisor.test.ts`, `MockModelClient`): spawn → result;
+late subscriber replay; cancel mid-run; failing run → failed status with no
+escape; queueing past the limit; `running()` ↔ `active` invariant.
+**Status**: Not Started
+
+## Stage 3: Follow-ups (reactive)
+**Goal**: A settled (or running) agent can enqueue more work — same-session
+`continue` or dependent `spawn` — decided at settle time, no DAG.
+**Files**: `agent-core/supervisor/supervisor.ts` (`followUp(id, FollowUp)`,
+settle-time enqueue), `agent-core/supervisor/supervisor.types.ts` (`FollowUp`
+union), `agent-core/tools/builtin/follow-up.ts` (`request_follow_up` tool:
+`terminate: true` + records a spec the supervisor reads on settle).
+**Success Criteria**: `{ kind: "continue", message }` appends a `UserMessage` to
+the child's session (`Memory`) and re-runs it, preserving context;
+`{ kind: "spawn", task }` starts a new background agent seeded with the
+predecessor's result; an optional `onSettle(result, handle) → FollowUp[]` policy
+is honored; a child calling `request_follow_up` terminates and the supervisor
+enqueues its spec; follow-ups ride the same shared limiter.
+**Tests** (`__tests__/supervisor-followups.test.ts`): continue threads prior
+context; spawn seeds predecessor result; `request_follow_up` round-trips through
+settle; `onSettle` enqueue; a follow-up that spawns a follow-up still respects N.
+**Status**: Not Started
+
+## Stage 4: schedule() trigger (Clock + Schedule)
+**Goal**: Time-triggered spawns — the *scheduled task* special case — as a thin
+trigger over the supervisor, with time injected for testability.
+**Files**: `agent-core/supervisor/clock.ts` (`Clock` interface; `SystemClock`
+default over `setTimeout`), `agent-core/supervisor/schedule.ts` (`Schedule`
+interface `nextFireAt(after) → number | null`; `at`/`after`/`every`),
+`agent-core/supervisor/scheduler.ts` (`schedule(spec, Schedule)` arms a `Clock`
+timer that calls `Supervisor.spawn` when due; recurring re-arms),
+`agent-core/mocks/manual-clock.ts` (`ManualClock` test double).
+**Success Criteria**: `every(ms)` fires repeatedly; `at`/`after` fire once; a due
+firing with no free slot defers per policy (skip vs queue), never silently
+dropped; `stop()` cancels pending timers; all driven by `ManualClock` with zero
+real waiting.
+**Tests** (`__tests__/scheduler.test.ts`, `ManualClock`): `after` fires once at T;
+`every` fires N times across advances; due-while-full defers; cancel stops future
+firings; pure `Schedule.nextFireAt` table per constructor.
+**Status**: Not Started
+
+## Stage 5: ProfileStore + poolTools → a working ParentAgent
+**Goal**: The "learn about you" seam and the bridge tools that turn a `runAgent`
+into a `ParentAgent`, assembled into one runnable demo.
+**Files**: `agent-core/profile/profile.types.ts` (`ProfileStore`
+`load(scope)`/`save(scope)`; `Profile = Record<string, unknown>`),
+`agent-core/profile/in-memory-profile-store.ts` (`InMemoryProfileStore` default),
+`agent-core/tools/builtin/pool-tools.ts` (`poolTools(supervisor)` → `spawn_agent`
+/ `list_agents` / `follow_up` / `cancel_agent`), `agent-core/index.ts`,
+`examples/parent-agent.ts`.
+**Success Criteria**: a profile loads by `scope`, renders into the parent's system
+prompt (ambient, not a tool), and is snapshotted into each child's context pack at
+spawn; `poolTools` lets a model spawn/list/follow-up/cancel children; an explicit
+`remember`-style write persists a fact (distillation deferred); the example wires
+`runAgent({ system: profilePrompt, tools: [...poolTools(sup)] })` and a child run
+streams back through the parent. `bun test` + `bun run typecheck` green.
+**Tests** (`__tests__/profile.test.ts`, `__tests__/pool-tools.test.ts`): profile
+load/save by scope; the context-pack snapshot is frozen (a post-spawn profile edit
+doesn't change the in-flight child); `spawn_agent` creates a handle the supervisor
+lists; `follow_up` tool enqueues; `cancel_agent` cancels.
+**Status**: Not Started
+
+---
+
+# Plan: Featherless concurrency gate (live, model-request backpressure)
+
+**Goal**: Admission control on outgoing **model requests**, paced to the *live*
+Featherless concurrency budget. Concurrency on Featherless is a weighted,
+account-wide budget (cost by model size: 7–15B → 1, 24–34B → 2, 70B+ → 4; plan
+allotments Basic 2 / Premium 4 / Scale 8/unit; over-budget requests are **429**'d).
+We don't replicate that accounting — the server owns it. The gate just asks "is
+there room right now?" before each call and **waits** if not.
+
+**Design**: a pre-call gate, *not* a semaphore (the weighted-semaphore primitive was
+tried and dropped — leases/FIFO/cost-weighting solved a problem we don't have).
+`withModelGate(model, gate)` (a `compose.ts` decorator) awaits a BYO `ModelGate`
+*before* `model.stream()` is even invoked, so a full budget holds the turn at the
+model boundary without converting messages or touching the wire. The gate is
+**abort-aware**: it honors `request.signal`, so a run cancelled while parked unwinds
+instead of hanging. Behavior with no room: **wait, then take the turn once a slot
+frees** (`used < limit` again); the only other exit is cancel. (No timeout / retry
+cap — an impossible-fit request, e.g. a 70B on a Basic plan, waits until cancelled,
+by design.)
+
+The Featherless **battery** behind the gate is a live meter: subscribe to
+`GET /account/concurrency/stream` (SSE — one frame on connect, then every 2s), hold
+`{ limit, used }`, and resolve the gate when `limit === null || used < limit`,
+re-checked on each frame. Because the stream is account-wide, the gate also respects
+budget consumed by *other* clients/keys — the whole point of "live". A server 429
+(someone grabbed the freed slot in the 2s gap) is folded back into the wait —
+"still full" — not surfaced as an error, keeping the two exits intact.
+
+## Stage 1: withModelGate decorator (abort-aware)
+**Goal**: The pre-call seam — await admission before each stream, cancel-aware.
+**Files**: `agent-core/compose.ts` (`ModelGate` type + `withModelGate`),
+`agent-core/index.ts` (exports).
+**Success Criteria**: `withModelGate(model, gate)` awaits `gate(request)` before
+`model.stream` is called; on resolve the call proceeds and every `StreamEvent` is
+forwarded unchanged; on reject (e.g. the gate honoring `request.signal` on abort)
+the stream rejects and the inner model is never invoked; transparent for a no-op
+gate; stacks with `withModelObserver`.
+**Tests** (`agent-core/__tests__/compose.test.ts`): the model isn't called until the
+gate resolves; an abort while parked rejects and never calls the model; a no-op gate
+is transparent.
+**Status**: Complete (3 tests; compose suite 16 green, typecheck clean)
+
+## Stage 2: Featherless concurrency meter (live battery)
+**Goal**: A live `{ limit, used }` view of the account budget the gate waits on,
+plus the gate function itself.
+**Files**: `agent-core/concurrency/parse-frame.ts` (pure `data: {…}` SSE frame →
+`{ limit, used_cost, request_count }` snapshot), `agent-core/concurrency/featherless-meter.ts`
+(subscribe to `/account/concurrency/stream`; expose `limit` / `used` / `nextFrame()`;
+a `gate` that waits until `used < limit`, abort-aware; `/account/concurrency` one-shot
+fallback; reconnect on drop; a 429 from the call re-enters the wait).
+**Success Criteria**: parses the documented payload (incl. `limit: null` → unbounded
+→ gate never waits); the gate resolves immediately when there's room and parks until
+the next frame shows room when full; honors `request.signal`; survives a dropped
+stream by reconnecting.
+**Tests** (`agent-core/__tests__/featherless-meter.test.ts`, fake event source):
+parse the sample frame; gate passes when `used < limit`; gate parks then resolves
+when a frame frees room; abort while parked rejects; `null` limit never parks.
+**Status**: Not Started
+
+## Stage 3: wiring + example
+**Goal**: Compose the gate onto a real model client and show backpressure + cancel.
+**Files**: `examples/concurrency-gate/` (wire `withModelGate(model, meter.gate)`
+around an `OpenAICompatibleModel`, reading `FEATHERLESS_API_KEY` from `.env`), docs note.
+**Success Criteria**: a run paces itself against the live budget; a parked run cancels
+cleanly via an `AbortController`; `bun test` + `bun run typecheck` green.
+**Status**: Not Started

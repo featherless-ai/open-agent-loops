@@ -100,6 +100,16 @@ implement `stream()` yourself. It has its own short guide —
 **[Bring Your Own Model Client](/docs/bring-your-own-model-client)** — covering
 the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
 
+## Skills
+
+A **skill** is a named bundle the model pulls in on demand: a one-line
+description that rides in the system prompt every turn, full instructions
+disclosed only when the model invokes the skill, and the tools the skill
+contributes. That progressive disclosure keeps the expensive instructions out of
+context until they're needed. It has its own short guide —
+**[Skills](/docs/skills)** — adding a skill to the multi-turn loop, then guarding
+it with a credential and an approval.
+
 ## Permissions & Credentials
 
 Some tool calls are risky enough that a human should approve them first. The

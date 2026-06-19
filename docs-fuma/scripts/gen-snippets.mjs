@@ -28,12 +28,39 @@ const SNIPPETS = [
     out: "snippets/multi-turn-chat-loop.mdx",
     title: "examples/multi-turn-chat/multi-turn-chat.ts",
   },
+  {
+    src: "examples/skill-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/skill-step1.mdx",
+    title: "examples/skill-tutorial/step1.ts",
+  },
+  {
+    src: "examples/skill-tutorial/step2.ts",
+    region: "step2",
+    out: "snippets/skill-step2.mdx",
+    title: "examples/skill-tutorial/step2.ts",
+  },
+  {
+    src: "examples/skill-tutorial/step3.ts",
+    region: "step3",
+    out: "snippets/skill-step3.mdx",
+    title: "examples/skill-tutorial/step3.ts",
+  },
+  {
+    src: "examples/skill-tutorial/step4.ts",
+    region: "step4",
+    out: "snippets/skill-step4.mdx",
+    title: "examples/skill-tutorial/step4.ts",
+  },
 ];
 
 // Example dev imports (relative, to TS source) → published package specifiers.
 const IMPORT_REWRITES = [
-  [/(["'])(?:\.\.\/)+agent-core\/providers\/openai-compatible\.ts\1/g, '"agent-core/providers/openai"'],
-  [/(["'])(?:\.\.\/)+agent-core\/index\.ts\1/g, '"agent-core"'],
+  [/(["'])(?:\.\.\/)+agent-core\/providers\/openai-compatible\.ts\1/g, '"@open-agent-os/core/providers/openai"'],
+  [/(["'])(?:\.\.\/)+agent-core\/index\.ts\1/g, '"@open-agent-os/core"'],
+  // bunShellBackend is host glue (you bring your own ShellBackend), not a package
+  // export — present it as a local module the reader provides.
+  [/(["'])(?:\.\.\/)+bun-backends\.ts\1/g, '"./bun-backends"'],
 ];
 
 /** Extract a `// #region name` … `// #endregion` block and dedent it. */

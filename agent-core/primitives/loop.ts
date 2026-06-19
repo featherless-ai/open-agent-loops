@@ -301,10 +301,16 @@ export async function runAgent(options: RunAgentOptions): Promise<RunResult> {
   const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
   const toolSpecs = tools.length > 0 ? tools.map(toToolSpec) : undefined;
 
-  // Seed the working history from memory, then add this run's prompt.
+  // Seed the working history from memory, then add this run's prompt. Two arrays
+  // are kept in lockstep — every append below pushes to both — so the invariant
+  // `messages === [...history, ...newMessages]` holds for the whole run.
   const history = await memory.load(sessionId);
   const prompts = normalizePrompt(options.prompt);
+  // `newMessages`: only what this run adds (prompt, assistant turns, tool results,
+  // injected messages) — the delta callers read to see "what just happened".
   const newMessages: Message[] = [...prompts];
+  // `messages`: the full conversation (loaded history + everything added) — what
+  // the model sees each turn and what you'd forward to continue the session.
   const messages: Message[] = [...history, ...prompts];
   await memory.append(sessionId, prompts);
 

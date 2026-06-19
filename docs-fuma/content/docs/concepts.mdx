@@ -75,7 +75,7 @@ A run ends when the model returns a final answer, a tool sets `terminate`, or a
 `StopCondition` fires. Combinators let you build predicates declaratively:
 
 ```ts
-import { runAgent, maxSteps, whenToolCalled, any } from "agent-core";
+import { runAgent, maxSteps, whenToolCalled, any } from "@open-agent-os/core";
 
 await runAgent({
   // ...
@@ -119,12 +119,12 @@ Ready to use as-is (pure, in-memory, zero network):
 - **Reasoning kwargs** — `reasoningProfileFor` / `injectReasoningKwargs` for
   per-model-family thinking toggles.
 - **Testing** — `MockModelClient`, a scripted `ModelClient` imported from
-  `agent-core/mocks/mock-model`.
+  `@open-agent-os/core/mocks/mock-model`.
 
 Opt-in provider battery:
 
 - **`OpenAICompatibleModel`** — a complete `ModelClient` for any
-  OpenAI-compatible endpoint, from the `agent-core/providers/openai` subpath
+  OpenAI-compatible endpoint, from the `@open-agent-os/core/providers/openai` subpath
   (kept out of the core entry so the `openai` SDK never lands in a browser
   bundle). Install the peer: `npm install openai`.
 

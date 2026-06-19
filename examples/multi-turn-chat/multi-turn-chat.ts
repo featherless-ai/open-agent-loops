@@ -12,7 +12,7 @@
  * Run it (Bun auto-loads .env):
  *   bun run examples/multi-turn-chat/multi-turn-chat.ts
  */
-
+// #region chat-loop
 import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "../../agent-core/index.ts";
 import type { AgentEvent } from "../../agent-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
@@ -76,7 +76,7 @@ function render(e: AgentEvent) {
   }
 }
 
-// #region chat-loop
+
 const memory = new SessionMemoryStore(); // one store, reused every turn
 const sessionId = "chat"; //               same id every turn → one conversation
 const rl = createInterface({ input, output });

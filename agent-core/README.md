@@ -32,9 +32,9 @@ load history → append prompt → ┌─ stream assistant turn
 ## Usage
 
 ```ts
-import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "agent-core";
+import { runAgent, SessionMemoryStore, defineTool, AgentEventType } from "@open-agent-os/core";
 // MockModelClient is a test double, not part of the public surface:
-import { MockModelClient } from "agent-core/mocks/mock-model";
+import { MockModelClient } from "@open-agent-os/core/mocks/mock-model";
 import { z } from "zod";
 
 const weather = defineTool({
@@ -101,8 +101,8 @@ import {
   InMemoryPermissionStore,
   PermissionPolicy,
   ApprovalChoice,
-} from "agent-core";
-import type { ApprovalPrompter } from "agent-core";
+} from "@open-agent-os/core";
+import type { ApprovalPrompter } from "@open-agent-os/core";
 
 // Config: read tool policies from anywhere. Ask means prompt the user.
 const store = new InMemoryPermissionStore({
@@ -136,7 +136,7 @@ provider's API, then translate its chunks into `StreamEvent`s. Any
 OpenAI-compatible endpoint works with a raw `fetch`; no extra package needed.
 
 ```ts
-import type { ModelClient, ModelRequest, StreamEvent } from "agent-core";
+import type { ModelClient, ModelRequest, StreamEvent } from "@open-agent-os/core";
 
 export class MyModel implements ModelClient {
   async *stream(req: ModelRequest): AsyncGenerator<StreamEvent> {
@@ -147,7 +147,7 @@ export class MyModel implements ModelClient {
 ```
 
 Or skip the boilerplate: `OpenAICompatibleModel` from the opt-in
-`agent-core/providers/openai` subpath implements `stream()` against any
+`@open-agent-os/core/providers/openai` subpath implements `stream()` against any
 OpenAI-compatible endpoint (install the optional `openai` peer). It's a separate
 subpath so importing `agent-core` never pulls the SDK into a browser bundle.
 
@@ -175,8 +175,8 @@ trace is fully written and you never have to call `flush()` yourself (set
 `flushOnEnd: false` to manage it manually, or call `flush()` for non-loop use).
 
 ```ts
-import { Tracer } from "agent-core";
-import { OpenAICompatibleModel } from "agent-core/providers/openai";
+import { Tracer } from "@open-agent-os/core";
+import { OpenAICompatibleModel } from "@open-agent-os/core/providers/openai";
 import { appendFile } from "node:fs/promises";
 
 // Async, batched, off the hot path. Flush once when the run ends.

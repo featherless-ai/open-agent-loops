@@ -1,5 +1,5 @@
 {
-  "name": "agent-core",
+  "name": "@open-agent-os/core",
   "version": "0.0.1",
   "description": "A minimal, provider-agnostic agentic loop. Plug-and-play seams behind interfaces.",
   "type": "module",

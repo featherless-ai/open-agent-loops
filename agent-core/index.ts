@@ -104,6 +104,14 @@ export { ExecutionMode } from "./tools/tools.types";
 
 export { ToolRegistry } from "./tools/registry";
 
+// Skills: a named bundle of instructions + tools the model pulls in on demand.
+// Composition over the existing seams — the catalog goes in `system`, the tools
+// in `tools`, and disclosure rides the tool seam (`skillTool`). The loop is
+// untouched, exactly like ToolRegistry.
+export { SkillRegistry } from "./skills/registry";
+export { skillResourceTool, skillTool } from "./skills/skill-tool";
+export type { Skill, SkillResource } from "./skills/skills.types";
+
 // Built-in tools: SDK-owned wiring over capability seams the consumer MUST
 // implement (no host-binding backend is shipped — that is the consumer's, and
 // the correct security boundary). Mocks live in `./mocks`, imported by tests.

@@ -27,8 +27,8 @@ import {
   InMemoryPermissionStore,
   PermissionPolicy,
   ApprovalChoice,
-} from "agent-core";
-import type { ApprovalPrompter } from "agent-core";
+} from "@open-agent-os/core";
+import type { ApprovalPrompter } from "@open-agent-os/core";
 import { z } from "zod";
 // ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
 // loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
@@ -104,7 +104,7 @@ with the gate without either knowing about the other — the credential wraps th
 tool, the permission gates the batch:
 
 ```ts
-import { withCredentials, InMemoryCredentialStore } from "agent-core";
+import { withCredentials, InMemoryCredentialStore } from "@open-agent-os/core";
 
 // deploy now authenticates with a token it never sees in the clear: the model
 // passes the placeholder `{{deploy_token}}`, resolved only inside execute.
@@ -154,7 +154,22 @@ approval, `withCredentials` swaps `{{deploy_token}}` for the real token for that
 one call and scrubs it from the result. Deny it, and the call never runs — it
 comes back as an error tool-result the model can react to.
 
-A **skill** guards the same way: its bundled tools are just tools, so wrap each
-with `withCredentials` and let the same `gateToolCalls` hook admit them. (Skills
-are a design sketch — `agent-core/docs/skills.md` — for now; the composition
-above is what they build on.)
+## Guarding a Skill
+
+A **skill** — a named bundle of instructions the model pulls in on demand —
+inherits both guards for free, because a skill runs through tools you have
+already wired. The typical skill ships *no tools of its own*: it is pure
+instructions that drive the shared `shell` tool. So you wrap that **one** shell
+tool with `withCredentials` and gate it with the same `gateToolCalls` hook, and
+every command the skill issues is both credentialed and approved — the skill
+layer never has to know about either seam.
+
+The runnable `examples/guarded-skill-chat/guarded-skill-chat.ts` is exactly the
+loop above plus a `SkillRegistry` and `skillTool`: a `secret-hello` skill tells
+the model to run `SECRET_HELLO_TOKEN={{secret_hello_token}} ./secret-hello "<name>"`
+against a real binary that refuses to run without the credential. Because the
+gate runs *before* `execute` and the credential swap happens *inside* it, the
+approval prompt shows you `{{secret_hello_token}}` — **never the real secret**.
+
+See `agent-core/docs/skills.md` for the skill seam itself, and
+`examples/secret-hello-skill/` for the same skill without the permission gate.

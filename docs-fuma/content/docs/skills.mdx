@@ -1,0 +1,119 @@
+---
+title: Skills
+description: A short tutorial — bundle instructions, tools, and reference material the model loads on demand, then guard the bundle with a secret and an approval.
+---
+
+A **skill** is a capability you hand the model and let it reach for when it fits
+the task. It bundles a one-line **description** the model sees every turn, the
+full **instructions** it loads only when the skill is relevant, and the **tools**
+the skill drives. Keeping the long instructions out of context until they're
+needed is the whole point — you can offer many skills for the cost of a few
+one-line descriptions.
+
+This tutorial starts from the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) and grows **one program** across
+four steps:
+
+1. **Add a skill** the model loads on demand.
+2. **Bundle reference material** it reads only when it needs it.
+3. **Give it a secret** it must use — without the model ever seeing it.
+4. **Require approval** before the skill acts.
+
+Each step below shows the **whole program so far** — the lines it adds are
+**highlighted**.
+
+## Step 1 — Add a Skill
+
+A skill's instructions can be long, and most turns don't need them. So the model
+sees only the one-line description every turn; when it decides the skill applies,
+it calls the built-in `skill` tool and the full instructions arrive as that
+call's result. Nothing in the loop changes — disclosure is just a tool call.
+
+Collect your skills in a `SkillRegistry` and give `runAgent` two things: the
+catalog for the system prompt, and the tools — `skillTool` (which does the
+disclosure) plus the tools the skill drives. Here a `greet` skill drives a shared
+`shell`:
+
+<include>../../snippets/skill-step1.mdx</include>
+
+Run it and say hello:
+
+```bash
+bun run examples/skill-tutorial/step1.ts
+you › say hello to Ada
+```
+
+The model sees `greet` in the catalog, calls `skill({ name: "greet" })` to load
+the instructions, then runs the `echo` command and reports it. Because `memory`
+and `sessionId` are reused, the next message continues the same conversation.
+
+## Step 2 — Bundle Reference Material on Demand
+
+There's a third level of disclosure. A skill can carry **resources** — reference
+docs, datasets, a form template — that load only when the model asks for them.
+You hand the skill a `load` thunk instead of the text, so a large reference never
+enters context, or even gets read off disk, until it's actually used. The
+highlighted lines add a `phrasebook` resource and the `skillResourceTool` that
+loads it:
+
+<include>../../snippets/skill-step2.mdx</include>
+
+```bash
+bun run examples/skill-tutorial/step2.ts
+you › say hello to Ada in French
+```
+
+Now disclosure goes three deep: catalog (**L1**) → `skill` instructions, which now
+end with a manifest of the skill's resources (**L2**) → the resource body via
+`skill_resource` (**L3**). The `load()` thunk runs only on that call — greet in
+English and the file is never read.
+
+## Step 3 — Give the Skill a Secret
+
+Real skills do real work, and that often needs a secret. Here the skill greets
+through an access-controlled CLI that wants a token — and you don't want that
+token in the model's view or the transcript. Wrap the shared `shell` with
+`withCredentials`; the model only ever writes the `{{placeholder}}`, and the real
+value is filled in for the one command that uses it and scrubbed from the result:
+
+<include>../../snippets/skill-step3.mdx</include>
+
+```bash
+bun run examples/skill-tutorial/step3.ts
+you › say hi to Ada
+```
+
+When the model runs the command, `{{secret_hello_token}}` is swapped for the real
+token just for that call. The `secret-hello` binary refuses to run without it —
+so you can watch the secret do its job.
+
+## Step 4 — Require Approval
+
+Some actions should ask you first. Approval is a separate, independent seam: the
+`gateToolCalls` hook looks at the turn's tool calls *before* any run and decides
+allow / deny / **ask**. The highlighted lines pre-approve loading a skill or a
+resource, and ask before the actual shell command:
+
+<include>../../snippets/skill-step4.mdx</include>
+
+```bash
+bun run examples/skill-tutorial/step4.ts
+you › say hi to Ada
+```
+
+You'll get a prompt before the command runs. The detail that makes this safe: the
+gate runs *before* the credential swap, so the approval shows you the placeholder
+— `{{secret_hello_token}}`, never the real secret. Deny it and the call never
+runs; it comes back as an error the model can react to.
+
+## Recap
+
+Starting from a plain chat loop, a few lines at a time you gave the model a skill
+it loads on demand, reference material it reads only when needed, a secret it can
+use but never see, and an approval gate in front of it. The skill never had to
+know about any of it — you wrapped the shared tool once and gated the batch once.
+
+Next, **[Permissions & Credentials](/docs/gating-tool-calls)** goes deeper on the
+policy itself — persisting "always" choices and writing the `ApprovalPrompter`.
+The finished program is at `examples/skill-tutorial/step4.ts`; for the skill
+seam's design, see `agent-core/docs/skills.md`.
