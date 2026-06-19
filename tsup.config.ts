@@ -16,7 +16,7 @@ export default defineConfig({
     "mocks/mock-model": "agent-core/mocks/mock-model.ts",
     // Server-side opt-in: the OpenAI-compatible ModelClient. Kept out of the
     // core entry so importing `agent-core` never pulls `openai` into a browser
-    // bundle — consumers reach for it explicitly via `agent-core/providers/openai`.
+    // bundle — consumers reach for it explicitly via `@open-agent-os/core/providers/openai`.
     "providers/openai": "agent-core/providers/openai-compatible.ts",
   },
   format: ["esm"],

@@ -5,7 +5,7 @@
  *
  * `openai` is an OPTIONAL peer dependency — install it only if you use this
  * provider. The core loop never imports it; you reach this file by its own
- * subpath (`agent-core/providers/openai`), so consumers who bring their own
+ * subpath (`@open-agent-os/core/providers/openai`), so consumers who bring their own
  * ModelClient never pull the SDK in.
  *
  * Reasoning: OpenAI-compatible reasoning models stream chain-of-thought on a
@@ -132,8 +132,8 @@ export interface OpenAICompatibleOptions {
  *
  * @example
  * ```ts
- * import { OpenAICompatibleModel } from "agent-core/providers/openai";
- * import { Role, StreamEventType } from "agent-core";
+ * import { OpenAICompatibleModel } from "@open-agent-os/core/providers/openai";
+ * import { Role, StreamEventType } from "@open-agent-os/core";
  *
  * const model = new OpenAICompatibleModel({
  *   model: "deepseek-ai/DeepSeek-V3.1",
