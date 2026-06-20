@@ -39,6 +39,17 @@ export enum ExecutionMode {
  * and for *soft* outcomes the model should read but not treat as a failure (e.g.
  * a non-zero shell exit, an "already up to date" note).
  *
+ * Abstraction over — nothing on the wire; this is a purely in-process handoff.
+ * The loop folds `content` into a {@link ToolMessage} (that message *is* the wire
+ * shape — `{ role: "tool", tool_call_id, content }`), reads `terminate` for its
+ * own stop logic, and never sends `details` to the model. OpenAI has no
+ * `ToolResult` counterpart.
+ *
+ * @example A handler's return value (in-process only — never serialized as-is)
+ * ```json
+ * { "content": "72°F and sunny", "terminate": false }
+ * ```
+ *
  * @group Defining Tools
  */
 export interface ToolResult {

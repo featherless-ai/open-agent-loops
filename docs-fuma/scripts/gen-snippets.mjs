@@ -53,6 +53,12 @@ const SNIPPETS = [
     title: "examples/tool-tutorial/step4.ts",
   },
   {
+    src: "examples/tool-tutorial/step5.ts",
+    region: "step5",
+    out: "snippets/tool-step5.mdx",
+    title: "examples/tool-tutorial/step5.ts",
+  },
+  {
     src: "examples/skill-tutorial/step1.ts",
     region: "step1",
     out: "snippets/skill-step1.mdx",

@@ -12,12 +12,13 @@ used.
 
 This tutorial starts from the [multi-turn chat
 loop](/docs/getting-started#multi-turn-chat-loop) and grows **one program** across
-four steps:
+five steps:
 
 1. **Define a tool** the model can call.
 2. **Let it fail safely** — throw an error the model recovers from.
 3. **Organize many tools** in a `ToolRegistry`, and run a stateful one safely.
 4. **Reach for a built-in tool** over a backend you supply.
+5. **Gate a risky call** behind your approval before it runs.
 
 Each step below shows the **whole program so far** — the lines it adds are
 **highlighted**.
@@ -122,12 +123,38 @@ a file, or hits the network should be your code, not the SDK's — so each built
 exception is the **[planning tools](/docs/planning-tools)**, which are pure
 in-memory and ship ready to use.
 
+## Step 5 — Gate a Tool Behind Approval
+
+Some calls are risky enough that a human should sign off first — running a shell
+command, deploying, deleting. Admission is a seam separate from the tool itself:
+the `gateToolCalls` hook sees the whole turn's calls *before* any of them run and
+decides allow / deny / **ask**. It's batteries-included — pair the shipped
+`permissionGate` with an `InMemoryPermissionStore` (the policy) and an
+`ApprovalPrompter` (how you ask). The highlighted lines let `weather` and
+`remember` run freely and prompt before `shell`:
+
+<include>../../snippets/tool-step5.mdx</include>
+
+```bash
+bun run examples/tool-tutorial/step5.ts
+you › list the files in the current directory
+```
+
+Ask about the weather and it just runs; ask it to touch the filesystem and you
+get a `[y/N]` before `shell` executes. The whole turn's calls arrive together, so
+the gate runs **once per turn** — ahead of the parallel execution phase, so the
+prompt never races a running tool. A denied call never runs; it comes back as an
+error tool-result the model can react to. Return `ApprovalChoice.AllowAlways` /
+`DenyAlways` instead of the "once" variants and `permissionGate` persists that
+policy to the store, so the next turn won't ask again.
+
 ## Recap
 
 Starting from a plain chat loop, a few lines at a time you gave the model a tool,
 let it recover from a tool's error instead of crashing, organized many tools in a
-registry and ran a stateful one safely, then handed it a built-in tool over a
-backend you own. The loop never changed — tools are just values you pass it.
+registry and ran a stateful one safely, handed it a built-in tool over a backend
+you own, then gated its riskiest call behind your approval. The loop never changed
+— tools are just values you pass it.
 
 From here:
 
@@ -135,7 +162,8 @@ From here:
   demand — the next level of progressive disclosure.
 - **[Planning Tools](/docs/planning-tools)** are batteries-included tools that give
   the model durable working memory.
-- **[Permissions & Credentials](/docs/gating-tool-calls)** gate a tool's calls
-  behind an approval and feed it a secret the model never sees.
+- **[Permissions & Credentials](/docs/gating-tool-calls)** goes deeper on the gate
+  you just used — persisting "always" choices, writing the `ApprovalPrompter` — and
+  adds **credentials**: feeding a tool a secret the model never sees.
 - The **[API reference](/docs/api)** has exact signatures for `defineTool`,
   `ToolRegistry`, and every built-in tool and backend.

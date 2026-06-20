@@ -28,6 +28,22 @@ export enum ToolCallType {
  * name, arguments } }`, where `arguments` is a JSON *string* (not a parsed
  * object). The loop JSON-parses and schema-validates it before the tool runs.
  *
+ * Abstraction over — nothing added: every field is OpenAI's, so a `ToolCall`
+ * *is* the wire object. It rides as one element of an assistant turn's
+ * {@link AssistantMessage.tool_calls} array.
+ *
+ * @example Wire shape (one element of `assistant.tool_calls[]`)
+ * ```json
+ * {
+ *   "id": "call_abc123",
+ *   "type": "function",
+ *   "function": {
+ *     "name": "get_weather",
+ *     "arguments": "{\"city\":\"NYC\",\"units\":\"metric\"}"
+ *   }
+ * }
+ * ```
+ *
  * @see {@link ToolArguments}
  * @group Messages & Events
  */
@@ -55,6 +71,18 @@ export interface ToolCall {
  * arguments are keyed values. The value types aren't known at the loop level
  * (each tool has its own schema), hence `unknown` per key — a tool's own
  * `execute` gets them fully typed as `z.infer<schema>`.
+ *
+ * Abstraction over — `JSON.parse(toolCall.function.arguments)`. Not a wire type
+ * of its own: the wire carries the *string* on {@link ToolCall.function}; this is
+ * that string parsed, on its way to a tool's `execute`.
+ *
+ * @example From the wire string to a parsed `ToolArguments`
+ * ```jsonc
+ * // on the wire — ToolCall.function.arguments is a JSON *string*:
+ * "{\"city\":\"NYC\",\"units\":\"metric\"}"
+ * // parsed into a ToolArguments object:
+ * { "city": "NYC", "units": "metric" }
+ * ```
  *
  * @group Messages & Events
  */

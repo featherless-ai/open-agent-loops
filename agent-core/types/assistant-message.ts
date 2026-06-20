@@ -19,6 +19,28 @@ import type { ToolCall } from "./tool-calls";
  * failed (a blank or truncated completion) — distinct from a tool failure, which
  * lands on a {@link ToolMessage}.
  *
+ * Abstraction over — OpenAI's `assistant` message (`{ role, content, tool_calls
+ * }`); `reasoning`, `reasoning_details`, `finishReason`, `isError`, and
+ * `timestamp` are extensions this loop adds. Egress sends `content` + `tool_calls`
+ * verbatim, and re-sends reasoning *only* on tool-call turns (as
+ * `reasoning_details` or flat `reasoning_content`) per the field rules below; the
+ * other extensions are dropped.
+ *
+ * @example Wire shape — a turn that requests one tool
+ * ```json
+ * {
+ *   "role": "assistant",
+ *   "content": "",
+ *   "tool_calls": [
+ *     {
+ *       "id": "call_abc123",
+ *       "type": "function",
+ *       "function": { "name": "get_weather", "arguments": "{\"city\":\"NYC\"}" }
+ *     }
+ *   ]
+ * }
+ * ```
+ *
  * @group Messages & Events
  */
 export interface AssistantMessage extends MessageBase {

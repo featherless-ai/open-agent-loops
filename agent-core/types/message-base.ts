@@ -18,6 +18,11 @@ import type { ContentPart } from "./content-part";
  * pin it back to `string`; only {@link UserMessage} keeps the multimodal array,
  * which is exactly where the chat-completions spec allows images / audio / files.
  *
+ * Abstraction over — no wire shape of its own: every wire message carries a
+ * `role`, which the concrete variants add (see each variant's `@example`).
+ * `timestamp` is a shared extension dropped at egress; the OpenAI wire has no
+ * per-message timestamp.
+ *
  * @group Messages & Events
  */
 export interface MessageBase {

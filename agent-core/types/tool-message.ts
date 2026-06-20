@@ -17,6 +17,20 @@ import { Role } from "./roles";
  * the model can tell which result belongs to which call. N tool calls in a turn
  * yield N tool messages, paired one-to-one by id.
  *
+ * Abstraction over — OpenAI's `tool` message (`{ role, tool_call_id, content }`);
+ * `toolName` and `isError` are this loop's extensions (plus `timestamp` from the
+ * base). Egress drops the extensions, so only the three standard fields cross the
+ * wire (see `toChatMessage`).
+ *
+ * @example Wire shape (OpenAI chat-completions)
+ * ```json
+ * {
+ *   "role": "tool",
+ *   "tool_call_id": "call_abc123",
+ *   "content": "72°F and sunny"
+ * }
+ * ```
+ *
  * @see {@link ToolCall}
  * @group Messages & Events
  */

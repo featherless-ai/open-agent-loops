@@ -17,6 +17,24 @@ import { Role } from "./roles";
  * chat-completions spec, where images, audio, and files are input-only and ride
  * on user turns; the array passes straight through egress to the provider.
  *
+ * Abstraction over — OpenAI's `user` message (`{ role, content }`), where
+ * `content` is a `string` or a {@link ContentPart} array; `timestamp` is the only
+ * extension. The multimodal array crosses egress unchanged.
+ *
+ * @example Wire shape — plain text, then multimodal
+ * ```json
+ * { "role": "user", "content": "What's the weather in NYC?" }
+ * ```
+ * ```json
+ * {
+ *   "role": "user",
+ *   "content": [
+ *     { "type": "text", "text": "What's in this image?" },
+ *     { "type": "image_url", "image_url": { "url": "https://example.com/a.png" } }
+ *   ]
+ * }
+ * ```
+ *
  * @group Messages & Events
  */
 export interface UserMessage extends MessageBase {
