@@ -102,10 +102,12 @@ history and all. The key stays a `$LLM_API_KEY` placeholder, so the output is sa
 to copy into a bug report. `stream: false` flips the body to a single JSON
 response so a hand-run is easy to read; drop it to stream SSE back.
 
-<Callout title="Quoting and large bodies">
-  `toCurl` single-quotes the body and escapes any embedded apostrophe as `'\''`,
-  so message content like *"what's the weather"* survives the shell intact. For
-  very large multi-turn bodies, prefer writing the body to a file and using
+<Callout title="Readable by default, quoting handled">
+  `toCurl` pretty-prints the JSON body so the command is easy to read — single
+  quotes preserve the newlines, so it stays runnable (pass `pretty: false` for a
+  compact one-liner). It also escapes any embedded apostrophe as `'\''`, so
+  message content like *"what's the weather"* survives the shell intact. For very
+  large multi-turn bodies, prefer writing the body to a file and using
   `-d @body.json` over an inline payload.
 </Callout>
 

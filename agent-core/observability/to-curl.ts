@@ -36,6 +36,12 @@ export interface ToCurlOptions {
    * that's easy to read when replayed by hand. Omit to keep the body as captured.
    */
   stream?: boolean;
+  /**
+   * Pretty-print the JSON body (2-space indent) so the command is easy to read.
+   * Single quotes preserve the newlines, so it stays runnable. Default `true`;
+   * set `false` for a compact one-liner (handy for scripting or `-d @file`).
+   */
+  pretty?: boolean;
 }
 
 /**
@@ -47,14 +53,15 @@ export interface ToCurlOptions {
  * @group Observability
  */
 export function toCurl(body: unknown, options: ToCurlOptions): string {
-  const { baseURL, path = "/chat/completions", apiKeyEnv = "API_KEY", stream } = options;
+  const { baseURL, path = "/chat/completions", apiKeyEnv = "API_KEY", stream, pretty = true } = options;
   const payload = stream === undefined ? body : { ...(body as object), stream };
+  const json = JSON.stringify(payload, null, pretty ? 2 : undefined);
   const url = `${baseURL.replace(/\/+$/, "")}${path}`;
   return [
     `curl -N ${url} \\`,
     `  -H 'Content-Type: application/json' \\`,
     `  -H "Authorization: Bearer $${apiKeyEnv}" \\`,
-    `  -d ${shellSingleQuote(JSON.stringify(payload))}`,
+    `  -d ${shellSingleQuote(json)}`,
   ].join("\n");
 }
 

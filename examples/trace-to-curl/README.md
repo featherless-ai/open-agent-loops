@@ -19,17 +19,25 @@ bun run examples/trace-to-curl/trace-to-curl.ts
 ```
 
 You'll see the agent stream its answer (calling `weather` for each city), then a
-`curl` per turn. Paste one to replay that exact call:
+`curl` per turn. The body is pretty-printed by default (single quotes preserve the
+newlines, so it stays runnable). Paste one to replay that exact call:
 
 ```bash
 curl -N https://api.featherless.ai/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $LLM_API_KEY" \
-  -d '{"model":"...","messages":[...],"tools":[...],"stream":false}'
+  -d '{
+  "model": "...",
+  "messages": [ ... ],
+  "tools": [ ... ],
+  "stream": false
+}'
 ```
 
 ## Notes
 
+- The body is pretty-printed for readability; pass `pretty: false` to `toCurl`
+  for a compact one-liner (handy for scripting or `-d @body.json`).
 - The printed curls set `stream: false` for a single readable JSON response.
   Drop that to stream SSE back (the captured body has `stream: true`).
 - Bodies are single-quoted for the shell; a literal `'` inside message content
