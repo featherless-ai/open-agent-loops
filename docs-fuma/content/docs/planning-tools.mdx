@@ -1,78 +1,125 @@
 ---
 title: Planning Tools
-description: A short guide — give the model durable working memory with a scratchpad and a to-do list.
+description: A short tutorial — give the model durable working memory with a to-do list and a scratchpad, then freeze its plan into a replayable workflow.
 ---
 
-The [multi-turn chat loop](/docs/getting-started#multi-turn-chat-loop) remembers
-*messages*. But a long, multi-step task also needs the model to hold a **plan**
-and a **to-do list** it can revise over many turns. There's a catch that makes
-this non-trivial: a turn's private reasoning is dropped from later requests, so
-the model can't rely on "thinking" to carry a plan forward. A **tool result**, on
-the other hand, stays in the transcript — so the way to give the model durable
-working memory is to make it *write to a tool*. Two batteries-included tool sets
-do exactly that:
+A long, multi-step task needs the model to hold a **plan** it can revise over many
+turns. The model's own thinking can carry some of this — interleaved/extended
+thinking keeps reasoning across turns, and this SDK resends it on tool-call turns —
+but thinking is a fragile place to *store* a plan: whether it survives depends on
+the provider and config, it can come back summarized or encrypted rather than
+re-readable text, and it's freeform prose, not queryable state you can persist. A
+**tool result** is durable, structured, and yours to keep — so the robust way to
+give the model working memory is to make it *write the plan to a tool*. Two
+batteries-included tool sets do exactly that:
 
 | Tool set            | Tools it returns                          | What it's for                                          |
 | ------------------- | ----------------------------------------- | ------------------------------------------------------ |
-| `scratchpadTools()` | `read_scratchpad`, `write_scratchpad`     | One free-form text slot for a plan or running notes.   |
 | `todoListTools()`   | `todo_append`, `todo_list`, `todo_update` | A task tracker with a `pending → in_progress → done` (plus `cancelled` / `failed`) lifecycle and retry counting. |
+| `scratchpadTools()` | `read_scratchpad`, `write_scratchpad`     | One free-form text slot for a plan or running notes.   |
 
-Each set is backed by a store you construct **once and reuse** — exactly like
-`memory` + `sessionId` — so the plan and the list persist across the whole
-conversation. Add them to the [multi-turn chat
-loop](/docs/getting-started#multi-turn-chat-loop) by extending the `tools` array:
+This tutorial grows **one program** across four steps:
 
-```ts
-import {
-  runAgent,
-  SessionMemoryStore,
-  InMemoryScratchpad,
-  InMemoryTodoStore,
-  scratchpadTools,
-  todoListTools,
-  defineTool,
-  AgentEventType,
-} from "@open-agent-os/core";
-// ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
-// loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
+1. **Track work** with a to-do list the model maintains itself.
+2. **Add a scratchpad** for free-form notes.
+3. **Author a workflow** — hand the agent a prose brief, let it decompose and run, then freeze the plan.
+4. **Replay** that frozen workflow deterministically.
 
-const memory = new SessionMemoryStore(); // one store, reused every turn
-const sessionId = "chat";                // same id every turn → one conversation
+Steps 2–4 show only the lines they add, **highlighted**.
 
-// Construct the planning stores once and reuse them — like `memory`, this is
-// what makes the plan and the list survive from one turn to the next. (Pass no
-// argument and each set spins up its own fresh in-memory store.)
-const scratchpad = new InMemoryScratchpad();
-const todos = new InMemoryTodoStore();
+## Step 1 — Track work with a to-do list
 
-// Spread each set into the model's tool list alongside your own tools.
-const tools = [weather, ...scratchpadTools(scratchpad), ...todoListTools(todos)];
+Construct an `InMemoryTodoStore` **once** (like `memory`, reusing it is what makes
+the list durable) and spread `todoListTools(store)` into the tool list. Give the
+model a multi-step job and it appends a step per task, flips each to `in_progress`,
+does it, and marks it `done`:
 
-const rl = createInterface({ input, output });
-while (true) {
-  const prompt = (await rl.question("\nyou › ")).trim();
-  if (prompt === "" || prompt === "exit") break;
+<include>../../snippets/planning-step1.mdx</include>
 
-  process.stdout.write("bot › ");
-  await runAgent({ model, memory, sessionId, prompt, tools, onEvent: render });
-}
-rl.close();
+```bash
+bun run examples/planning-tutorial/step1.ts
 ```
 
-Now give it work that spans turns — "Plan a 3-stop day trip to Kyoto, then book
-each stop one at a time." The model can `write_scratchpad` its plan, `todo_append`
-a step per stop, flip each to `in_progress` / `done` with `todo_update`, and
-`read_scratchpad` / `todo_list` on a later turn to pick up exactly where it left
-off.
+The list survives across the loop's turns even though the reasoning between them
+doesn't — that's the point. At the end we read it straight from the store with
+`todos.read(...)`: it's canonical state, not reconstructed from the transcript.
+
+## Step 2 — Add a scratchpad
+
+A to-do list is structured (one row per task); a **scratchpad** is unstructured
+(one block of prose). Construct an `InMemoryScratchpad` and spread
+`scratchpadTools(scratchpad)` in too — the highlighted lines are all it takes:
+
+<include>../../snippets/planning-step2.mdx</include>
+
+```bash
+bun run examples/planning-tutorial/step2.ts
+```
+
+Now the model jots intermediate findings (the word count, the slug) as it works
+and can re-read them later.
 
 <Callout title="Two layers of memory">
-  These tools and `memory` persist *different* things. `memory` records the
-  **transcript** — every message, including each scratchpad/to-do tool call and
-  its result. The scratchpad and to-do **stores** hold the *current canonical
-  state*, queried fresh with `read_scratchpad` / `todo_list` instead of
-  reconstructed from the history. Both tool sets run their tools sequentially,
-  since the tools in a set share one mutable store and the model may call several
-  in a single turn. And like `SessionMemoryStore`, the in-memory stores are a
-  swappable seam — back `Scratchpad` / `TodoStore` with a file or DB to share a
+  These stores and `memory` persist *different* things. `memory` records the
+  **transcript** — every message, including each tool call and its result. The
+  to-do and scratchpad **stores** hold the *current canonical state*, queried
+  fresh with `todo_list` / `read_scratchpad` instead of reconstructed from history.
+  Both sets run their tools sequentially, since the tools in a set share one
+  mutable store. And like `SessionMemoryStore`, the in-memory stores are a
+  swappable seam — back `TodoStore` / `Scratchpad` with a file or DB to share a
   plan across sessions or survive a restart.
 </Callout>
+
+## Step 3 — Author a workflow from a brief
+
+So far the model *wrote* its own list. Lean into that: hand it a **brief** — a
+prose spec — and it decomposes the brief into steps with `todo_append`, then works
+them. Capture the list it built and you have a **workflow**: a serializable `goal`,
+`instructions`, ordered `steps`, and the *names* of the tools those steps need. The
+highlighted lines read the brief and serialize the plan:
+
+<include>../../snippets/planning-step3.mdx</include>
+
+```bash
+bun run examples/planning-tutorial/step3.ts
+```
+
+The agent does the decomposition; we just freeze the result. *prose → plan →
+artifact.* That JSON is the input to the next step.
+
+## Step 4 — Replay the frozen workflow
+
+A workflow isn't a new primitive — there's nothing to add to the loop. It hydrates
+entirely onto seams you already have:
+
+| Serialized field        | Hydrates into           | Via                                |
+| ----------------------- | ----------------------- | ---------------------------------- |
+| `steps`                 | a pre-seeded to-do list | `store.append(...)` per step       |
+| `toolNames`             | the tools for this run  | `ToolRegistry.resolve(names)`      |
+| `goal` + `instructions` | the system prompt       | `runAgent({ system })`             |
+
+So replaying is: deserialize, seed the store, resolve the tool names, run. No
+planning phase — the model executes a fixed, reviewable plan. The highlighted lines
+are that hydration:
+
+<include>../../snippets/planning-step4.mdx</include>
+
+```bash
+bun run examples/planning-tutorial/step4.ts
+```
+
+<Callout title="Data serializes; behavior doesn't">
+  A tool's `execute` is a function, so a workflow can't carry the tools
+  themselves — it carries their *names*. `ToolRegistry.resolve` re-binds those
+  names to live tools at load time and **throws** (listing what *is* registered)
+  if the host never registered one, so a workflow that references a missing tool
+  fails loudly at load instead of the model silently running without it.
+</Callout>
+
+## Recap
+
+Starting from a plain run, a few lines at a time you gave the model a to-do list it
+maintains across turns, a scratchpad for notes, and then turned that emergent list
+into a **workflow** — authored from a brief, frozen as data, replayed
+deterministically. The loop never changed: every step is the same `runAgent` taking
+a plain `Tool[]`. The finished programs are in `examples/planning-tutorial/`.

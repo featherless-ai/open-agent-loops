@@ -1,0 +1,24 @@
+{
+  "name": "publish-blog-post",
+  "goal": "Get a blog post draft ready to publish.",
+  "instructions": "Work the steps in order: set each in_progress, do it with the named tool, then done.",
+  "toolNames": [
+    "word_count",
+    "slugify",
+    "save_draft"
+  ],
+  "steps": [
+    {
+      "id": "step-1",
+      "content": "Measure the word count of the post body."
+    },
+    {
+      "id": "step-2",
+      "content": "Turn the post title into a URL-friendly slug."
+    },
+    {
+      "id": "step-3",
+      "content": "Save the draft to disk, filed under the slug."
+    }
+  ]
+}
