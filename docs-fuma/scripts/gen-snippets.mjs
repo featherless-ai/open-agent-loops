@@ -106,6 +106,24 @@ const SNIPPETS = [
     out: "snippets/planning-step4.mdx",
     title: "examples/planning-tutorial/step4.ts",
   },
+  {
+    src: "examples/tracing-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/tracing-step1.mdx",
+    title: "examples/tracing-tutorial/step1.ts",
+  },
+  {
+    src: "examples/tracing-tutorial/step2.ts",
+    region: "step2",
+    out: "snippets/tracing-step2.mdx",
+    title: "examples/tracing-tutorial/step2.ts",
+  },
+  {
+    src: "examples/tracing-tutorial/step3.ts",
+    region: "step3",
+    out: "snippets/tracing-step3.mdx",
+    title: "examples/tracing-tutorial/step3.ts",
+  },
 ];
 
 // Example dev imports (relative, to TS source) → published package specifiers.

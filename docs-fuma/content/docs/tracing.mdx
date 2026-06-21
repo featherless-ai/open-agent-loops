@@ -1,0 +1,128 @@
+---
+title: Tracing
+description: A short tutorial — attach a passive Tracer to a chat loop, capture the raw request wire, and turn any captured call into a runnable curl you can replay.
+---
+
+A **Tracer** records the trajectory of a run for debugging. It's a *passive
+observer* built on the seams the loop already exposes — it rides your `onEvent`
+sink and the provider's wire taps, so the loop never knows it's there and capture
+can never change a run. Every captured item becomes one timestamped entry in a
+single ordered timeline, which you can fold into a trajectory, render as a
+timeline, dump as JSONL — or, the payoff here, turn back into the exact HTTP call
+that produced it.
+
+This tutorial starts from the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) and grows **one program** across
+three steps:
+
+1. **Attach a Tracer** as a passive observer on the event seam.
+2. **Capture the request wire** — the exact body sent to the model each turn.
+3. **Reconstruct a curl** at the end of every turn, ready to replay.
+
+Each step below shows the **whole program so far** — the lines it adds are
+**highlighted**.
+
+## Step 1 — Attach a Tracer
+
+`tracer.sink` is an `EventSink`: the same shape `runAgent`'s `onEvent` already
+takes. So tracing is just fanning each event to two places — your renderer for
+the human, the sink for the record. Nothing about the loop changes. At the end of
+each turn, `formatTrajectory()` folds what it captured into one *(action →
+observation)* pair per model turn:
+
+<include>../../snippets/tracing-step1.mdx</include>
+
+```bash
+bun run examples/tracing-tutorial/step1.ts
+you › what's the weather in Paris?
+```
+
+You get the model's reasoning and answer streamed live (as always), then a folded
+summary of the turn: the assistant's decision and the tool calls it produced, with
+timings. Because `memory` and `sessionId` are reused, the trajectory grows turn by
+turn — the next step scopes the output to just the latest turn.
+
+<Callout title="Other views of the same trace">
+  The trajectory is one projection. `format()` renders the full timeline one entry
+  per line; `toJSONL()` emits one JSON object per line for storage or tooling;
+  `toJSON()` bundles the timeline with the run's metadata. `disclosure()` shows how
+  the tool surface and context window changed turn to turn. They all read the same
+  `entries` — pick the lens you need.
+</Callout>
+
+## Step 2 — Capture the Request Wire
+
+The trajectory is reconstructed from the loop's events — enough to *see* what
+happened, but not the bytes actually sent. To replay a call you need the wire
+body. `onRawRequest` is the request-side twin of `onRawSSE`: it hands the Tracer
+the fully assembled request — `messages` (system folded in, every `tool_calls`
+block and `tool` result), `tools`, and sampling params — once per model turn.
+`onRequest` is a lightweight summary that seeds the model id and `baseURL` into
+`tracer.meta`. The highlighted lines wire both taps and report what each turn
+captured:
+
+<include>../../snippets/tracing-step2.mdx</include>
+
+```bash
+bun run examples/tracing-tutorial/step2.ts
+you › what's the weather in Paris and Tokyo?
+```
+
+One user message can be **several** model turns — a turn that calls `weather`
+twice, then a turn that answers — so you'll often see two request bodies captured,
+the second carrying the first's tool calls and their results. `tracer.entries`
+is the live timeline; slicing from the index we saved before the turn gives just
+this turn's new entries.
+
+<Callout title="Both directions of the wire">
+  `onRawRequest` captures the request; `onRawSSE` captures the raw response lines
+  the server streams back. Together they're the complete wire. Neither tap sees
+  HTTP headers, so the **API key is never captured** — only the request and
+  response bodies. Add `tracer.observe(model)` for a third, finer grain: the
+  parsed `StreamEvent`s and a per-turn disclosure snapshot.
+</Callout>
+
+## Step 3 — A Curl at the End of Each Turn
+
+The body is already the whole `-d` payload; the only things missing from a
+runnable command are the URL (in `tracer.meta.baseURL`) and the auth header (an
+env placeholder). `toCurl` stitches them together. The highlighted lines print a
+curl for every request the turn made:
+
+<include>../../snippets/tracing-step3.mdx</include>
+
+```bash
+bun run examples/tracing-tutorial/step3.ts
+you › what's the weather in Paris and Tokyo?
+```
+
+Each printed command reproduces one model turn exactly — paste it into a terminal
+(with `LLM_API_KEY` set) and you'll get the same call the agent made, tool-call
+history and all. The key stays a `$LLM_API_KEY` placeholder, so the output is safe
+to copy into a bug report. `stream: false` flips the body to a single JSON
+response so a hand-run is easy to read; drop it to stream SSE back.
+
+<Callout title="Quoting and large bodies">
+  `toCurl` single-quotes the body and escapes any embedded apostrophe as `'\''`,
+  so message content like *"what's the weather"* survives the shell intact. For
+  very large multi-turn bodies, prefer writing the body to a file and using
+  `-d @body.json` over an inline payload.
+</Callout>
+
+## Recap
+
+Starting from a plain chat loop, a few lines at a time you attached a passive
+Tracer on the existing event seam, captured the raw request wire with
+`onRawRequest`, and turned each captured body into a runnable curl with `toCurl`.
+The loop never changed — the Tracer only ever *observes*.
+
+From here:
+
+- **[Bring Your Own Model Client](/docs/bring-your-own-model-client)** — where the
+  `onRawRequest` / `onRawSSE` / `onRequest` taps live, and how to point the
+  provider at any OpenAI-compatible endpoint.
+- **[Bring Your Own Renderer](/docs/bring-your-own-renderer)** goes deeper on the
+  `onEvent` seam the Tracer rides.
+- The **[API reference](/docs/api)** has exact signatures for `Tracer`, `toCurl`,
+  and every trace view (`format`, `trajectory`, `disclosure`, `toJSON`/`toJSONL`).
+```

@@ -9,6 +9,7 @@
     "planning-tools",
     "bring-your-own-renderer",
     "bring-your-own-model-client",
+    "tracing",
     "gating-tool-calls",
     "---Reference---",
     "api"
