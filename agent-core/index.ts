@@ -116,6 +116,7 @@ export type { Skill, SkillResource } from "./skills/skills.types";
 // implement (no host-binding backend is shipped — that is the consumer's, and
 // the correct security boundary). Mocks live in `./mocks`, imported by tests.
 export { formatShellResult, shellTool } from "./tools/builtin/shell";
+export { codeExecutionTool, formatCodeExecutionResult } from "./tools/builtin/code-execution";
 export { formatSearchResults, searchTool } from "./tools/builtin/search";
 export { formatFileContent, formatGlobMatches, globTool, readTool } from "./tools/builtin/file-read";
 export { editTool, formatEditResult, formatWriteResult, writeTool } from "./tools/builtin/file-write";
@@ -125,6 +126,9 @@ export type {
   BrowserElement,
   BrowserSession,
   BrowserSnapshot,
+  CodeExecutionBackend,
+  CodeExecutionRequest,
+  CodeExecutionResult,
   FileEditRequest,
   FileEditResult,
   FileReadBackend,

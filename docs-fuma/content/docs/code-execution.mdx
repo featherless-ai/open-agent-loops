@@ -1,0 +1,167 @@
+---
+title: Code Execution
+description: "A guide — let the model run code in a sandbox: why it's a separate tool from shell, the Deno backend the repo ships, the prompt that steers it, and how inputs and outputs behave."
+---
+
+The [`shell`](/docs/tools) tool runs a command. `code_execution` runs a
+**program** — a snippet in a named language that the model writes and your machine
+runs for real, handing back the captured output. Reach for it when the model should
+*compute* an answer (parse data, do math, transform a file) instead of guessing one:
+the result is measured, not invented in the prompt.
+
+Like every dangerous built-in, it follows the SDK's split: **the SDK owns the
+model-facing contract** — `codeExecutionTool` fixes the `code_execution` name, its
+`{ language, code }` schema, and how the result is formatted — and **you own the
+backend** that actually runs the code. That boundary is the whole point. Running
+model-written code is the single most dangerous thing an agent does, so the core
+ships no executor; you choose one.
+
+## Why a separate tool from `shell`
+
+`shell` and `code_execution` both run model-written instructions, but they differ on
+the two things that matter:
+
+| | `shell` | `code_execution` |
+| --- | --- | --- |
+| Input | one command string | a `{ language, code }` snippet |
+| Isolation (shipped backend) | none — `bunShellBackend` runs on the host | a **deny-by-default sandbox** — `denoCodeExecutionBackend` |
+
+The isolation row is why this isn't just "`shell` with `node -e`". Code execution is
+exactly where you *expect* a sandbox, so the reference backend is sandboxed by
+default (below).
+
+## Wiring it up
+
+`codeExecutionTool` comes from the package; the backend is host glue you bring (the
+repo ships a sandboxed one, `denoCodeExecutionBackend`). Add it to the
+[multi-turn chat loop](/docs/getting-started#multi-turn-chat-loop) by extending the
+`tools` array:
+
+```ts
+import { runAgent, SessionMemoryStore, codeExecutionTool } from "@open-agent-os/core";
+import { denoCodeExecutionBackend } from "./deno-backends"; // the reference backend you bring
+// ...same `model` and `render` renderer as the chat loop.
+
+// codeExecutionTool   = the stable, model-facing contract.
+// denoCodeExecutionBackend() = the swappable host glue that actually runs the code.
+const tools = [codeExecutionTool(denoCodeExecutionBackend())];
+
+await runAgent({ model, memory: new SessionMemoryStore(), sessionId: "demo", prompt, tools });
+```
+
+The full runnable example is at `examples/code-execution/`.
+
+## The batteries
+
+Code execution is a **host-binding seam**, so unlike the
+[planning tools](/docs/planning-tools) it isn't pure batteries-included — the
+executor has to bind to a real runtime, which the core refuses to ship. What the repo
+*does* provide, ready to use:
+
+| Battery | What it is | Use it for |
+| --- | --- | --- |
+| `denoCodeExecutionBackend()` | A **sandboxed** reference backend. Pipes the snippet to `deno run` with a deny-by-default permission set — no file, network, or env access unless you grant it. JavaScript/TypeScript only. | Running untrusted, model-written JS/TS with real isolation and zero infrastructure. |
+| `MockCodeExecutionBackend` | A scriptable test double — records requests, replays a fixed result. | Unit tests, the way `MockShellBackend` stands in for a real shell. |
+
+`denoCodeExecutionBackend` is consumer-side code — it lives in `deno-backends.ts`
+next to `bunShellBackend`, **not** inside `@open-agent-os/core` — because the core
+stays environment-agnostic. It's deny-by-default; grant capabilities explicitly:
+
+```ts
+denoCodeExecutionBackend({
+  allow: { read: ["/data"], net: ["api.example.com:443"] }, // everything else stays denied
+});
+```
+
+<Callout title="Don't like how it runs? Swap it.">
+  The backend is the swap point. Anything implementing `CodeExecutionBackend` —
+  `exec({ language, code }, ctx)` returning `{ stdout, stderr, exitCode }` — drops in
+  behind the same `codeExecutionTool`. Replace the Deno battery with a container or
+  microVM you control (multi-language, stronger isolation), or a **cloud variant**
+  that hands the code to a hosted execution service. The model, the loop, and the
+  result format never change — only where the code runs.
+</Callout>
+
+## The prompt
+
+The tool's `description` already tells the model that the output is whatever the
+program prints. Two things are worth reinforcing in your **system prompt**, because
+they are the common failure modes:
+
+```ts
+system: [
+  "When a question needs computation, write a snippet and run it with the",
+  "`code_execution` tool instead of doing the math in your head.",
+  "The sandbox runs JavaScript or TypeScript — use console.log to print the",
+  "result so it comes back to you.",
+].join("\n"),
+```
+
+- **"use console.log to print the result"** — a snippet runs as a *script*, not a
+  REPL, so a bare final expression (`6 * 7`) is computed and thrown away. The model
+  has to print what it wants back. (If it forgets, the result is still a clear
+  `[exit 0: ok]`, not a confusing blank — see below.)
+- **"runs JavaScript or TypeScript"** — the Deno battery is JS/TS only. Steering the
+  model there keeps it from reaching for Python, which that backend rejects.
+
+## How inputs and outputs behave
+
+**Two fields in, one string out.**
+
+The model sends exactly two fields — `language` and `code` — validated against the
+Zod schema before anything runs (a missing `code` comes straight back as a retryable
+error). The backend also receives a `ToolContext` carrying an abort `signal`, so a
+cancelled run kills the child process.
+
+The backend returns `{ stdout, stderr, exitCode }`, which `formatCodeExecutionResult`
+folds into the single string the model reads — **always ending in a verdict**, so a
+run is never a contentless result:
+
+| Code the model ran | String the model gets back |
+| --- | --- |
+| `console.log(6 * 7)` | `42` <br /> `[exit 0: ok]` |
+| `throw new Error("nope")` | `[stderr]` <br /> `…nope…` <br /> `[exit 1: error]` |
+| `const x = 1 + 1` (never printed) | `[exit 0: ok]` |
+
+The round trip, end to end — note the result is *measured* inside the sandbox, never
+produced by the model:
+
+```text
+model ─▶ code_execution({ language, code })        the model only ASKS
+           │
+           ▼  runAgent: validate → backend.exec() → Bun.spawn(["deno","run", …])
+   ┌─ deno · sandboxed child (deny-by-default) ────┐
+   │   runs the snippet for REAL → stdout/stderr   │
+   └───────────────────┬───────────────────────────┘
+           │  { stdout, stderr, exitCode }
+           ▼  formatCodeExecutionResult() → "42\n[exit 0: ok]"
+   tool result ─▶ appended to history ─▶ next model turn reads it
+```
+
+**Errors always come back as a string the model can retry from** — the run never
+crashes:
+
+- **The code fails** (throws, or exits non-zero): a normal result carrying the
+  `[stderr] … [exit N: error]` text. The code ran; the model reads the error and fixes
+  its snippet. This is a *soft* outcome, not flagged an error.
+- **The backend can't run it** (unsupported language, `deno` missing): the loop turns
+  the thrown error into a tool result flagged `isError`, with the message as content —
+  e.g. *"runs JavaScript/TypeScript only…"*.
+
+<Callout title="The model reads text, not flags">
+  On an OpenAI-compatible wire a tool result is just `{ role, tool_call_id, content }`
+  — there's no error flag the model sees. It tells success from failure purely by
+  reading the string. That's why the verdict is *always* appended: `[exit 0: ok]` vs
+  `[exit 1: error]` makes the outcome legible in the content itself.
+</Callout>
+
+## From here
+
+- The [Tools](/docs/tools) guide — where `code_execution` sits among the other
+  built-ins, and the backend-seam pattern it shares with them.
+- [Gating tool calls](/docs/gating-tool-calls) — put a human in front of risky runs.
+  (With the deny-by-default Deno backend the sandbox is already doing that job; gate
+  when you swap in an unsandboxed or more powerful backend.)
+- API reference: [`codeExecutionTool`](/docs/api/functions/codeExecutionTool),
+  [`formatCodeExecutionResult`](/docs/api/functions/formatCodeExecutionResult),
+  [`CodeExecutionBackend`](/docs/api/interfaces/CodeExecutionBackend).

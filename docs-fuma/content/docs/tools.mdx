@@ -103,7 +103,7 @@ sets `executionMode: ExecutionMode.Sequential`.
 ## Step 4 — Reach for a Built-in Tool
 
 You rarely start from nothing. The SDK ships the common agent tools — `shell`,
-`search`, file read/write, web fetch/search, a browser — but with a deliberate
+`code_execution`, `search`, file read/write, web fetch/search, a browser — but with a deliberate
 split: the SDK owns the **model-facing contract** (the name, the schema, the
 result formatting), and **you supply the backend** that does the work. The
 highlighted lines add the built-in `shell` over a Bun-based backend:
@@ -118,10 +118,21 @@ you › list the files in the current directory
 `shellTool` gives the model a stable `shell` tool; `bunShellBackend()` is the host
 glue *you* bring. That boundary is the point: anything that runs a command, reads
 a file, or hits the network should be your code, not the SDK's — so each built-in
-(`searchTool`, `readTool` / `globTool`, `editTool` / `writeTool`, `webFetchTool` /
-`webSearchTool`, `browserTools`) takes a backend interface you implement. The
+(`codeExecutionTool`, `searchTool`, `readTool` / `globTool`, `editTool` / `writeTool`,
+`webFetchTool` / `webSearchTool`, `browserTools`) takes a backend interface you implement. The
 exception is the **[planning tools](/docs/planning-tools)**, which are pure
 in-memory and ship ready to use.
+
+<Callout title="Two ways to run code">
+  Two built-ins run model-written instructions, in different shapes. `shell` runs one
+  command string; `code_execution` runs a snippet in a named language
+  (`{ language, code }`). They differ on *isolation*: `bunShellBackend` runs unsandboxed
+  on the host, while the shipped `denoCodeExecutionBackend` executes JavaScript/TypeScript
+  through Deno's **deny-by-default** permission sandbox — real isolation with no extra
+  infrastructure (grant file, network, or env access explicitly via `allow`). Either way
+  the result ends with an explicit `[exit 0: ok]` / `[exit N: error]` verdict, so a run is
+  never a contentless result.
+</Callout>
 
 ## Step 5 — Gate a Tool Behind Approval
 

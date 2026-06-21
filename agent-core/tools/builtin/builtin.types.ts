@@ -71,6 +71,72 @@ export interface ShellBackend {
 }
 
 /**
+ * The outcome of running one code snippet.
+ *
+ * @remarks
+ * Structurally the same as {@link ShellResult} — running code is just a richer
+ * `exec` — but kept a distinct type so the two seams can diverge later (timing,
+ * artifacts) without coupling.
+ *
+ * @group Built-in Tools
+ */
+export interface CodeExecutionResult {
+  /** Standard output captured from the run. */
+  stdout: string;
+  /** Standard error captured from the run. */
+  stderr: string;
+  /** Process exit status; 0 conventionally means success. */
+  exitCode: number;
+}
+
+/**
+ * A request to run a snippet of code in some language.
+ *
+ * @group Built-in Tools
+ */
+export interface CodeExecutionRequest {
+  /**
+   * Runtime to run under, e.g. `"python"`, `"javascript"`, `"typescript"`. The
+   * backend owns which languages it supports and rejects the rest — a sandbox may
+   * only be able to isolate what it can actually run.
+   */
+  language: string;
+  /** Source to run. */
+  code: string;
+}
+
+/**
+ * The code-execution capability seam — implement this against a sandbox.
+ *
+ * @remarks
+ * The richer sibling of {@link ShellBackend}: instead of one shell command it
+ * runs a snippet in a named language, but the danger and the boundary are the
+ * same. Wire it to e.g. a Deno permission sandbox (`deno-backends.ts`), a
+ * container, or a hosted execution service.
+ *
+ * SECURITY: this runs arbitrary, model-written code. Unlike {@link ShellBackend},
+ * the *expectation* is that the backend sandboxes it — but the core cannot
+ * enforce that, so isolation remains the backend's responsibility. Route the
+ * resulting tool through the permission gate (`../../permissions`) before granting
+ * it to a model you do not fully trust.
+ *
+ * @see {@link CodeExecutionRequest}
+ * @see {@link CodeExecutionResult}
+ * @see {@link codeExecutionTool} which wraps this seam in a model-facing tool.
+ * @group Built-in Tools
+ */
+export interface CodeExecutionBackend {
+  /**
+   * Run a code snippet and capture its output.
+   *
+   * @param request - The language and source to run.
+   * @param ctx - Per-call context; `ctx.signal` may be used to abort the run.
+   * @returns The run's stdout, stderr, and exit code.
+   */
+  exec(request: CodeExecutionRequest, ctx: ToolContext): Promise<CodeExecutionResult>;
+}
+
+/**
  * A single content match from a regex search.
  *
  * @group Built-in Tools
