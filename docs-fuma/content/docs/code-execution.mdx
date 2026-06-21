@@ -126,17 +126,7 @@ run is never a contentless result:
 The round trip, end to end — note the result is *measured* inside the sandbox, never
 produced by the model:
 
-```text
-model ─▶ code_execution({ language, code })        the model only ASKS
-           │
-           ▼  runAgent: validate → backend.exec() → Bun.spawn(["deno","run", …])
-   ┌─ deno · sandboxed child (deny-by-default) ────┐
-   │   runs the snippet for REAL → stdout/stderr   │
-   └───────────────────┬───────────────────────────┘
-           │  { stdout, stderr, exitCode }
-           ▼  formatCodeExecutionResult() → "42\n[exit 0: ok]"
-   tool result ─▶ appended to history ─▶ next model turn reads it
-```
+<CodeExecutionDiagram />
 
 **Errors always come back as a string the model can retry from** — the run never
 crashes:

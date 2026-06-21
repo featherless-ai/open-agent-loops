@@ -3,6 +3,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 import { Card, Cards } from "fumadocs-ui/components/card";
 import type { MDXComponents } from "mdx/types";
 import { LoopDiagram } from "./components/loop-diagram";
+import { CodeExecutionDiagram } from "./components/code-execution-diagram";
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -11,6 +12,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Card,
     Cards,
     LoopDiagram,
+    CodeExecutionDiagram,
     ...components,
   };
 }
