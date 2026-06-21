@@ -1,6 +1,6 @@
 ---
 title: Code Execution
-description: "A guide — let the model run code in a sandbox: why it's a separate tool from shell, the Deno backend the repo ships, the prompt that steers it, and how inputs and outputs behave."
+description: "A tutorial — grow one program across four steps: run a model-written snippet in a sandbox, grant it one capability, swap the backend, then gate it behind approval."
 ---
 
 The [`shell`](/docs/tools) tool runs a command. `code_execution` runs a
@@ -28,81 +28,125 @@ the two things that matter:
 
 The isolation row is why this isn't just "`shell` with `node -e`". Code execution is
 exactly where you *expect* a sandbox, so the reference backend is sandboxed by
-default (below).
+default.
 
-## Wiring it up
+## The tutorial
 
-`codeExecutionTool` comes from the package; the backend is host glue you bring (the
-repo ships a sandboxed one, `denoCodeExecutionBackend`). Add it to the
-[multi-turn chat loop](/docs/getting-started#multi-turn-chat-loop) by extending the
-`tools` array:
+Starting from the [multi-turn chat loop](/docs/getting-started#multi-turn-chat-loop),
+this grows **one program** across four steps:
 
-```ts
-import { runAgent, SessionMemoryStore, codeExecutionTool } from "@open-agent-os/core";
-import { denoCodeExecutionBackend } from "./deno-backends"; // the reference backend you bring
-// ...same `model` and `render` renderer as the chat loop.
+1. **Run a snippet** the model writes, in a sandbox.
+2. **Grant one capability** — open a single hole in the deny-by-default sandbox.
+3. **Swap the backend** — the same tool over a runtime you control.
+4. **Gate it** — put a human in front once the sandbox is gone.
 
-// codeExecutionTool   = the stable, model-facing contract.
-// denoCodeExecutionBackend() = the swappable host glue that actually runs the code.
-const tools = [codeExecutionTool(denoCodeExecutionBackend())];
+Each step below shows the **whole program so far** — the lines it adds are
+**highlighted**. Steps 1–2 need the `deno` binary on PATH ([deno.com](https://deno.com));
+steps 3–4 swap to a Bun backend, so they don't.
 
-await runAgent({ model, memory: new SessionMemoryStore(), sessionId: "demo", prompt, tools });
+## Step 1 — Run a Snippet
+
+`codeExecutionTool` is the model-facing contract; `denoCodeExecutionBackend()` is the
+host glue that runs the code. The Deno backend is **deny-by-default** — the snippet
+gets no file, network, or env access — so you can run untrusted, model-written code
+with no permission gate. Add it to the chat loop's `tools` array and steer the model
+with a system prompt:
+
+<include>../../snippets/code-exec-step1.mdx</include>
+
+```bash
+bun run examples/code-execution-tutorial/step1.ts
+you › what is the 20th Fibonacci number? compute it by running code.
 ```
 
-The full runnable example is at `examples/code-execution/`.
+The model emits `code_execution({ language, code })` and runs nothing itself; the
+loop validates the args and hands them to your backend, which launches `deno` as a
+child, pipes the code in, and captures the real `{ stdout, stderr, exitCode }`.
+`formatCodeExecutionResult` folds that into one string the next model turn reads —
+**always ending in a verdict** (`6765` then `[exit 0: ok]`), so a run is never a
+contentless result. The round trip, end to end:
 
-## The batteries
+<CodeExecutionDiagram />
 
-Code execution is a **host-binding seam**, so unlike the
-[planning tools](/docs/planning-tools) it isn't pure batteries-included — the
-executor has to bind to a real runtime, which the core refuses to ship. What the repo
-*does* provide, ready to use:
+The system prompt earns its two lines. **"use `console.log` to print the result"** —
+a snippet runs as a *script*, not a REPL, so a bare final expression (`6 * 7`) is
+computed and thrown away; the model has to print what it wants back. **"runs
+JavaScript or TypeScript"** — the Deno battery is JS/TS only, so steering the model
+there keeps it from reaching for Python, which the backend rejects.
 
-| Battery | What it is | Use it for |
-| --- | --- | --- |
-| `denoCodeExecutionBackend()` | A **sandboxed** reference backend. Pipes the snippet to `deno run` with a deny-by-default permission set — no file, network, or env access unless you grant it. JavaScript/TypeScript only. | Running untrusted, model-written JS/TS with real isolation and zero infrastructure. |
-| `MockCodeExecutionBackend` | A scriptable test double — records requests, replays a fixed result. | Unit tests, the way `MockShellBackend` stands in for a real shell. |
+## Step 2 — Grant a Capability
 
-`denoCodeExecutionBackend` is consumer-side code — it lives in `deno-backends.ts`
-next to `bunShellBackend`, **not** inside `@open-agent-os/core` — because the core
-stays environment-agnostic. It's deny-by-default; grant capabilities explicitly:
+Deny-by-default means a snippet can compute but can't touch your disk, network, or
+env — so the moment the model needs to read a real file, the read fails closed and
+comes back as `[exit 1: error]`. You open exactly one hole: pass `allow` to the
+backend. The highlighted lines grant **read** access to just the tutorial folder
+(and nothing else), then point the model at a data file:
 
-```ts
-denoCodeExecutionBackend({
-  allow: { read: ["/data"], net: ["api.example.com:443"] }, // everything else stays denied
-});
+<include>../../snippets/code-exec-step2.mdx</include>
+
+```bash
+bun run examples/code-execution-tutorial/step2.ts
+you › add up the numbers in examples/code-execution-tutorial/data.txt
 ```
 
-<Callout title="Don't like how it runs? Swap it.">
-  The backend is the swap point. Anything implementing `CodeExecutionBackend` —
-  `exec({ language, code }, ctx)` returning `{ stdout, stderr, exitCode }` — drops in
-  behind the same `codeExecutionTool`. Replace the Deno battery with a container or
-  microVM you control (multi-language, stronger isolation), or a **cloud variant**
-  that hands the code to a hosted execution service. The model, the loop, and the
-  result format never change — only where the code runs.
+The snippet now reads `data.txt` and prints the sum (`153`). `allow` is the whole
+deny-by-default story in one object: `read`, `write`, `net`, and `env`, each either
+`true` (grant broadly) or an array that **scopes** it to specific paths, hosts, or
+variable names. There is deliberately no `run` grant — spawning a subprocess is the
+escape hatch out of the sandbox, and this backend keeps it shut. Grant the least you
+can: a path, not the disk; a host, not the network.
+
+## Step 3 — Swap the Backend
+
+The backend is the swap point. Anything implementing `CodeExecutionBackend` — one
+`exec({ language, code }, ctx)` method returning `{ stdout, stderr, exitCode }` —
+drops in behind the same `codeExecutionTool`. The highlighted lines replace the Deno
+battery with a **hand-written Bun backend** that runs the snippet on Bun instead:
+write it to a temp file, `bun run` it, capture the output.
+
+<include>../../snippets/code-exec-step3.mdx</include>
+
+```bash
+bun run examples/code-execution-tutorial/step3.ts
+you › what is 25 factorial? compute it by running code.
+```
+
+The model, the loop, and the result format never change — only *where* the code runs.
+That's the seam: swap the Deno battery for a container or microVM (multi-language,
+stronger isolation), or a **cloud variant** that hands the code to a hosted execution
+service, all behind the same tool.
+
+<Callout title="This backend traded the sandbox away">
+  The Bun backend runs the snippet with **full host access** — no isolation at all,
+  unlike Deno's deny-by-default sandbox. That's fine for code *you* trust, but it's
+  exactly the situation Step 4 addresses: once the sandbox is gone, put a human in
+  front of model-written code.
 </Callout>
 
-## The prompt
+## Step 4 — Gate It
 
-The tool's `description` already tells the model that the output is whatever the
-program prints. Two things are worth reinforcing in your **system prompt**, because
-they are the common failure modes:
+With the deny-by-default Deno backend the sandbox is already the guardrail. The
+moment you run model-written code with real access — an unsandboxed backend, or a
+powerful cloud one — a human should sign off first. Admission is a separate seam: the
+`gateToolCalls` hook sees the turn's calls *before* any of them run and decides allow
+/ deny / **ask**. The highlighted lines pair the shipped `permissionGate` with an
+`InMemoryPermissionStore` (the policy) and an `ApprovalPrompter` (how you ask), so
+every `code_execution` prompts first:
 
-```ts
-system: [
-  "When a question needs computation, write a snippet and run it with the",
-  "`code_execution` tool instead of doing the math in your head.",
-  "The sandbox runs JavaScript or TypeScript — use console.log to print the",
-  "result so it comes back to you.",
-].join("\n"),
+<include>../../snippets/code-exec-step4.mdx</include>
+
+```bash
+bun run examples/code-execution-tutorial/step4.ts
+you › what is 25 factorial? compute it by running code.
+🔐 allow code_execution(...)? [y/N]
 ```
 
-- **"use console.log to print the result"** — a snippet runs as a *script*, not a
-  REPL, so a bare final expression (`6 * 7`) is computed and thrown away. The model
-  has to print what it wants back. (If it forgets, the result is still a clear
-  `[exit 0: ok]`, not a confusing blank — see below.)
-- **"runs JavaScript or TypeScript"** — the Deno battery is JS/TS only. Steering the
-  model there keeps it from reaching for Python, which that backend rejects.
+The gate runs **once per turn**, ahead of the parallel execution phase, so the prompt
+never races a running tool. A denied call never runs — it comes back as an error
+tool-result the model can react to. This is the same gate the [Tools tutorial,
+Step 5](/docs/tools#step-5--gate-a-tool-behind-approval) puts in front of `shell`;
+[Permissions & Credentials](/docs/gating-tool-calls) goes deeper — persisting
+"always" choices and feeding a tool a secret the model never sees.
 
 ## How inputs and outputs behave
 
@@ -123,11 +167,6 @@ run is never a contentless result:
 | `throw new Error("nope")` | `[stderr]` <br /> `…nope…` <br /> `[exit 1: error]` |
 | `const x = 1 + 1` (never printed) | `[exit 0: ok]` |
 
-The round trip, end to end — note the result is *measured* inside the sandbox, never
-produced by the model:
-
-<CodeExecutionDiagram />
-
 **Errors always come back as a string the model can retry from** — the run never
 crashes:
 
@@ -145,13 +184,20 @@ crashes:
   `[exit 1: error]` makes the outcome legible in the content itself.
 </Callout>
 
-## From here
+## Recap
+
+Starting from a plain chat loop, a few lines at a time you ran a model-written
+snippet in a sandbox, opened one capability into that sandbox, swapped the Deno
+battery for a backend you wrote, then gated the riskiest version behind your
+approval. The tool, the loop, and the result format never changed — only the backend
+behind the seam did.
+
+From here:
 
 - The [Tools](/docs/tools) guide — where `code_execution` sits among the other
   built-ins, and the backend-seam pattern it shares with them.
-- [Gating tool calls](/docs/gating-tool-calls) — put a human in front of risky runs.
-  (With the deny-by-default Deno backend the sandbox is already doing that job; gate
-  when you swap in an unsandboxed or more powerful backend.)
+- [Permissions & Credentials](/docs/gating-tool-calls) — persisting "always" choices,
+  writing the `ApprovalPrompter`, and feeding a tool a secret.
 - API reference: [`codeExecutionTool`](/docs/api/functions/codeExecutionTool),
   [`formatCodeExecutionResult`](/docs/api/functions/formatCodeExecutionResult),
   [`CodeExecutionBackend`](/docs/api/interfaces/CodeExecutionBackend).

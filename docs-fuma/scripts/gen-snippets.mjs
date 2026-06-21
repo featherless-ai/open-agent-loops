@@ -124,6 +124,30 @@ const SNIPPETS = [
     out: "snippets/tracing-step3.mdx",
     title: "examples/tracing-tutorial/step3.ts",
   },
+  {
+    src: "examples/code-execution-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/code-exec-step1.mdx",
+    title: "examples/code-execution-tutorial/step1.ts",
+  },
+  {
+    src: "examples/code-execution-tutorial/step2.ts",
+    region: "step2",
+    out: "snippets/code-exec-step2.mdx",
+    title: "examples/code-execution-tutorial/step2.ts",
+  },
+  {
+    src: "examples/code-execution-tutorial/step3.ts",
+    region: "step3",
+    out: "snippets/code-exec-step3.mdx",
+    title: "examples/code-execution-tutorial/step3.ts",
+  },
+  {
+    src: "examples/code-execution-tutorial/step4.ts",
+    region: "step4",
+    out: "snippets/code-exec-step4.mdx",
+    title: "examples/code-execution-tutorial/step4.ts",
+  },
 ];
 
 // Example dev imports (relative, to TS source) → published package specifiers.
@@ -133,6 +157,9 @@ const IMPORT_REWRITES = [
   // bunShellBackend is host glue (you bring your own ShellBackend), not a package
   // export — present it as a local module the reader provides.
   [/(["'])(?:\.\.\/)+bun-backends\.ts\1/g, '"./bun-backends"'],
+  // denoCodeExecutionBackend is the same: host glue you bring (the reference
+  // CodeExecutionBackend), not a package export — present it as a local module.
+  [/(["'])(?:\.\.\/)+deno-backends\.ts\1/g, '"./deno-backends"'],
 ];
 
 /** Extract a `// #region name` … `// #endregion` block and dedent it. */
