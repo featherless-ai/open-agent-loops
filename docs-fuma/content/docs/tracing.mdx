@@ -111,6 +111,56 @@ response so a hand-run is easy to read; drop it to stream SSE back.
   `-d @body.json` over an inline payload.
 </Callout>
 
+## Other timelines: choosing a grain
+
+The tutorial captured the run at two grains: the loop's **events**
+(`tracer.sink`) and the raw **request** wire (`onRawRequest`). There's a third —
+the raw **response** wire (`onRawSSE`) — and one `format()` renders any of them.
+Every entry carries a `source`, and `format({ sources })` filters the timeline to
+just the grains you ask for:
+
+| `source` | wired by | the timeline shows |
+| --- | --- | --- |
+| `agent` | `tracer.sink` | turns, messages, tool calls, and the streamed reasoning/text deltas |
+| `model` | `onRawRequest` | the exact request body POSTed each turn — the bytes **out** |
+| `sse` | `onRawSSE` | the raw `data: {…}` lines the server streams back — the bytes **in** |
+
+One subtlety worth calling out, because it surprises people: the reasoning and
+text **deltas** in the `agent` timeline are the loop's *parse* of the response
+stream. They arrive token by token, so they look SSE-ish — but they are not the
+wire. The wire is the `sse` grain: the literal `data: {…}` lines `onRawSSE` taps.
+
+So to see the **over-the-wire timeline** — each request interleaved with the raw
+SSE that answered it — wire both raw taps and filter to the two wire grains:
+
+```ts
+const model = new OpenAICompatibleModel({
+  // ...
+  onRawRequest: tracer.onRawRequest, // request wire  (out)
+  onRawSSE: tracer.onRawSSE, //         response wire (in)
+  onRequest: tracer.onRequest, //       run config → meta (model, baseURL)
+});
+
+// ...after the run, the request + raw SSE, in arrival order:
+console.log(tracer.format({ sources: ["model", "sse"] }));
+```
+
+`tracer.observe(model)` also records under the `model` source — the *parsed*
+`StreamEvent`s and a per-turn disclosure snapshot — a grain that sits between the
+agent events and the raw wire. Two runnable scripts sit beside the tutorial:
+
+- `examples/trace-timeline` — the full **agent**-grain timeline via `format()`,
+  plus `toJSONL()` written to disk.
+- `examples/trace-wire` — the raw **over-the-wire** view: both raw taps, the
+  interleaved request + SSE timeline, and the exact request bytes per turn.
+
+<Callout title="format() truncates; the JSON doesn't">
+  `format()` clips every value to `maxValueLength` (default 80), so `request_body`
+  rows show a compact `body msgs=N tools=M` marker and long SSE lines are cut.
+  Raise `maxValueLength`, narrow with `sources`, or read the bytes verbatim from
+  `toJSON()` / `toJSONL()` when you need them in full.
+</Callout>
+
 ## Recap
 
 Starting from a plain chat loop, a few lines at a time you attached a passive
