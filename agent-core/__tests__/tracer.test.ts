@@ -191,6 +191,45 @@ describe("Tracer: behavior", () => {
     expect(tracer.meta.sessionId).toBe("demo"); // from agent_start
   });
 
+  // Request wire: onRawRequest lands a per-turn `request_body` entry carrying the
+  // full body (with tool-call history); onRequest seeds baseURL into meta. Both
+  // survive the compact projection, so a trace doc can rebuild the request.
+  test("captures the request body off the wire, with baseURL in meta", async () => {
+    const tracer = new Tracer({ now: clock() });
+    tracer.onRequest({ model: "m", baseURL: "https://api.featherless.ai/v1" });
+    tracer.onRawRequest({
+      model: "m",
+      stream: true,
+      messages: [
+        { role: "system", content: "Be terse." },
+        { role: "assistant", content: "", tool_calls: [{ id: "call_0", type: "function", function: { name: "weather", arguments: '{"city":"Paris"}' } }] },
+        { role: "tool", tool_call_id: "call_0", content: "Sunny in Paris" },
+      ],
+      tools: [{ type: "function", function: { name: "weather" } }],
+    });
+
+    // meta carries the URL host for replay
+    expect(tracer.meta.baseURL).toBe("https://api.featherless.ai/v1");
+
+    // a single model-source `request_body` entry holds the verbatim body
+    const reqs = tracer.entries.filter((e) => e.source === "model" && e.label === "request_body");
+    expect(reqs).toHaveLength(1);
+    const body = (reqs[0]!.data as { body: { messages: unknown[]; tools: unknown[] } }).body;
+    expect(body.messages).toHaveLength(3);
+    expect(body.tools).toHaveLength(1);
+
+    // it round-trips through the compact JSON projection (flattened, no `data`)
+    const compact = tracer.toJSON().entries.find((e) => (e as { type?: string }).type === "request_body") as
+      | { source: string; body: { messages: unknown[] } }
+      | undefined;
+    expect(compact?.source).toBe("model");
+    expect(compact?.body.messages).toHaveLength(3);
+
+    // the human-readable timeline summarizes it
+    expect(tracer.format()).toContain("request_body");
+    expect(tracer.format()).toContain("body msgs=3 tools=1");
+  });
+
   // Non-throwing: a throwing onEntry/log callback never breaks capture.
   test("capture is non-throwing", () => {
     const tracer = new Tracer({

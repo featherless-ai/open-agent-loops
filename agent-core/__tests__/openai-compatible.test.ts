@@ -213,6 +213,47 @@ describe("OpenAICompatibleModel", () => {
     });
   });
 
+  // Edge: onRawRequest taps the full assembled wire body (messages + tools) and
+  // onRequest reports baseURL — together enough to reconstruct the request.
+  test("edge: onRawRequest taps the full wire body; onRequest reports baseURL", async () => {
+    const fakeClient = {
+      chat: { completions: { create: async () => stream(chunk({ content: "hi" })) } },
+    } as unknown as OpenAI;
+
+    const bodies: any[] = [];
+    const configs: any[] = [];
+    const model = new OpenAICompatibleModel({
+      model: "deepseek-ai/DeepSeek-V3.1",
+      baseURL: "https://api.featherless.ai/v1",
+      client: fakeClient,
+      onRawRequest: (body) => bodies.push(body),
+      onRequest: (info) => configs.push(info),
+    });
+
+    await collect(
+      model.stream({
+        system: "Be brief.",
+        messages: [userMessage({ content: "weather in Paris?" })],
+        tools: [{ name: "weather", description: "Get weather", parameters: { type: "object", properties: {} } }],
+      }),
+    );
+
+    // The wire body: model id, streaming on, system folded into messages, and
+    // the tool surface — the exact JSON the SDK POSTs.
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ model: "deepseek-ai/DeepSeek-V3.1", stream: true });
+    expect(bodies[0].messages[0]).toEqual({ role: "system", content: "Be brief." });
+    expect(bodies[0].messages.at(-1)).toMatchObject({ role: "user" });
+    expect(bodies[0].tools.map((t: any) => t.function.name)).toEqual(["weather"]);
+
+    // The lightweight config now carries baseURL, so the request URL is known.
+    expect(configs[0]).toMatchObject({
+      model: "deepseek-ai/DeepSeek-V3.1",
+      baseURL: "https://api.featherless.ai/v1",
+      system: "Be brief.",
+    });
+  });
+
   // Edge: chatTemplateKwargs is forwarded in the request body when set.
   test("edge: forwards chat_template_kwargs when configured", async () => {
     let sent: any;

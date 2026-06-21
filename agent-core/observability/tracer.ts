@@ -3,9 +3,11 @@
  *
  * It's a passive observer built on the existing seams, so the loop never knows
  * it's there:
- *   - `tracer.sink`      -> pass as runAgent({ onEvent })   (agent events)
- *   - `tracer.onRawSSE`  -> pass as OpenAICompatibleModel({ onRawSSE })  (wire)
- *   - `tracer.observe(model)` -> wrap a ModelClient          (stream events)
+ *   - `tracer.sink`         -> pass as runAgent({ onEvent })                  (agent events)
+ *   - `tracer.onRawRequest` -> pass as OpenAICompatibleModel({ onRawRequest }) (request wire)
+ *   - `tracer.onRawSSE`     -> pass as OpenAICompatibleModel({ onRawSSE })     (response wire)
+ *   - `tracer.onRequest`    -> pass as OpenAICompatibleModel({ onRequest })    (run config -> meta)
+ *   - `tracer.observe(model)` -> wrap a ModelClient                           (stream events)
  *
  * Every captured item becomes a timestamped `TraceEntry` in one ordered
  * timeline (`entries`). From that you can:
@@ -27,6 +29,7 @@ import type { AsyncWriterOptions } from "./async-writer";
 import type {
   CompactEntry,
   DisclosureStep,
+  RawRequest,
   RawSSE,
   RequestSnapshot,
   TraceEntry,
@@ -150,17 +153,28 @@ export class Tracer {
     return back;
   };
 
-  /** Tap for `OpenAICompatibleModel({ onRawSSE })`: captures raw wire lines (fire-and-forget). */
+  /** Tap for `OpenAICompatibleModel({ onRawSSE })`: captures raw response-wire lines (fire-and-forget). */
   readonly onRawSSE = (line: string): void => {
     void this.record("sse", "sse", { line } satisfies RawSSE);
   };
 
   /**
-   * Tap for `OpenAICompatibleModel({ onRequest })`: records the model id,
-   * sampling params, and system prompt into `meta`.
+   * Tap for `OpenAICompatibleModel({ onRawRequest })`: captures the full
+   * assembled request body off the wire — the exact JSON POSTed to the model,
+   * with the complete tool-call history. One entry per model turn. Together with
+   * `meta.baseURL` (from `onRequest`) these reconstruct a reproducible `curl`.
+   */
+  readonly onRawRequest = (body: unknown): void => {
+    void this.record("model", "request_body", { type: "request_body", body } satisfies RawRequest);
+  };
+
+  /**
+   * Tap for `OpenAICompatibleModel({ onRequest })`: records the model id, base
+   * URL, sampling params, and system prompt into `meta`.
    */
   readonly onRequest = (info: {
     model?: string;
+    baseURL?: string;
     params?: Record<string, unknown>;
     system?: string;
   }): void => {
@@ -456,10 +470,16 @@ function findTool(step: TrajectoryStep | undefined, toolCallId: string): Traject
 function describe(entry: TraceEntry, maxLen: number): string {
   if (entry.source === "sse") return truncate((entry.data as RawSSE).line, maxLen);
 
-  const data = entry.data as AgentEvent | StreamEvent | RequestSnapshot;
+  const data = entry.data as AgentEvent | StreamEvent | RequestSnapshot | RawRequest;
   switch (data.type) {
     case "request":
       return `tools=${data.tools.length} msgs=${data.messages}${data.system ? " +system" : ""}`;
+    case "request_body": {
+      const body = (data.body ?? {}) as { messages?: unknown[]; tools?: unknown[] };
+      const msgs = Array.isArray(body.messages) ? body.messages.length : 0;
+      const tools = Array.isArray(body.tools) ? body.tools.length : 0;
+      return `body msgs=${msgs} tools=${tools}`;
+    }
     case AgentEventType.AgentStart:
       return `session=${data.sessionId}${data.tools?.length ? ` tools=${data.tools.length}` : ""}`;
     case AgentEventType.TurnStart:

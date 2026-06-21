@@ -219,9 +219,13 @@ export { Tracer } from "./observability/tracer";
 export type { FormatOptions, TraceDocument, TracerOptions } from "./observability/tracer";
 export { AsyncWriter } from "./observability/async-writer";
 export type { AsyncWriterOptions } from "./observability/async-writer";
+// Reconstruct a runnable curl from a captured request body (see `onRawRequest`).
+export { toCurl } from "./observability/to-curl";
+export type { ToCurlOptions } from "./observability/to-curl";
 export type {
   CompactEntry,
   DisclosureStep,
+  RawRequest,
   RawSSE,
   RequestSnapshot,
   TraceEntry,

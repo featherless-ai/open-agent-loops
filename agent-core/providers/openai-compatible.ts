@@ -45,6 +45,17 @@ type ChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ChatChunk = OpenAI.Chat.Completions.ChatCompletionChunk;
 
 /**
+ * The fully assembled request body POSTed to the endpoint: the streaming chat
+ * params plus the non-standard `chat_template_kwargs` extension. This is the
+ * exact wire shape — model, `messages` (system folded in, full tool-call
+ * history), `tools`, sampling params — handed to {@link
+ * OpenAICompatibleOptions.onRawRequest}.
+ *
+ * @group Model
+ */
+export type ChatRequestBody = ChatParams & { chat_template_kwargs?: Record<string, unknown> };
+
+/**
  * Minimal fetch shape the SDK accepts — narrower than the DOM `typeof fetch`.
  *
  * @internal
@@ -77,12 +88,28 @@ export interface OpenAICompatibleOptions {
   onRawSSE?: (line: string) => void;
   /**
    * Developer tap on the resolved request config, fired once per `stream()` call
-   * just before the request goes out: the model id, the sampling `params`, and
-   * the `system` prompt for this call. Symmetric with {@link onRawSSE} —
-   * observability only; it cannot change the request. (Message history and tools
-   * aren't included here: they already surface through the loop's events.)
+   * just before the request goes out: the model id, the `baseURL`, the sampling
+   * `params`, and the `system` prompt for this call. A lightweight summary —
+   * enough to seed run metadata (and reconstruct the request URL). For the full
+   * wire body (messages + tools), use {@link onRawRequest}. Observability only;
+   * it cannot change the request.
    */
-  onRequest?: (info: { model: string; params: Record<string, unknown>; system?: string }) => void;
+  onRequest?: (info: {
+    model: string;
+    baseURL?: string;
+    params: Record<string, unknown>;
+    system?: string;
+  }) => void;
+  /**
+   * Developer tap on the fully assembled request body, fired once per `stream()`
+   * call just before the request goes out — the exact JSON POSTed to the server:
+   * `messages` (system folded in, full tool-call history), `tools`, sampling
+   * params, and `chat_template_kwargs`. The request-side twin of {@link
+   * onRawSSE}; together they capture both directions of the wire. Observability
+   * only; it cannot change the request. HTTP headers (and the API key) are NOT
+   * included — redact `messages` yourself if they carry sensitive data.
+   */
+  onRawRequest?: (body: Readonly<ChatRequestBody>) => void;
   /**
    * Per-request timeout in milliseconds. A request that exceeds this aborts and
    * surfaces as an {@link StreamEventType.Error} event (the SDK throws
@@ -150,9 +177,11 @@ export interface OpenAICompatibleOptions {
 export class OpenAICompatibleModel implements ModelClient {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly baseURL: string | undefined;
   private readonly extra: OpenAICompatibleOptions["params"];
   private readonly chatTemplateKwargs: OpenAICompatibleOptions["chatTemplateKwargs"];
   private readonly onRequest: OpenAICompatibleOptions["onRequest"];
+  private readonly onRawRequest: OpenAICompatibleOptions["onRawRequest"];
 
   /**
    * Create a model client for an OpenAI-compatible endpoint.
@@ -161,8 +190,10 @@ export class OpenAICompatibleModel implements ModelClient {
    */
   constructor(options: OpenAICompatibleOptions) {
     this.model = options.model;
+    this.baseURL = options.baseURL;
     this.extra = options.params;
     this.onRequest = options.onRequest;
+    this.onRawRequest = options.onRawRequest;
     // Explicit kwargs win; otherwise derive them from the model id for the
     // requested thinking state. Unset `thinking` keeps the legacy behavior
     // (inject nothing).
@@ -209,11 +240,24 @@ export class OpenAICompatibleModel implements ModelClient {
       ...(this.chatTemplateKwargs ? { chat_template_kwargs: this.chatTemplateKwargs } : {}),
     };
 
-    // Observability tap: report the model id, sampling params, and system prompt
-    // for this call. Never let a misbehaving tap break the request.
+    // Observability taps: report the request config (lightweight) and the full
+    // assembled body (the wire shape). Never let a misbehaving tap break the
+    // request — both are best-effort and swallow their own errors.
     if (this.onRequest) {
       try {
-        this.onRequest({ model: this.model, params: { ...this.extra }, system: request.system });
+        this.onRequest({
+          model: this.model,
+          ...(this.baseURL !== undefined ? { baseURL: this.baseURL } : {}),
+          params: { ...this.extra },
+          system: request.system,
+        });
+      } catch {
+        // best-effort debugging tap
+      }
+    }
+    if (this.onRawRequest) {
+      try {
+        this.onRawRequest(params);
       } catch {
         // best-effort debugging tap
       }

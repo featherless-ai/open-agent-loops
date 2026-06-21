@@ -29,6 +29,8 @@ export interface TraceMeta {
   sessionId?: string;
   /** Model id, e.g. "deepseek-ai/DeepSeek-V3.1". */
   model?: string;
+  /** Endpoint base URL, e.g. "https://api.featherless.ai/v1" — the request URL host for replay. */
+  baseURL?: string;
   /** Sampling parameters (temperature, top_p, max_tokens, ...). */
   params?: Record<string, unknown>;
   /** The system prompt for the run. */
@@ -37,9 +39,24 @@ export interface TraceMeta {
   tools?: ToolSpec[];
 }
 
-/** A raw SSE line captured off the wire. */
+/** A raw SSE line captured off the wire (response side). */
 export interface RawSSE {
   line: string;
+}
+
+/**
+ * The fully assembled request body captured off the wire (request side) — one
+ * per model turn, the exact JSON POSTed to the endpoint. Carries the whole
+ * conversation as sent: `messages` (system folded in, every assistant
+ * `tool_calls` block and `tool` result), the available `tools`, sampling params,
+ * and `chat_template_kwargs`. With {@link TraceMeta.baseURL} it's enough to
+ * reconstruct a reproducible `curl` for the call. Captured by the
+ * `onRawRequest` tap; the request-side twin of {@link RawSSE}.
+ */
+export interface RawRequest {
+  type: "request_body";
+  /** The request body as POSTed — shape depends on the provider (OpenAI chat by default). */
+  body: unknown;
 }
 
 /**
@@ -69,8 +86,8 @@ export interface TraceEntry {
   source: TraceSource;
   /** Short kind label: the event `type`, or "sse" for a raw line. */
   label: string;
-  /** Payload: an AgentEvent, a model StreamEvent, a request snapshot, or a raw SSE line. */
-  data: AgentEvent | StreamEvent | RequestSnapshot | RawSSE;
+  /** Payload: an AgentEvent, a model StreamEvent, a request snapshot, a raw request body, or a raw SSE line. */
+  data: AgentEvent | StreamEvent | RequestSnapshot | RawRequest | RawSSE;
 }
 
 /**
@@ -86,6 +103,7 @@ export type CompactEntry = { seq: number; dt: number; source: TraceSource } & (
   | AgentEvent
   | StreamEvent
   | RequestSnapshot
+  | RawRequest
   | RawSSE
 );
 
