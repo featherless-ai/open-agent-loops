@@ -20,7 +20,7 @@ package is to make the **components of the agent plug-and-play, independently te
   are all interfaces. Implement them with a plain object or function.
 - **Streaming by default** — `ModelClient.stream()` returns an async iterable of
   `StreamEvent`s, so reasoning, text, and tool calls arrive incrementally.
-- **Bring your own renderer** — the loop is headless. It emits a typed
+- **Bring your own front end** — the loop is headless. It emits a typed
   `AgentEvent` stream via `onEvent`; render it to a console, the DOM, a TUI, or
   anywhere — the same run drives a CLI or a browser UI unchanged.
 - **Provider-agnostic** — nothing in the core references a specific LLM SDK. Any

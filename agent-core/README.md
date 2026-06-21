@@ -71,7 +71,7 @@ const result = await runAgent({
 console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."
 ```
 
-## Bring your own renderer
+## Bring your own front end
 
 The loop is **headless** — it never writes to a screen. It emits a typed
 `AgentEvent` stream (`onEvent`), and the model emits `StreamEvent`s; *you* decide
