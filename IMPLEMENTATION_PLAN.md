@@ -467,3 +467,104 @@ around an `OpenAICompatibleModel`, reading `FEATHERLESS_API_KEY` from `.env`), d
 **Success Criteria**: a run paces itself against the live budget; a parked run cancels
 cleanly via an `AbortController`; `bun test` + `bun run typecheck` green.
 **Status**: Not Started
+
+---
+
+# Plan: live-ingress channels with backpressure
+
+**Goal**: Let a long-lived, bursty transport (Slack/Discord websocket) feed
+`runAgent` without coupling the two rate domains — the socket must drain
+continuously (stall it and you get disconnected) while the model is slow and
+rate-limited. The fix is a bounded queue between them as an impedance matcher,
+plus a session-keyed dispatcher that owns throttling. See
+[`agent-core/docs/channels.md`](agent-core/docs/channels.md) for the design.
+
+**Load-bearing constraint**: `runAgent` does not change. Everything new is a seam
+(`ChannelSource`, multiple impls) plus caller-owned policy (the buffer + the
+dispatcher). `Memory`, `signal`, and the `EventSink` are reused as-is.
+
+**Backpressure model**: one primitive, both directions. A `BoundedBuffer<T>` sits
+between a fast and a slow side; the only variable is the overflow policy. Inbound
+(unblockable socket) sheds — `drop-oldest`/`coalesce`. Outbound (blockable loop)
+can `block` to propagate real backpressure upstream, or `coalesce` reply deltas
+before a rate-limited `send`. "Bounded" keeps the system from breaking; the
+buffer's `dropped`/`highWater` readings are what a later adaptive controller acts
+on. Bounded ≠ adaptive.
+
+**Relation to the Featherless gate plan (above)**: that plan throttles *egress*
+(model requests, paced to the live provider budget) at the model boundary. This
+plan throttles *ingress* (inbound channel traffic) at the dispatcher. The
+dispatcher's global concurrency cap (Stage 2) and the Featherless gate are
+complementary and compose — the gate is the deeper, account-wide protection the
+dispatcher's coarse semaphore can defer to.
+
+## Stage 1: `BoundedBuffer<T>` primitive
+**Goal**: A pure, host-agnostic bounded FIFO with a pluggable overflow policy —
+the impedance matcher, usable inbound and outbound. `MessageQueue` becomes its
+`capacity: Infinity` specialization so steering/follow-up are unaffected.
+**Files**: `agent-core/primitives/bounded-buffer.ts`,
+`agent-core/primitives/message-queue.ts` (re-based on it), `agent-core/index.ts`.
+**Success Criteria**: `drop-oldest`/`drop-newest`/`block`/`coalesce` each behave
+per spec; `block` reports blocked items without dropping them (caller owns
+upstream backpressure); `size`/`dropped`/`highWater` expose the load readings;
+`capacity >= 1` enforced; `MessageQueue` API byte-identical; suite + typecheck
+green.
+**Tests** (`__tests__/bounded-buffer.test.ts`): one per policy, `highWater` across
+drains, `capacity < 1` throws, `Infinity` never overflows; existing
+`message-queue.test.ts` still passes.
+**Status**: Complete (9 tests; full suite 324 green, typecheck clean)
+
+## Stage 2: session-keyed dispatcher
+**Goal**: The throttling layer between the source and `runAgent`. Owns: at most
+one in-flight run per `sessionId` (concurrent runs would corrupt `memory.append`
+ordering); a per-session `BoundedBuffer` that debounces/coalesces a burst into a
+single `Message[]` prompt; a global concurrency semaphore across all sessions
+(protects the provider rate limit); and supersede-via-`AbortSignal` so a newer
+message can cancel a stale in-flight run instead of queueing behind it.
+**Files**: `agent-core/channels/dispatcher.ts`,
+`agent-core/channels/dispatcher.types.ts`, `agent-core/index.ts`.
+**Success Criteria**: N messages to one session in a burst → one `runAgent` call
+with the coalesced prompt; two sessions never interleave a session's runs; no more
+than `maxConcurrency` runs in flight at once (excess waits); supersede cancels the
+prior run's `signal`; per-session overflow follows the buffer policy.
+**Tests** (`__tests__/dispatcher.test.ts`, `MockModelClient` + a fake clock):
+burst coalesces to one run; per-session serialization holds under interleaved
+pushes; semaphore caps global in-flight; supersede aborts the stale run; overflow
+drops/coalesces per policy.
+**Status**: Not Started
+
+## Stage 3: `ChannelSource` seam + in-memory fake
+**Goal**: The transport seam (analogous to `ModelClient`) that owns liveness only
+— connect/disconnect, heartbeat, reconnect with backoff, resume cursors —
+normalizes provider events into one `InboundMessage { channelId, threadId,
+userId, text }`, maps `thread → sessionId`, and sends replies out by consuming the
+`EventSink` (`TextDelta`). Ship an `InMemoryChannelSource` fake so the whole path
+is unit-testable without a real socket; coalesce outbound deltas through a
+`BoundedBuffer` before `send`.
+**Files**: `agent-core/channels/channel-source.types.ts`,
+`agent-core/channels/in-memory-channel-source.ts`, `agent-core/index.ts`.
+**Success Criteria**: `InMemoryChannelSource` drives the dispatcher end-to-end;
+inbound events become runs keyed by the mapped `sessionId`; `TextDelta`s stream
+back coalesced; liveness concerns never touch the model path.
+**Tests** (`__tests__/channel-source.test.ts`): fake source → dispatcher →
+`runAgent` (mock) → reply deltas captured; thread→session mapping reuses `Memory`
+across messages on the same thread.
+**Status**: Not Started
+
+## Stage 4: runnable example + adaptive note
+**Goal**: An `examples/channels/` end-to-end using `InMemoryChannelSource`
+(scripted bursty traffic) so the backpressure story is observable — print
+`dropped`/`highWater` as load rises. Document the seam boundary (connect =
+`ChannelSource`, throttle = dispatcher, adapt = a controller reading the buffer
+metrics) and what a v1 adaptive controller (AIMD on concurrency, coalesce-window
+on `highWater`) would add, without building it yet.
+**Files**: `examples/channels/`, docs note.
+**Success Criteria**: example runs against `MockModelClient`, shows coalescing and
+shedding under a burst; docs note captures the layering and the open questions
+from `channels.md`.
+**Status**: Not Started
+
+**Open questions** (from `channels.md`): coalescing window (fixed vs quiet-period
+vs adaptive); overflow policy per channel; supersede vs finish on a mid-run
+message; session granularity (thread/channel/user); whether the global semaphore
+needs per-tenant quotas for v1, or defers entirely to the Featherless gate.

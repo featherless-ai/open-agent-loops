@@ -27,15 +27,10 @@
  */
 
 import type { Message } from "../types";
+import { BoundedBuffer } from "./bounded-buffer";
+import type { DrainMode } from "./bounded-buffer";
 
-/**
- * How many queued messages a {@link MessageQueue.drain | drain} releases:
- * `"one-at-a-time"` (the oldest single message) or `"all"` (every queued
- * message). Mirrors pi's `steeringMode` / `followUpMode`.
- *
- * @group Core
- */
-export type DrainMode = "one-at-a-time" | "all";
+export type { DrainMode };
 
 /**
  * Options for a {@link MessageQueue}.
@@ -48,59 +43,26 @@ export interface MessageQueueOptions {
 }
 
 /**
- * A FIFO queue of {@link Message}s for the loop's steering / follow-up seams.
+ * A FIFO queue of {@link Message}s for the loop's steering / follow-up seams —
+ * the unbounded specialization of {@link BoundedBuffer} (`capacity: Infinity`),
+ * so the overflow policy never engages and it behaves as a plain FIFO.
  *
  * @remarks
- * Pure and host-agnostic: no timers, no I/O. {@link drain} returns messages in
- * the order they were pushed and removes what it returns, so it plugs straight
- * into {@link Hooks.drainSteering} / {@link Hooks.drainFollowUp} — which expect
- * exactly "the messages to inject now, having consumed them".
+ * Pure and host-agnostic: no timers, no I/O. {@link BoundedBuffer.drain | drain}
+ * returns messages in the order they were pushed and removes what it returns, so
+ * it plugs straight into {@link Hooks.drainSteering} / {@link Hooks.drainFollowUp}
+ * — which expect exactly "the messages to inject now, having consumed them".
+ *
+ * Reach for {@link BoundedBuffer} directly when you need a cap and an overflow
+ * policy — e.g. a live-ingress dispatcher queue or outbound reply coalescing.
  *
  * @group Core
  */
-export class MessageQueue {
-  private readonly items: Message[] = [];
-
-  /** Drain policy — mutable so a caller can switch one-at-a-time/all at runtime. */
-  mode: DrainMode;
-
+export class MessageQueue extends BoundedBuffer<Message> {
   /**
    * @param options - Drain policy; see {@link MessageQueueOptions}.
    */
   constructor(options: MessageQueueOptions = {}) {
-    this.mode = options.mode ?? "one-at-a-time";
-  }
-
-  /** Number of messages currently queued. */
-  get size(): number {
-    return this.items.length;
-  }
-
-  /**
-   * Enqueue one or more messages at the back of the queue.
-   *
-   * @param messages - The message(s) to queue, in order.
-   */
-  push(...messages: Message[]): void {
-    this.items.push(...messages);
-  }
-
-  /**
-   * Remove and return queued messages per {@link mode}: the single oldest
-   * message for `"one-at-a-time"`, or every queued message for `"all"`. Returns
-   * an empty array when the queue is empty — so it is safe to pass directly as a
-   * drain hook (an empty result leaves the run as-is).
-   *
-   * @returns The drained messages in FIFO order.
-   */
-  drain(): Message[] {
-    if (this.items.length === 0) return [];
-    if (this.mode === "all") return this.items.splice(0);
-    return this.items.splice(0, 1);
-  }
-
-  /** Drop every queued message. */
-  clear(): void {
-    this.items.length = 0;
+    super({ capacity: Infinity, overflow: "block", mode: options.mode });
   }
 }

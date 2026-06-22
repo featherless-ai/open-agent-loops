@@ -195,6 +195,13 @@ export type {
 export { MessageQueue } from "./primitives/message-queue";
 export type { DrainMode, MessageQueueOptions } from "./primitives/message-queue";
 
+export { BoundedBuffer } from "./primitives/bounded-buffer";
+export type {
+  BoundedBufferOptions,
+  OverflowPolicy,
+  PushResult,
+} from "./primitives/bounded-buffer";
+
 export { withCredentials } from "./credentials/with-credentials";
 export { InMemoryCredentialStore } from "./credentials/in-memory-credential-store";
 export type { InMemoryCredentialStoreOptions } from "./credentials/in-memory-credential-store";
