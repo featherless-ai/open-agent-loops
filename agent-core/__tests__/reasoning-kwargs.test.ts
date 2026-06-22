@@ -56,27 +56,68 @@ describe("reasoningKwargsFor", () => {
     expect(reasoningKwargsFor("deepseek-ai/DeepSeek-R1-0528", "auto")).toBeUndefined();
   });
 
-  // MiniMax-M2: interleaved, always-on, no toggle — flagged but no kwargs.
-  test("MiniMax-M2 is interleaved with no toggle", () => {
-    const profile = reasoningProfileFor("MiniMaxAI/MiniMax-M2.7");
-    expect(profile?.interleaved).toBe(true);
-    expect(profile?.toggleKey).toBeNull();
-    expect(reasoningKwargsFor("MiniMaxAI/MiniMax-M2", "auto")).toBeUndefined();
+  // MiniMax-M2 / M3: interleaved, always-on, no toggle — flagged but no kwargs.
+  test("MiniMax M-line is interleaved with no toggle", () => {
+    for (const id of ["MiniMaxAI/MiniMax-M2.7", "MiniMaxAI/MiniMax-M3"]) {
+      const profile = reasoningProfileFor(id);
+      expect(profile?.interleaved).toBe(true);
+      expect(profile?.toggleKey).toBeNull();
+    }
+    expect(reasoningKwargsFor("MiniMaxAI/MiniMax-M3", "auto")).toBeUndefined();
     // "off" is ignored — the model can't disable interleaved thinking.
     expect(reasoningKwargsFor("MiniMaxAI/MiniMax-M2", "off")).toBeUndefined();
+    // The broadened prefix must NOT swallow the SynLogic models.
+    expect(reasoningProfileFor("MiniMaxAI/SynLogic-32B")).toBeUndefined();
   });
 
-  // Qwen3 hybrids: enable_thinking, default on for the larger models.
-  test("Qwen3 hybrids use enable_thinking, default on", () => {
+  // MiMo-V2 (Flash / V2.5): enable_thinking, default OFF (like Gemma 4).
+  test("MiMo-V2 uses enable_thinking, default off", () => {
+    expect(reasoningKwargsFor("XiaomiMiMo/MiMo-V2-Flash", "on")).toEqual({ enable_thinking: true });
+    expect(reasoningKwargsFor("XiaomiMiMo/MiMo-V2-Flash", "auto")).toEqual({ enable_thinking: false });
+    expect(reasoningKwargsFor("XiaomiMiMo/MiMo-V2.5", "off")).toEqual({ enable_thinking: false });
+  });
+
+  // gpt-oss (20b / 120b): always-on reasoner, no chat_template_kwarg toggle.
+  test("gpt-oss is always-on with no toggle", () => {
+    const profile = reasoningProfileFor("openai/gpt-oss-120b");
+    expect(profile?.reasoning).toBe(true);
+    expect(profile?.toggleKey).toBeNull();
+    expect(reasoningKwargsFor("openai/gpt-oss-20b", "on")).toBeUndefined();
+    expect(reasoningKwargsFor("openai/gpt-oss-120b", "auto")).toBeUndefined();
+  });
+
+  // Original Qwen3: enable_thinking, default on, interleaved by the template's
+  // last_query_index checkpoint — but NO preserve_thinking (arrived in 3.5).
+  test("original Qwen3 is interleaved with no preserve_thinking", () => {
     expect(reasoningKwargsFor("Qwen/Qwen3-235B-A22B", "auto")).toEqual({ enable_thinking: true });
-    expect(reasoningKwargsFor("Qwen/Qwen3.5-397B-A17B", "auto")).toEqual({ enable_thinking: true });
-    expect(reasoningKwargsFor("Qwen/Qwen3.5-27B", "off")).toEqual({ enable_thinking: false });
+    expect(reasoningKwargsFor("Qwen/Qwen3-30B-A3B", "on")).toEqual({ enable_thinking: true });
+    expect(reasoningProfileFor("Qwen/Qwen3-235B-A22B")?.interleaved).toBe(true);
   });
 
-  // Small Qwen3.5 (2B/4B/9B) default to thinking off.
-  test("small Qwen3.5 defaults off", () => {
+  // Qwen3.5 / 3.6: enable_thinking default on, interleaved, + preserve_thinking
+  // continuity while thinking is on (dropped when off).
+  test("Qwen3.5/3.6 add preserve_thinking continuity", () => {
+    expect(reasoningKwargsFor("Qwen/Qwen3.5-397B-A17B", "auto")).toEqual({
+      enable_thinking: true,
+      preserve_thinking: true,
+    });
+    expect(reasoningKwargsFor("Qwen/Qwen3.6-35B-A3B", "auto")).toEqual({
+      enable_thinking: true,
+      preserve_thinking: true,
+    });
+    expect(reasoningKwargsFor("Qwen/Qwen3.5-27B", "off")).toEqual({ enable_thinking: false });
+    expect(reasoningProfileFor("Qwen/Qwen3.6-35B-A3B")?.interleaved).toBe(true);
+  });
+
+  // Small Qwen3.5 (2B/4B/9B) default to thinking off, but still interleave and
+  // carry preserve_thinking once thinking is on.
+  test("small Qwen3.5 defaults off, still interleaves", () => {
     expect(reasoningKwargsFor("Qwen/Qwen3.5-9B", "auto")).toEqual({ enable_thinking: false });
-    expect(reasoningKwargsFor("Qwen/Qwen3.5-2B", "on")).toEqual({ enable_thinking: true });
+    expect(reasoningKwargsFor("Qwen/Qwen3.5-2B", "on")).toEqual({
+      enable_thinking: true,
+      preserve_thinking: true,
+    });
+    expect(reasoningProfileFor("Qwen/Qwen3.5-9B")?.interleaved).toBe(true);
   });
 
   // Qwen *-Coder / *-Instruct variants don't reason.

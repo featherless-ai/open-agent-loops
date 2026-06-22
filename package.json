@@ -32,6 +32,8 @@
     "prepublishOnly": "bun run build",
     "demo": "bun run examples/running-product.ts",
     "test": "bun test agent-core",
+    "test:system": "bun test system-tests",
+    "number-test": "bun run system-tests/reasoning-number-test.ts",
     "typecheck": "tsc --noEmit",
     "docs:site": "cd docs-fuma && bun run dev",
     "docs:site:build": "cd docs-fuma && bun run build"

@@ -11,13 +11,22 @@
  * | GLM (4.7/5/5.1)   | `enable_thinking`| `clear_thinking: false`     |
  * | Kimi K2 Thinking  | `thinking`       | `preserve_thinking: true`   |
  * | DeepSeek V3.1/V4  | `thinking`       | (resend reasoning_content)  |
- * | Qwen3 / Gemma 4   | `enable_thinking`| —                           |
+ * | Qwen3 (original)  | `enable_thinking`| interleaved; resend reasoning |
+ * | Qwen3.5 / 3.6     | `enable_thinking`| `preserve_thinking: true`   |
+ * | Gemma 4           | `enable_thinking`| —                           |
  *
  * Some families have no runtime toggle: DeepSeek R1 and StepFun Step-3.5 always
  * reason, and MiniMax-M2 does *interleaved* thinking (enabled server-side via
  * vLLM's `--reasoning-parser`, not a kwarg). For those, {@link reasoningKwargsFor}
  * injects nothing — the caller's job is only to RETAIN prior reasoning across
  * tool-call turns, which the loop's `prepareRequestMessages` already does.
+ *
+ * Interleaved and toggleable are independent: the whole Qwen3 series interleaves
+ * by default (the chat template's `last_query_index` "rolling checkpoint" keeps
+ * `<think>` only for turns after the last user message) yet still honors the
+ * `enable_thinking` toggle, and Qwen3.5/3.6 add `preserve_thinking` to retain the
+ * FULL history like Kimi. Retaining prior reasoning_content is the caller's job
+ * either way.
  *
  * Matching is first-match-wins over the lowercased id; unknown and non-reasoning
  * models resolve to `undefined` (inject nothing) so this is always safe to apply.
@@ -50,8 +59,9 @@ export interface ReasoningProfile {
   reasoning: boolean;
   /**
    * The `chat_template_kwargs` key that toggles thinking, or `null` when there
-   * is no runtime toggle (always-on reasoners like DeepSeek R1, and interleaved
-   * models like MiniMax-M2).
+   * is no runtime toggle (always-on reasoners like DeepSeek R1, or interleaved
+   * models with no switch like MiniMax-M2). Interleaved ≠ null toggle: Qwen3 and
+   * Kimi interleave AND expose a toggle.
    */
   toggleKey: "enable_thinking" | "thinking" | null;
   /** The family's default thinking state, used when the mode is `"auto"`. */
@@ -64,8 +74,10 @@ export interface ReasoningProfile {
   whenOn?: Record<string, unknown>;
   /**
    * The model reasons *between* tool calls (interleaved thinking). Informational:
-   * it is enabled server-side, not via kwargs — the caller must keep prior
-   * reasoning in the message history rather than strip it.
+   * it is enabled by default — either a server-side parser, or the chat template's
+   * own `last_query_index` retention (Qwen3) — rather than by the toggle kwarg. The
+   * caller must keep prior reasoning in the message history rather than strip it. A
+   * family can be both interleaved AND have a toggle (Qwen3, Kimi).
    */
   interleaved: boolean;
 }
@@ -143,11 +155,15 @@ const RULES: Rule[] = [
       interleaved: true,
     },
   },
-  // MiniMax-M2 — interleaved thinking, always on, no kwarg toggle (enabled
-  // server-side via `--reasoning-parser minimax_m2`). verified:
+  // MiniMax-M2 / M3 — interleaved thinking, always on, no kwarg toggle (enabled
+  // server-side via `--reasoning-parser minimax_m2`). The `minimax-m` prefix
+  // covers the whole M-line (M2, M2.1, M2.5, M2.7, M3) without matching the
+  // SynLogic models. verified:
   //   https://docs.vllm.ai/en/latest/features/interleaved_thinking/
+  // M3 confirmed empirically on Featherless (2026-06-22): reasons by default on
+  // the `reasoning` field; `enable_thinking` is a no-op (interleaved, not toggled).
   {
-    test: (id) => id.includes("minimax-m2"),
+    test: (id) => id.includes("minimax-m"),
     profile: { reasoning: true, toggleKey: null, defaultOn: true, interleaved: true },
   },
   // Qwen3 *-Coder / *-Instruct variants don't reason — Qwen ships its Coder /
@@ -165,21 +181,53 @@ const RULES: Rule[] = [
     test: (id) => id.includes("qwen3") && (id.includes("coder") || id.includes("instruct")),
     profile: NON_REASONING,
   },
-  // Small Qwen3.5 (2B/4B/9B) default to thinking off.
+  // Small Qwen3.5 (2B/4B/9B) default to thinking off, but still interleave and
+  // honor preserve_thinking like the rest of the 3.5 line. (Before the general
+  // 3.5/3.6 rule, which they'd otherwise match.)
   // verified — "For Qwen3.5 0.8B, 2B, 4B and 9B, reasoning is disabled by
   // default": https://unsloth.ai/docs/models/qwen3.5
   {
     test: (id) =>
       id.includes("qwen3.5-2b") || id.includes("qwen3.5-4b") || id.includes("qwen3.5-9b"),
-    profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: false, interleaved: false },
+    profile: {
+      reasoning: true,
+      toggleKey: "enable_thinking",
+      defaultOn: false,
+      whenOn: { preserve_thinking: true },
+      interleaved: true,
+    },
   },
-  // Qwen3 / 3.5 / 3.6 hybrids (incl. VL-Thinking) — enable_thinking, default on.
-  // verified — vLLM: "The reasoning feature for the Qwen3 series is enabled by
-  // default. To disable it, you must pass `enable_thinking=False`" (parser
-  // `qwen3`): https://docs.vllm.ai/en/latest/features/reasoning_outputs/
+  // Qwen3.5 / 3.6 (incl. VL-Thinking) — enable_thinking, default on, interleaved,
+  // PLUS a `preserve_thinking` kwarg (new in 3.5, same name as Kimi's) that retains
+  // thinking across ALL history instead of only the latest user turn. The 3.6 card
+  // recommends full retention "for agent scenarios". verified — Qwen3.6-35B-A3B
+  // chat_template.jinja gates retention on `(preserve_thinking is defined and
+  // preserve_thinking is true) or (loop.index0 > ns.last_query_index)`, and the
+  // card: "only the thinking blocks generated in handling the latest user message
+  // is retained, resulting in a pattern commonly as interleaved thinking":
+  //   https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+  {
+    test: (id) => id.includes("qwen3.5") || id.includes("qwen3.6"),
+    profile: {
+      reasoning: true,
+      toggleKey: "enable_thinking",
+      defaultOn: true,
+      whenOn: { preserve_thinking: true },
+      interleaved: true,
+    },
+  },
+  // Original Qwen3 (8B / 30B-A3B / 235B-A22B, incl. VL-Thinking) — enable_thinking,
+  // default on, interleaved by the template's `last_query_index` "rolling
+  // checkpoint" (keeps `<think>` only for turns after the last user message). No
+  // `preserve_thinking` kwarg on this line — full-history retention arrived in 3.5;
+  // the caller must resend reasoning_content on tool-call turns or there's nothing
+  // to retain. verified — vLLM: "The reasoning feature for the Qwen3 series is
+  // enabled by default. To disable it, you must pass `enable_thinking=False`"
+  // (parser `qwen3`): https://docs.vllm.ai/en/latest/features/reasoning_outputs/ —
+  // and the `ns.last_query_index` logic in Qwen3-8B's tokenizer_config.json.
   {
     test: (id) => id.includes("qwen3"),
-    profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: true, interleaved: false },
+    profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: true, interleaved: true },
   },
   // Gemma 4 — enable_thinking, default OFF. (Also wants body
   // `skip_special_tokens:false` for clean parsing on some runtimes — not a
@@ -188,6 +236,24 @@ const RULES: Rule[] = [
   {
     test: (id) => id.includes("gemma-4"),
     profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: false, interleaved: false },
+  },
+  // Xiaomi MiMo-V2 (Flash / V2.5) — `enable_thinking`, default OFF. verified
+  // empirically on Featherless (2026-06-22): MiMo-V2-Flash emits nothing on the
+  // `reasoning` field by default, and ~1.5k chars of reasoning once
+  // `enable_thinking:true` is sent (`thinking` / `reasoning_effort` are no-ops).
+  {
+    test: (id) => id.includes("mimo"),
+    profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: false, interleaved: false },
+  },
+  // OpenAI gpt-oss (20b / 120b) — harmony-format reasoner, ALWAYS on, no
+  // chat_template_kwarg toggle (depth is set via `reasoning_effort` / a
+  // "Reasoning: high" system line, not enable_thinking). verified empirically on
+  // Featherless (2026-06-22): reasons on the `reasoning` field under every
+  // kwarg combo. Like DeepSeek-R1/Step — inject nothing, just retain prior
+  // reasoning. Parser `openai_gptoss`: https://docs.vllm.ai/en/latest/features/reasoning_outputs/
+  {
+    test: (id) => id.includes("gpt-oss"),
+    profile: { reasoning: true, toggleKey: null, defaultOn: true, interleaved: false },
   },
   // StepFun Step-3.5 — reasons, but has NO documented kwarg toggle yet. verified
   // — maintainer in the HF thread: a disable switch is "coming next version"; the
