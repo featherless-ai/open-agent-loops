@@ -18,7 +18,7 @@
  * Run it (Bun auto-loads .env):
  *   bun run examples/trace-to-curl/trace-to-curl.ts
  */
-import { AgentEventType, runAgent, SessionMemoryStore, toCurl, Tracer, defineTool } from "../../agent-core/index.ts";
+import { AgentEventType, runAgent, SessionMemoryStore, Tracer, defineTool } from "../../agent-core/index.ts";
 import type { AgentEvent } from "../../agent-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
 import { color } from "../console-format.ts";
@@ -78,18 +78,23 @@ await runAgent({
   sessionId: "trace-to-curl",
   prompt: "What's the weather in Paris and Tokyo?",
   tools: [weather],
-  onEvent: tracer.sink, // so the run also lands in the trace (agent_start → meta)
+  // render() prints the turn as it streams; tracer.sink() lands it in the trace.
+  onEvent: (e) => { render(e); tracer.sink(e); },
 });
 
 // Every turn's request body is now in the trace. Each later turn's body carries
 // the growing tool-call history, so its curl replays exactly what the model saw.
-const requests = tracer.entries.filter((e) => e.source === "model" && e.label === "request_body");
+// `curls()` owns the wire plumbing — it filters the `request_body` entries,
+// unwraps each body, and stitches in `meta.baseURL` (from `onRequest`) — so all
+// we do here is print. `requests()` gives the raw bodies, aligned by turn, for
+// the per-turn message count.
+const requests = tracer.requests();
+const curls = tracer.curls({ apiKeyEnv: "LLM_API_KEY", stream: false });
 
-console.log(`\n\n${color("\x1b[1m", `${requests.length} request(s) captured`)} — replay any of them:\n`);
-requests.forEach((entry, i) => {
-  const body = (entry.data as { body: unknown }).body;
-  const msgs = (body as { messages?: unknown[] }).messages?.length ?? 0;
+console.log(`\n\n${color("\x1b[1m", `${curls.length} request(s) captured`)} — replay any of them:\n`);
+curls.forEach((curl, i) => {
+  const msgs = (requests[i] as { messages?: unknown[] }).messages?.length ?? 0;
   console.log(color("\x1b[36m", `# turn ${i + 1} — ${msgs} messages`));
-  console.log(toCurl(body, { baseURL: tracer.meta.baseURL ?? baseURL, apiKeyEnv: "LLM_API_KEY", stream: false }));
+  console.log(curl);
   console.log();
 });

@@ -70,9 +70,10 @@ you › what's the weather in Paris and Tokyo?
 
 One user message can be **several** model turns — a turn that calls `weather`
 twice, then a turn that answers — so you'll often see two request bodies captured,
-the second carrying the first's tool calls and their results. `tracer.entries`
-is the live timeline; slicing from the index we saved before the turn gives just
-this turn's new entries.
+the second carrying the first's tool calls and their results. `tracer.requests()`
+is the structured read of those bodies, in turn order — it owns the `request_body`
+filter and unwraps each body, so you never touch `tracer.entries`. Slicing from
+the count we saved before the turn gives just this turn's.
 
 <Callout title="Both directions of the wire">
   `onRawRequest` captures the request; `onRawSSE` captures the raw response lines
@@ -86,8 +87,9 @@ this turn's new entries.
 
 The body is already the whole `-d` payload; the only things missing from a
 runnable command are the URL (in `tracer.meta.baseURL`) and the auth header (an
-env placeholder). `toCurl` stitches them together. The highlighted lines print a
-curl for every request the turn made:
+env placeholder). `tracer.curls()` stitches them together — one runnable command
+per captured request. The highlighted lines print a curl for every request the
+turn made:
 
 <include>../../snippets/tracing-step3.mdx</include>
 
@@ -103,12 +105,13 @@ to copy into a bug report. `stream: false` flips the body to a single JSON
 response so a hand-run is easy to read; drop it to stream SSE back.
 
 <Callout title="Readable by default, quoting handled">
-  `toCurl` pretty-prints the JSON body so the command is easy to read — single
-  quotes preserve the newlines, so it stays runnable (pass `pretty: false` for a
-  compact one-liner). It also escapes any embedded apostrophe as `'\''`, so
-  message content like *"what's the weather"* survives the shell intact. For very
-  large multi-turn bodies, prefer writing the body to a file and using
-  `-d @body.json` over an inline payload.
+  `curls()` is sugar over the `toCurl` building block, forwarding its options. It
+  pretty-prints the JSON body so the command is easy to read — single quotes
+  preserve the newlines, so it stays runnable (pass `pretty: false` for a compact
+  one-liner). It also escapes any embedded apostrophe as `'\''`, so message
+  content like *"what's the weather"* survives the shell intact. Reach for
+  `toCurl` directly for a custom request `path`; for very large multi-turn bodies,
+  prefer writing the body to a file and using `-d @body.json` over an inline payload.
 </Callout>
 
 ## Other timelines: choosing a grain
@@ -165,8 +168,8 @@ agent events and the raw wire. Two runnable scripts sit beside the tutorial:
 
 Starting from a plain chat loop, a few lines at a time you attached a passive
 Tracer on the existing event seam, captured the raw request wire with
-`onRawRequest`, and turned each captured body into a runnable curl with `toCurl`.
-The loop never changed — the Tracer only ever *observes*.
+`onRawRequest`, and turned each captured body into a runnable curl with
+`tracer.curls()`. The loop never changed — the Tracer only ever *observes*.
 
 From here:
 

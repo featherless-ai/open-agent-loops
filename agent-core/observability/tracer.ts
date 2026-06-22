@@ -26,6 +26,8 @@ import { StreamEventType } from "../model.types";
 import type { EventSink } from "../types";
 import { AsyncWriter } from "./async-writer";
 import type { AsyncWriterOptions } from "./async-writer";
+import { toCurl } from "./to-curl";
+import type { ToCurlOptions } from "./to-curl";
 import type {
   CompactEntry,
   DisclosureStep,
@@ -445,6 +447,38 @@ export class Tracer {
       );
     }
     return out.join("\n");
+  }
+
+  /**
+   * The request body POSTed each model turn, in turn order — the exact JSON the
+   * provider sent, with the growing tool-call history. The structured accessor
+   * for the request wire (the `request_body` entries from `onRawRequest`): it
+   * owns the label filter and unwraps the {@link RawRequest} payload, so callers
+   * don't reach into `entries`/`data`. Pair to `curls()` like `trajectory()` /
+   * `formatTrajectory()`. Empty unless `onRawRequest` is wired.
+   */
+  requests(): unknown[] {
+    return this.entries
+      .filter((e) => e.source === "model" && e.label === "request_body")
+      .map((e) => (e.data as RawRequest).body);
+  }
+
+  /**
+   * Every captured request rendered as a runnable `curl`, in turn order — paste
+   * any to replay that exact call. Maps `requests()` through {@link toCurl},
+   * defaulting `baseURL` from `meta.baseURL` (seeded by `onRequest`) so the call
+   * site doesn't stitch the endpoint together. Pass `baseURL` to override; the
+   * rest of {@link ToCurlOptions} (`apiKeyEnv`, `stream`, `pretty`, `path`) pass
+   * straight through.
+   *
+   * @throws if no `baseURL` is known — wire `onRequest`, or pass `options.baseURL`.
+   */
+  curls(options: Omit<ToCurlOptions, "baseURL"> & { baseURL?: string } = {}): string[] {
+    const baseURL = options.baseURL ?? this.meta.baseURL;
+    if (!baseURL) {
+      throw new Error("Tracer.curls(): no baseURL — wire onRequest to capture it, or pass options.baseURL.");
+    }
+    return this.requests().map((body) => toCurl(body, { ...options, baseURL }));
   }
 
   /** One compact JSON object per line — machine-readable, append-friendly. */

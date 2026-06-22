@@ -1,18 +1,19 @@
 /**
  * Tracing tutorial — Step 3: a replayable curl at the end of each turn.
  *
- * The trace already holds every request body. `toCurl` stitches one of those
- * bodies together with `meta.baseURL` into a runnable command — the API key kept
- * as a `$LLM_API_KEY` placeholder, never captured. At the end of each turn we
- * print a curl for every request the turn made; paste any to reproduce the exact
- * call (tool-call history and all).
+ * The trace already holds every request body. `tracer.curls()` renders each into
+ * a runnable command — stitching in `meta.baseURL`, the API key kept as a
+ * `$LLM_API_KEY` placeholder, never captured. (It's sugar over the `toCurl`
+ * building block; reach for `toCurl` directly for a custom path or `-d @file`.)
+ * At the end of each turn we print a curl for every request the turn made; paste
+ * any to reproduce the exact call (tool-call history and all).
  *
  * Run it (Bun auto-loads .env):
  *   bun run examples/tracing-tutorial/step3.ts
  *   you › what's the weather in Paris and Tokyo?
  */
 // #region step3
-import { AgentEventType, defineTool, runAgent, SessionMemoryStore, toCurl, Tracer } from "../../agent-core/index.ts"; // [!code highlight]
+import { AgentEventType, defineTool, runAgent, SessionMemoryStore, Tracer } from "../../agent-core/index.ts"; // [!code highlight]
 import type { AgentEvent } from "../../agent-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
@@ -73,18 +74,19 @@ while (true) {
   const prompt = (await rl.question("\nyou › ")).trim();
   if (prompt === "" || prompt === "exit") break;
 
-  const before = tracer.entries.length;
+  const before = tracer.requests().length;
   process.stdout.write("bot › ");
   await runAgent({ model, memory, sessionId, prompt, tools: [weather], onEvent: observe });
 
-  // End of turn: turn each captured body into a runnable curl. The key stays a // [!code highlight:9]
-  // `$LLM_API_KEY` placeholder (never captured); `stream: false` gives a single
-  // readable JSON response on replay. Paste any to reproduce that exact call.
-  const requests = tracer.entries.slice(before).filter((e) => e.label === "request_body");
-  console.log(`\n# ${requests.length} request(s) this turn — replay any of them:\n`);
-  for (const entry of requests) {
-    const body = (entry.data as { body: unknown }).body;
-    console.log(toCurl(body, { baseURL: tracer.meta.baseURL ?? baseURL, apiKeyEnv: "LLM_API_KEY", stream: false }));
+  // End of turn: `curls()` renders each captured body as a runnable curl. It owns // [!code highlight:8]
+  // the wire plumbing — filtering the request bodies and stitching in
+  // `meta.baseURL` — and keeps the key a `$LLM_API_KEY` placeholder (never
+  // captured). `stream: false` gives a single readable JSON response on replay;
+  // `slice(before)` keeps just this turn's. Paste any to reproduce that exact call.
+  const curls = tracer.curls({ apiKeyEnv: "LLM_API_KEY", stream: false }).slice(before);
+  console.log(`\n# ${curls.length} request(s) this turn — replay any of them:\n`);
+  for (const curl of curls) {
+    console.log(curl);
     console.log();
   }
 }

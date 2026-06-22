@@ -76,15 +76,17 @@ while (true) {
   const prompt = (await rl.question("\nyou › ")).trim();
   if (prompt === "" || prompt === "exit") break;
 
-  const before = tracer.entries.length; // remember where this turn starts // [!code highlight]
+  const before = tracer.requests().length; // remember where this turn starts // [!code highlight]
   process.stdout.write("bot › ");
   await runAgent({ model, memory, sessionId, prompt, tools: [weather], onEvent: observe });
 
-  // End of turn: a `request_body` entry per model turn — the raw wire, with the // [!code highlight:4]
-  // full tool-call history. One user message can be several model turns.
-  const requests = tracer.entries.slice(before).filter((e) => e.label === "request_body");
-  const last = requests.at(-1)?.data as { body?: { messages?: unknown[] } } | undefined;
-  console.log(`\n# ${requests.length} request(s) captured · ${last?.body?.messages?.length ?? 0} messages`);
+  // End of turn: `requests()` is the structured read of the request wire — one // [!code highlight:5]
+  // body per model turn, with the full tool-call history (it owns the
+  // `request_body` filter and unwraps each body, so we don't touch `entries`).
+  // `slice(before)` keeps just this turn's; one user message can be several turns.
+  const requests = tracer.requests().slice(before);
+  const last = requests.at(-1) as { messages?: unknown[] } | undefined;
+  console.log(`\n# ${requests.length} request(s) captured · ${last?.messages?.length ?? 0} messages`);
 }
 rl.close();
 // #endregion

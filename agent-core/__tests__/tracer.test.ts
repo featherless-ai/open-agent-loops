@@ -119,6 +119,8 @@ describe("Tracer: edge inputs", () => {
     expect(tracer.durationMs).toBe(0);
     expect(tracer.trajectory()).toEqual([]);
     expect(tracer.disclosure()).toEqual([]);
+    expect(tracer.requests()).toEqual([]);
+    expect(tracer.curls({ baseURL: "https://x/v1" })).toEqual([]);
   });
 
   // A failing tool is recorded as an error observation on the trajectory.
@@ -228,6 +230,39 @@ describe("Tracer: behavior", () => {
     // the human-readable timeline summarizes it
     expect(tracer.format()).toContain("request_body");
     expect(tracer.format()).toContain("body msgs=3 tools=1");
+  });
+
+  // requests()/curls() are the structured accessors over the captured wire: the
+  // call site no longer has to know the `request_body` label, unwrap `data.body`,
+  // or stitch in `meta.baseURL` by hand. requests() returns the bodies in turn
+  // order; curls() maps each through toCurl, defaulting baseURL from meta.
+  test("requests()/curls() project the captured bodies into runnable curls", () => {
+    const tracer = new Tracer({ now: clock() });
+    tracer.onRequest({ baseURL: "https://api.featherless.ai/v1" });
+    tracer.onRawRequest({ model: "m", stream: true, messages: [{ role: "user", content: "hi" }] });
+    tracer.onRawRequest({ model: "m", stream: true, messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "yo" }] });
+
+    // the unwrapped bodies, in arrival order — no label filter or cast at the call site
+    const reqs = tracer.requests();
+    expect(reqs).toHaveLength(2);
+    expect((reqs[1] as { messages: unknown[] }).messages).toHaveLength(2);
+
+    // one runnable command per request; baseURL comes from meta, options pass through
+    const curls = tracer.curls({ apiKeyEnv: "LLM_API_KEY", stream: false });
+    expect(curls).toHaveLength(2);
+    expect(curls[0]).toContain("curl -N https://api.featherless.ai/v1/chat/completions");
+    expect(curls[0]).toContain("Bearer $LLM_API_KEY");
+    expect(curls[0]).toMatch(/"stream":\s*false/);
+  });
+
+  // curls() needs a baseURL: it defaults from meta (via onRequest), and a helpful
+  // error fires when neither meta nor an explicit override supplies one.
+  test("curls() resolves baseURL from meta, or throws when none is known", () => {
+    const tracer = new Tracer({ now: clock() });
+    tracer.onRawRequest({ model: "m", messages: [] });
+    expect(() => tracer.curls()).toThrow(/baseURL/);
+    // an explicit override works without meta
+    expect(tracer.curls({ baseURL: "https://x/v1" })[0]).toContain("https://x/v1/chat/completions");
   });
 
   // Non-throwing: a throwing onEntry/log callback never breaks capture.

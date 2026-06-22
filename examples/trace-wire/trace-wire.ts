@@ -98,9 +98,8 @@ console.log(tracer.format({ sources: ["model", "sse"], maxValueLength: 120 }));
 
 // format() shows the request body compactly (`body msgs=N tools=M`); here are the
 // exact bytes that went out each turn — the request side of the wire, in full.
-const requests = tracer.entries.filter((e) => e.source === "model" && e.label === "request_body");
-requests.forEach((entry, i) => {
-  const body = (entry.data as { body: unknown }).body;
+// tracer.requests() is the structured read of those bodies, in turn order.
+tracer.requests().forEach((body, i) => {
   console.log(`\n${color("\x1b[36m", `# turn ${i + 1} — request body (exact bytes, out)`)}`);
   console.log(JSON.stringify(body, null, 2));
 });
