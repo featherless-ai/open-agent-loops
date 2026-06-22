@@ -4,6 +4,7 @@ import { Card, Cards } from "fumadocs-ui/components/card";
 import type { MDXComponents } from "mdx/types";
 import { LoopDiagram } from "./components/loop-diagram";
 import { CodeExecutionDiagram } from "./components/code-execution-diagram";
+import { WireFormatDiagram } from "./components/wire-format-diagram";
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
@@ -13,6 +14,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Cards,
     LoopDiagram,
     CodeExecutionDiagram,
+    WireFormatDiagram,
     ...components,
   };
 }

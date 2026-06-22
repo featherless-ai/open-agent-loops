@@ -1,0 +1,289 @@
+---
+title: Messages & the Wire Format
+description: How the loop models a conversation — the four message roles, how user / assistant / tool turns interleave, and how tool calls pair one-to-one with tool results, even under parallel and interleaved tool calling.
+---
+
+Under the [agentic loop](/docs/getting-started#the-core-agentic-loop) is a single
+data model: an **ordered array of messages**, each tagged with a role. That array
+*is* the wire — it maps almost one-to-one onto the **OpenAI chat-completions
+format** every provider in the ecosystem accepts (Featherless, vLLM, Together,
+Groq, Fireworks, DeepSeek, …). The loop appends to it; the `ModelClient` sends it
+and reads the reply back.
+
+This guide is the foundation under that loop diagram: what the messages look like,
+how the roles **interleave** across turns, how a tool call pairs back to its
+result, and what the SDK adds on top of the bare wire.
+
+## The Four Roles
+
+A conversation is a flat, ordered list of messages drawn from four roles:
+
+| Role        | Wire string   | Written by      | Carries                                              |
+| ----------- | ------------- | --------------- | --------------------------------------------------- |
+| `system`    | `"system"`    | you             | the instructions that steer the whole run           |
+| `user`      | `"user"`      | the human       | a prompt — text, or multimodal (image / audio / file) parts |
+| `assistant` | `"assistant"` | the model       | the reply text **and/or** the tool calls it wants run |
+| `tool`      | `"tool"`      | the loop        | the result of **one** tool call, linked back by id  |
+
+The role names are the exact OpenAI wire strings, so `JSON.stringify` of any
+message already emits `"role":"user"` — the abstraction and the wire share one
+vocabulary. (`Role` is a string enum whose values *are* those strings.)
+
+## How a Turn Interleaves
+
+Every turn follows the same rhythm: a `user` (or `tool`) message goes in, an
+`assistant` message comes out, and **if** that assistant turn asks for tools, the
+loop runs them and appends one `tool` message per call before looping again.
+
+Three parties touch every turn: **you** (the caller), the **hosting machine** that
+runs the loop and your tools, and the **API provider** that runs the model. Only
+the loop ↔ provider arrows cross the network — *that's the wire*; your prompt and
+the tool execution stay on your machine. Here's a two-lookup prompt, end to end:
+
+<WireFormatDiagram />
+
+That whole exchange is just six entries in the array. Here it is on the wire,
+exactly as the `ModelClient` sends it back on turn 2:
+
+```json
+[
+  { "role": "system", "content": "You are a helpful weather assistant." },
+
+  { "role": "user", "content": "What's the weather in NYC and London?" },
+
+  {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      { "id": "call_a", "type": "function",
+        "function": { "name": "get_weather", "arguments": "{\"city\":\"NYC\"}" } },
+      { "id": "call_b", "type": "function",
+        "function": { "name": "get_weather", "arguments": "{\"city\":\"London\"}" } }
+    ]
+  },
+
+  { "role": "tool", "tool_call_id": "call_a", "content": "72°F and sunny" },
+  { "role": "tool", "tool_call_id": "call_b", "content": "55°F and rainy" },
+
+  { "role": "assistant",
+    "content": "NYC is 72°F and sunny; London is 55°F and rainy." }
+]
+```
+
+Nothing about a multi-turn conversation is special-cased: the loop loads this
+array from `memory`, appends the new turn to it, and writes it back — so the next
+run already remembers everything before it. Continue a session by reusing the
+same `memory` and `sessionId`.
+
+<Callout title="The model only ever sees this array">
+  There is no hidden state. Whatever the model knows about the conversation, it
+  knows because it's a message in this list. That's why a tool's output has to be
+  appended as a `tool` message (not, say, returned to your code and dropped) — and
+  why a turn's private reasoning, which *isn't* persisted into the next request on
+  a plain turn, is invisible to the model on the turn after. See
+  [Interleaved Thinking](#interleaved-thinking-reasoning-across-tool-calls) below.
+</Callout>
+
+## Message Shapes — the Wire vs. the Abstraction
+
+Each role has a small, fixed wire shape. The SDK's in-memory message type is that
+wire shape **plus a few extensions** for routing, display, and debugging. Most are
+local-only and *dropped on egress*, so only the standard fields cross the wire —
+the one exception is the **reasoning channel**, which *is* sent back (under a
+provider-specific field name, and only on tool-call turns — see below).
+
+### `user` and `system`
+
+The simplest two. A `system` message is plain text. A `user` message is plain
+text **or** an array of multimodal content parts (`text`, `image_url`,
+`input_audio`, `file`) — and that array is, by construction, already the exact
+shape of OpenAI's content-part wire format, so it crosses verbatim.
+
+```json
+{ "role": "system", "content": "You are a helpful weather assistant." }
+{ "role": "user",   "content": "What's the weather in NYC?" }
+```
+
+### `assistant` — text and/or tool calls
+
+The model's turn. `content` is its text answer; `tool_calls` is present when it
+wants tools run. A pure tool-call turn typically has `content: ""`.
+
+```json
+{
+  "role": "assistant",
+  "content": "",
+  "tool_calls": [
+    { "id": "call_a", "type": "function",
+      "function": { "name": "get_weather", "arguments": "{\"city\":\"NYC\"}" } }
+  ]
+}
+```
+
+A `ToolCall` has three parts: an **`id`** (used to pair the answering result), a
+`type` (always `"function"`), and a `function` with a `name` and **`arguments` —
+a raw JSON *string*, exactly as the model emitted it.**
+
+<Callout title="Arguments are a string until the moment of execution">
+  `arguments` stays a JSON string all the way through the wire and the message
+  array. The loop parses it (`JSON.parse`) and validates it against the tool's Zod
+  schema only just before `execute` runs — so a tool's handler receives fully
+  typed, validated input, and a malformed-JSON or schema-mismatch call becomes a
+  safe error result instead of a thrown loop. Streaming clients receive
+  `arguments` as a series of string fragments and must concatenate them before
+  emitting the call whole (see
+  [Bring Your Own Model Client](/docs/bring-your-own-model-client#part-2--a-real-provider-over-raw-fetch)).
+</Callout>
+
+Beyond `content` and `tool_calls`, an assistant message carries a few
+**extensions** the bare text-and-tools format doesn't define — and they split two
+ways on egress:
+
+- **`reasoning` / `reasoning_details`** (the thinking channel) — these *do* cross
+  the wire, but conditionally: resent on tool-call turns (as `reasoning_content`,
+  or verbatim `reasoning_details`) and stripped on plain turns. See
+  [Interleaved Thinking](#interleaved-thinking-reasoning-across-tool-calls) below.
+- **`finishReason`** (clean `stop` vs. truncated `length` vs. `content_filter`) and
+  **`isError`** (a turn whose stream failed) — local-only metadata for callers,
+  stop conditions, and UIs; **never** sent to the server.
+
+### `tool` — one result per call
+
+The loop produces **exactly one `tool` message per tool call**, carrying that
+tool's output in `content` and linking back to the call via **`tool_call_id`
+(equal to the call's `id`)**.
+
+```json
+{ "role": "tool", "tool_call_id": "call_a", "content": "72°F and sunny" }
+```
+
+The SDK also tracks `toolName` (to route and to let stop conditions match on a
+tool's name) and `isError` (the call threw) — both extensions, both dropped on
+egress. On the wire a tool result is just `{ role, tool_call_id, content }`;
+notably, **there is no error flag the model sees** — a failure is communicated as
+text in `content`, so the model can read it and recover.
+
+## Pairing: One Result per Call
+
+`N` tool calls in an assistant turn yield `N` tool messages, **paired one-to-one**.
+The model reads them back to know which result answers which call. There are two
+ways that pairing can be expressed, and the loop is careful about both:
+
+1. **By id** — the standard mechanism: `tool_call_id` echoes the call's `id`.
+2. **By order** — results are appended in the **same order the calls were made**.
+
+The loop guarantees the *ordering* one regardless of what happens to ids. It
+allocates one result slot per call up front and fills each slot in place — denied
+calls immediately, approved calls after they execute — then appends the slots in
+the original request order. So the model always sees result #1 answering call #1,
+result #2 answering call #2, and so on.
+
+<Callout title="Why ordering, not just ids: tool_call_id collisions">
+  Some popular open models (several GLM 4.6–5.2 and Qwen builds, via the vLLM tool
+  parser) **reuse the same `tool_call_id` every turn** — every call comes back as
+  `call_0`. If the loop matched results to calls purely by id, a multi-turn run
+  would become ambiguous. Because the loop pairs **positionally** — one slot per
+  call, appended in request order — colliding ids are harmless: the result for
+  each call still lands in the right place. This is why the framework works with
+  collision-prone models out of the box where a naive id-keyed map would not.
+</Callout>
+
+## Parallel Tool Calling
+
+A single assistant turn can ask for **many tools at once** — that's the two-city
+example above. The loop handles a batch in three phases:
+
+1. **Gate the whole batch, once.** Before anything runs, every call passes through
+   the `gateToolCalls` admission point together, so a permission prompt happens
+   once per turn, ahead of execution — never racing the parallel phase.
+2. **Execute the approved calls — in parallel by default.** Approved calls run
+   concurrently (`Promise.all`). A single call's failure doesn't break the batch;
+   it becomes an error `tool` message. Opt into serial execution per-tool
+   (`executionMode: "sequential"`) or per-run (`toolExecution`) when calls must
+   not overlap.
+3. **Append results in request order.** Per the pairing rule above, so the model
+   reads them back in the order it asked, whatever order they *finished* in.
+
+The wire for a parallel turn is exactly the two-`tool_calls` / two-`tool`-messages
+shape shown earlier — "parallel" is about *how* the loop executes the batch, not a
+different wire shape.
+
+## Interleaved Thinking: Reasoning Across Tool Calls
+
+Reasoning models (DeepSeek, Qwen3, GLM, Anthropic, Gemini, OpenAI o-series, …)
+emit a **thinking channel** separate from `content`. This is a deliberate,
+**non-standard extension**: the base chat-completions format covers text + tool
+calls, and every reasoning provider bolts thinking on under its own field name.
+The SDK normalizes that, and resends it with one rule that makes
+*interleaved* (think → call a tool → think again → call another) work:
+
+> **Reasoning is resent only on tool-call turns; it's dropped from plain turns.**
+
+- A turn that **made tool calls** → its reasoning is **resent** on later requests.
+  Thinking-mode models (e.g. DeepSeek V4) require the reasoning that *led to* a
+  tool call to still be present when they continue after the result — omit it and
+  they reject the request with a `400`. Keeping it across the call is exactly what
+  "interleaved thinking" needs.
+- A turn with **no tool calls** (a final answer) → its reasoning is **display /
+  memory only** and is stripped when building the next request, since the model
+  ignores it there. This keeps it out of context without losing it from the trace.
+
+On a tool-call turn, the thinking rides alongside the call:
+
+```json
+{
+  "role": "assistant",
+  "content": "",
+  "reasoning_content": "The user wants two cities. I'll call get_weather for each.",
+  "tool_calls": [
+    { "id": "call_a", "type": "function",
+      "function": { "name": "get_weather", "arguments": "{\"city\":\"NYC\"}" } },
+    { "id": "call_b", "type": "function",
+      "function": { "name": "get_weather", "arguments": "{\"city\":\"London\"}" } }
+  ]
+}
+```
+
+The field-name asymmetry is the wrinkle the SDK smooths over:
+
+| Direction | Field on the wire | Notes |
+| --------- | ----------------- | ----- |
+| Model **emits** | `reasoning` (vLLM / OpenAI-style) or `reasoning_content` (DeepSeek) | the SDK reads either into one normalized `reasoning` string |
+| SDK **sends back** | `reasoning_content` (flat) or `reasoning_details` (structured) | flat string for raw-reasoning models; verbatim structured blocks for signed / encrypted ones |
+
+For models that return **structured** reasoning blocks (Anthropic, Gemini, OpenAI
+o-series — signed, summarized, or encrypted), the SDK keeps them in
+`reasoning_details` and resends them **verbatim and in original order** on
+tool-call turns. Those blocks are validated by the model; any edit, reorder, or
+omission breaks the sequence — so the contract is strictly pass-through.
+
+<Callout title="Where the rule lives">
+  This split is applied once, centrally, by the request builder
+  (`prepareRequestMessages`) — it returns a fresh array with reasoning stripped
+  from non-tool-call turns, and the provider layer emits the right field name for
+  the target model. Storage always keeps the full value; only the *outgoing
+  request* is trimmed. You don't manage any of this per-call.
+</Callout>
+
+## Recap
+
+- A conversation is one **ordered array of messages**, four roles
+  (`system` / `user` / `assistant` / `tool`), that maps almost one-to-one onto the
+  OpenAI chat-completions wire.
+- Turns **interleave** as user → assistant (text and/or `tool_calls`) → one `tool`
+  message per call → next assistant turn.
+- Tool calls and results pair **one-to-one**, by id *and* — crucially — by
+  **request order**, which keeps the loop correct even when a model reuses
+  `tool_call_id`.
+- **Parallel** tool calling is a batch the loop gates once, runs concurrently, and
+  appends in order; **interleaved thinking** is reasoning resent across tool-call
+  turns and dropped from plain ones.
+- The SDK's message type is the wire shape plus a few **extensions**: the
+  **reasoning** channel (sent back on tool-call turns, under a provider-specific
+  field name) plus local-only metadata (`finishReason`, `toolName`, `isError`)
+  that never leaves your process.
+
+From here: see [Bring Your Own Model Client](/docs/bring-your-own-model-client) to
+produce and consume this wire for any provider, [Tools](/docs/tools) to add the
+capabilities that drive the `tool_calls` / `tool` exchange, and
+[Tracing](/docs/tracing) to capture the exact request wire of every turn.
