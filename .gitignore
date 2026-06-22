@@ -16,3 +16,6 @@ docs-fuma/snippets
 
 # npm lockfile — project uses bun.lock / deno.lock
 package-lock.json
+
+# Generated trace output (from examples, e.g. trace-timeline)
+trace.jsonl
