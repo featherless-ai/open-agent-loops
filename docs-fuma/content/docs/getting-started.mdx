@@ -74,6 +74,48 @@ runnable example**:
   restarts.
 </Callout>
 
+## Messages & the Wire Format
+
+Under that loop is one data model: an ordered array of **messages**, each tagged
+with a role — `system`, `user`, `assistant`, `tool`. That array *is* the wire,
+mapping almost one-to-one onto the OpenAI chat-completions format every provider
+speaks. It has its own short guide —
+**[Messages & the Wire Format](/docs/messages-and-the-wire-format)** — covering how
+the four roles interleave across turns, how a tool call pairs one-to-one with its
+result (even under parallel and interleaved tool calling), and what the SDK adds
+on top of the bare wire.
+
+## Tools
+
+A **tool** is a capability you hand the model: a `name`, a one-line description, a
+Zod schema for its arguments, and an `execute` handler. The loop validates every
+call against the schema *before* `execute` runs, so your handler can trust its
+input. It has its own short guide — **[Tools](/docs/tools)** — growing one program
+across five steps: define a tool, let it fail safely, organize many in a
+`ToolRegistry`, reach for a built-in over your own backend, and gate a risky call
+behind approval.
+
+## Code Execution
+
+Where the `shell` tool runs a command, `code_execution` runs a **program** — a
+snippet the model writes and your machine runs for real, handing back the captured
+output. Reach for it when the model should *compute* an answer instead of guessing
+one. Like every dangerous built-in, the SDK owns the model-facing contract and
+**you own the backend** that runs the code. It has its own short guide —
+**[Code Execution](/docs/code-execution)** — covering why it's separate from
+`shell`, the Deno backend the repo ships, the prompt that steers it, and how
+inputs and outputs behave.
+
+## Skills
+
+A **skill** is a named bundle the model pulls in on demand: a one-line
+description that rides in the system prompt every turn, full instructions
+disclosed only when the model invokes the skill, and the tools the skill
+contributes. That progressive disclosure keeps the expensive instructions out of
+context until they're needed. It has its own short guide —
+**[Skills](/docs/skills)** — adding a skill to the multi-turn loop, then guarding
+it with a credential and an approval.
+
 ## Planning Tools
 
 A long, multi-step task needs the model to hold a **plan** and a **to-do list** it
@@ -90,7 +132,7 @@ The loop is **headless**: the `onEvent` handler above is a renderer — `onEvent
 emits a typed `AgentEvent` stream and you present it however you like (stdout,
 the DOM, a TUI, a log sink). It has its own short guide —
 **[Bring Your Own Front End](/docs/bring-your-own-front-end)** — covering a custom
-renderer (Part 1) and the ready-made `Tracer` (Part 2).
+renderer (Part 1) and a quick look at the ready-made `Tracer` (Part 2).
 
 ## Bring Your Own Model Client
 
@@ -100,15 +142,14 @@ implement `stream()` yourself. It has its own short guide —
 **[Bring Your Own Model Client](/docs/bring-your-own-model-client)** — covering
 the minimal contract (Part 1) and a real provider over raw `fetch` (Part 2).
 
-## Skills
+## Tracing
 
-A **skill** is a named bundle the model pulls in on demand: a one-line
-description that rides in the system prompt every turn, full instructions
-disclosed only when the model invokes the skill, and the tools the skill
-contributes. That progressive disclosure keeps the expensive instructions out of
-context until they're needed. It has its own short guide —
-**[Skills](/docs/skills)** — adding a skill to the multi-turn loop, then guarding
-it with a credential and an approval.
+A **Tracer** records the trajectory of a run for debugging — a *passive observer*
+that rides the same `onEvent` sink and provider wire taps, so capture can never
+change a run. Every captured item becomes one timestamped entry you can fold into
+a trajectory, render as a timeline, or turn back into the exact HTTP call that
+produced it. It has its own short guide — **[Tracing](/docs/tracing)** — attaching
+a Tracer, capturing the request wire, and reconstructing a replayable curl.
 
 ## Permissions & Credentials
 
