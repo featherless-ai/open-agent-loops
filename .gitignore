@@ -1,4 +1,5 @@
 node_modules
+node_modules.deno.bak
 dist
 *.log
 *.tsbuildinfo
@@ -12,3 +13,6 @@ docs/api-md
 
 # Generated doc snippets (from examples, via docs-fuma `bun run snippets`)
 docs-fuma/snippets
+
+# npm lockfile — project uses bun.lock / deno.lock
+package-lock.json
