@@ -7,8 +7,9 @@
  * entry point for loading credentials from the environment at startup
  * (e.g. `{ github_token: process.env.GITHUB_TOKEN }`).
  *
- * Like `SessionMemoryStore` / `InMemoryPermissionStore` it is RAM-only and gone
- * on restart. A durable or vault-backed store implements the same interface.
+ * Like `SessionMemoryStore` / `InMemoryPermissionStore`, it is the RAM-only
+ * battery for this seam — convenient, but gone on restart. Replace it with your
+ * own: a durable or vault-backed store implements the same `resolve` interface.
  *
  * SECURITY: secrets live in plaintext in this process's memory. See
  * {@link CredentialStore} for the trust-boundary note.

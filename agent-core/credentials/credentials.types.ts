@@ -9,9 +9,10 @@
  *
  * The model and the conversation transcript only ever see placeholders like
  * `{{github_token}}`. The real value exists for the duration of one `execute`
- * call and is scrubbed back out of the result. Back this with RAM
- * ({@link InMemoryCredentialStore}), a JSON file, an OS keychain, or a remote
- * vault — the decorator only depends on {@link CredentialStore.resolve}.
+ * call and is scrubbed back out of the result. Back it with the shipped in-memory
+ * battery ({@link InMemoryCredentialStore}) or bring your own — a JSON file, an OS
+ * keychain, or a remote vault; the decorator only depends on
+ * {@link CredentialStore.resolve}.
  *
  * SECURITY: a {@link CredentialStore} holds plaintext secrets in memory. It is
  * the trust boundary — only wire it to tools you intend to hand real
