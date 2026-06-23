@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { baseOptions } from "./layout.config";
@@ -12,6 +13,18 @@ import { RunsAnywhere } from "@/components/landing/runs-anywhere";
 
 const GITHUB = "https://github.com/ArEnSc/advance-agent";
 const NPM = "https://www.npmjs.com/package/@open-agent-loops/core";
+
+export const metadata: Metadata = {
+  title: "Open Agent OS — a minimal, provider-agnostic agent loop",
+  description:
+    "A headless, provider-agnostic agentic loop. Every piece — memory, model, tools, stop conditions — sits behind a swappable interface. Streaming by default, one dependency, runs anywhere.",
+  openGraph: {
+    title: "Open Agent OS",
+    description:
+      "A minimal, provider-agnostic agent loop built on swappable seams. Bring your own front end; runs in Node, Bun, Deno, and the browser.",
+    type: "website",
+  },
+};
 
 export default function HomePage() {
   return (
@@ -33,20 +46,25 @@ export default function HomePage() {
 
 const FEATURES: { title: string; body: string }[] = [
   { title: "Streaming by default", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
-  { title: "Provider-agnostic", body: "Nothing in the core references a specific LLM SDK. Any OpenAI-compatible endpoint works with a raw fetch." },
-  { title: "Independently testable", body: "Each seam is verified in isolation with deterministic test doubles — zero network." },
+  { title: "Skills", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
+  { title: "Planning tools", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
+  { title: "Composable agents", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
+  { title: "Channels & steering", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
+  { title: "Goal loops", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
   { title: "Tracing built in", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
   { title: "Permissioned tool calls", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
-  { title: "Goal loops", body: "An outer runGoal loop with a grader seam drives the inner loop until a goal is met." },
+  { title: "Independently testable", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
 ];
 
 function FeatureGrid() {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-16">
       <div className="mb-8 flex flex-col gap-3 text-center">
-        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Everything behind a seam</h2>
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Composable building blocks</h2>
         <p className="mx-auto max-w-2xl text-fd-muted-foreground">
-          Small, sharp pieces you can test, swap, and observe in isolation.
+          Skills, planning, sub-agents, channels — each built <em>over</em>{" "}
+          <code className="rounded bg-fd-muted px-1 py-0.5">runAgent()</code>, never into it. Add
+          what you need, ignore the rest.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
