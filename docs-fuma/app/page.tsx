@@ -24,6 +24,11 @@ export const metadata: Metadata = {
       "A minimal, provider-agnostic agent loop built on swappable seams. Bring your own front end; runs in Node, Bun, Deno, and the browser.",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Open Agent OS",
+    description: "A minimal, provider-agnostic agent loop built on swappable seams.",
+  },
 };
 
 export default function HomePage() {
@@ -31,6 +36,7 @@ export default function HomePage() {
     <HomeLayout {...baseOptions}>
       <main className="flex flex-1 flex-col">
         <Hero />
+        <Quickstart />
         <SeamSwap />
         <ByoFrontend />
         <SeamTour />
@@ -44,16 +50,62 @@ export default function HomePage() {
   );
 }
 
-const FEATURES: { title: string; body: string }[] = [
-  { title: "Streaming by default", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
-  { title: "Skills", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
-  { title: "Planning tools", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
-  { title: "Composable agents", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
-  { title: "Channels & steering", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
-  { title: "Goal loops", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
-  { title: "Tracing built in", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
-  { title: "Permissioned tool calls", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
-  { title: "Independently testable", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
+const QUICKSTART = `import { runAgent, SessionMemoryStore, defineTool } from "@open-agent-loops/core";
+import { OpenAICompatibleModel } from "@open-agent-loops/core/providers/openai";
+import { z } from "zod";
+
+// A tool is a name, a schema, and a function.
+const weather = defineTool({
+  name: "weather",
+  description: "Get the weather for a city.",
+  parameters: z.object({ city: z.string() }),
+  execute: async ({ city }) => ({ content: \`Sunny in \${city}\` }),
+});
+
+const result = await runAgent({
+  model: new OpenAICompatibleModel({ baseURL, apiKey, model }),
+  memory: new SessionMemoryStore(),
+  sessionId: "demo",
+  prompt: "What's the weather in Paris?",
+  tools: [weather],
+  onEvent: (e) => render(e), // the loop is headless — render events your way
+});
+
+console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."`;
+
+function Quickstart() {
+  return (
+    <section className="mx-auto w-full max-w-4xl px-6 py-16">
+      <div className="mb-6 flex flex-col gap-3 text-center">
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">From zero to a running agent</h2>
+        <p className="mx-auto max-w-2xl text-fd-muted-foreground">
+          Define a tool, hand it to the loop, render the stream. That's the whole API surface.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-fd-border bg-fd-card p-5">
+        <pre className="font-mono text-[12.5px] leading-relaxed text-fd-foreground">
+          <code>{QUICKSTART}</code>
+        </pre>
+      </div>
+      <div className="mt-4 text-center">
+        <Link href="/docs/getting-started" className="text-sm text-fd-primary underline-offset-4 hover:underline">
+          Full walkthrough in Getting Started →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+const FEATURES: { title: string; body: string; href: string }[] = [
+  { title: "Streaming by default", href: "/docs/messages-and-the-wire-format", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
+  { title: "Skills", href: "/docs/skills", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
+  { title: "Planning tools", href: "/docs/planning-tools", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
+  { title: "Composable agents", href: "/docs/agent-as-tool", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
+  { title: "Channels & steering", href: "/docs/channels", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
+  { title: "Goal loops", href: "/docs/goal-loops", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
+  { title: "Tracing built in", href: "/docs/tracing", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
+  { title: "Permissioned tool calls", href: "/docs/gating-tool-calls", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
+  { title: "Independently testable", href: "/docs/getting-started", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
 ];
 
 function FeatureGrid() {
@@ -69,10 +121,19 @@ function FeatureGrid() {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f) => (
-          <div key={f.title} className="flex flex-col gap-2 rounded-xl border border-fd-border bg-fd-card p-5">
-            <h3 className="font-semibold">{f.title}</h3>
+          <Link
+            key={f.title}
+            href={f.href}
+            className="group flex flex-col gap-2 rounded-xl border border-fd-border bg-fd-card p-5 transition-colors hover:border-fd-primary/60"
+          >
+            <h3 className="font-semibold">
+              {f.title}
+              <span className="ml-1 text-fd-muted-foreground transition-transform group-hover:translate-x-0.5 inline-block">
+                →
+              </span>
+            </h3>
             <p className="text-sm text-fd-muted-foreground">{f.body}</p>
-          </div>
+          </Link>
         ))}
       </div>
     </section>
