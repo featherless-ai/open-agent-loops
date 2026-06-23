@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 // Social-share card. Next.js serves this for og:image and twitter:image.
-export const alt = "Open Agent OS — a minimal, provider-agnostic agent loop";
+export const alt = "Open Agent Loops — a minimal, provider-agnostic agent loop";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -27,7 +27,7 @@ export default function OpenGraphImage() {
         </svg>
 
         <div style={{ marginTop: 40, fontSize: 76, fontWeight: 700, letterSpacing: "-0.02em" }}>
-          Open Agent OS
+          Open Agent Loops
         </div>
         <div style={{ marginTop: 16, fontSize: 34, color: "#a1a1aa", maxWidth: 900 }}>
           A minimal, provider-agnostic agent loop. Every piece behind a swappable seam.

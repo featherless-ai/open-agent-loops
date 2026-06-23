@@ -1,5 +1,5 @@
 /**
- * The Open Agent OS brand mark: a rounded-square loop with a single "station" dot
+ * The Open Agent Loops brand mark: a rounded-square loop with a single "station" dot
  * riding it — the transit-map hero, distilled to a glyph. Ring uses currentColor
  * so it adapts to context; the dot is theme yellow. Used in the nav and (as a
  * static copy) for the favicon and OG image.

@@ -1,4 +1,4 @@
-# Open Agent OS
+# Open Agent Loops
 
 A minimal, provider-agnostic agentic loop. Every fundamental piece sits behind
 an interface so it can be swapped without touching the loop — the point of this

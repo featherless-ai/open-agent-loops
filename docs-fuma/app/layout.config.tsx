@@ -7,7 +7,7 @@ export const baseOptions: BaseLayoutProps = {
     title: (
       <span className="inline-flex items-center gap-2 font-semibold">
         <LoopMark />
-        Open Agent OS
+        Open Agent Loops
       </span>
     ),
   },

@@ -1,4 +1,4 @@
-# Open Agent OS
+# Open Agent Loops
 
 A minimal, provider-agnostic **agentic loop**. The whole point of this package
 is to make the components of the agent **plug-and-play, independently testable, and reliable** — every fundamental thing sits behind an interface, so it can be
