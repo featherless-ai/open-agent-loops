@@ -27,8 +27,8 @@ The smallest possible client emits nothing but the answer and the terminal
 `done`. No network — just the shape, so you can see every moving part:
 
 ```ts
-import { runAgent, SessionMemoryStore, StreamEventType, assistantMessage } from "@open-agent-os/core";
-import type { ModelClient, ModelRequest, StreamEvent } from "@open-agent-os/core";
+import { runAgent, SessionMemoryStore, StreamEventType, assistantMessage } from "@open-agent-loops/core";
+import type { ModelClient, ModelRequest, StreamEvent } from "@open-agent-loops/core";
 
 // The whole interface is this one method.
 const echo: ModelClient = {
@@ -66,8 +66,8 @@ fragments, so accumulate them and emit each call whole at the end, just before
 the terminal `done`:
 
 ```ts
-import { StreamEventType, ToolCallType, assistantMessage } from "@open-agent-os/core";
-import type { ModelClient, ModelRequest, StreamEvent, ToolSpec, ToolCall } from "@open-agent-os/core";
+import { StreamEventType, ToolCallType, assistantMessage } from "@open-agent-loops/core";
+import type { ModelClient, ModelRequest, StreamEvent, ToolSpec, ToolCall } from "@open-agent-loops/core";
 
 export class MyModel implements ModelClient {
   constructor(private readonly opts: { baseURL: string; apiKey: string; model: string }) {}
@@ -164,7 +164,7 @@ failure instead of stalling on a silent empty turn.
 
 <Callout title="Already OpenAI-compatible? Use the battery.">
   If your endpoint speaks the OpenAI chat-completions wire format, you don't need
-  any of this — `OpenAICompatibleModel` from `@open-agent-os/core/providers/openai` is a
+  any of this — `OpenAICompatibleModel` from `@open-agent-loops/core/providers/openai` is a
   complete `ModelClient` for Featherless, vLLM, Together, Groq, Fireworks,
   DeepSeek, and more. Reach for a hand-written client only when your provider
   isn't OpenAI-compatible, or you want a different transport. Reasoning models

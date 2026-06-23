@@ -27,8 +27,8 @@ import {
   InMemoryPermissionStore,
   PermissionPolicy,
   ApprovalChoice,
-} from "@open-agent-os/core";
-import type { ApprovalPrompter } from "@open-agent-os/core";
+} from "@open-agent-loops/core";
+import type { ApprovalPrompter } from "@open-agent-loops/core";
 import { z } from "zod";
 // ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
 // loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
@@ -104,7 +104,7 @@ with the gate without either knowing about the other — the credential wraps th
 tool, the permission gates the batch:
 
 ```ts
-import { withCredentials, InMemoryCredentialStore } from "@open-agent-os/core";
+import { withCredentials, InMemoryCredentialStore } from "@open-agent-loops/core";
 
 // deploy now authenticates with a token it never sees in the clear: the model
 // passes the placeholder `{{deploy_token}}`, resolved only inside execute.

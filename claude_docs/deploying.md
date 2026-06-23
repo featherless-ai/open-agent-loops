@@ -6,7 +6,7 @@ description: Host the docs site on a Cloudflare subdomain via a cloudflared tunn
 There are two things to ship:
 
 1. **The docs site** (this site) — onto a Cloudflare `*.featherless.ai` subdomain.
-2. **The package** (`@open-agent-os/core`) — onto npm, so anyone can `npm install` it.
+2. **The package** (`@open-agent-loops/core`) — onto npm, so anyone can `npm install` it.
 
 The Cloudflare half follows the same shape the Featherless **guarded-api Cloudflare
 pilot** uses: a containerized Node service bound to localhost, reached from the
@@ -74,11 +74,11 @@ Build and run it, binding to loopback so only the tunnel can reach it:
 
 ```bash
 # from the repo root
-docker build -t open-agent-os-docs .
+docker build -t open-agent-loops-docs .
 
-docker run -d --name open-agent-os-docs --restart unless-stopped \
+docker run -d --name open-agent-loops-docs --restart unless-stopped \
   -p 127.0.0.1:3000:3000 \
-  open-agent-os-docs
+  open-agent-loops-docs
 
 curl -s localhost:3000 | head    # the rendered docs HTML
 ```
@@ -92,8 +92,8 @@ curl -s localhost:3000 | head    # the rendered docs HTML
 
 ```bash
 cloudflared tunnel login                          # browser auth to the featherless.ai zone
-cloudflared tunnel create open-agent-os-docs      # prints a UUID + writes a credentials JSON
-cloudflared tunnel route dns open-agent-os-docs docs.featherless.ai
+cloudflared tunnel create open-agent-loops-docs      # prints a UUID + writes a credentials JSON
+cloudflared tunnel route dns open-agent-loops-docs docs.featherless.ai
 ```
 
 Write `cloudflared/config.yml` pointing the hostname at the container:
@@ -136,18 +136,18 @@ host.
 ### Tearing it down
 
 ```bash
-docker rm -f open-agent-os-docs
-cloudflared tunnel delete open-agent-os-docs   # also removes the DNS route
+docker rm -f open-agent-loops-docs
+cloudflared tunnel delete open-agent-loops-docs   # also removes the DNS route
 ```
 
 ## Part 2 — Publish the package to npm
 
-This publishes `@open-agent-os/core` to npm — **private (restricted) at first**,
+This publishes `@open-agent-loops/core` to npm — **private (restricted) at first**,
 then public when you're ready.
 
 ### Pre-flight
 
-- It's a **scoped** package (`@open-agent-os/core`), and scoped packages publish
+- It's a **scoped** package (`@open-agent-loops/core`), and scoped packages publish
   as **restricted (private)** by default — exactly what we want initially. We set
   it explicitly below so it can't be made public by accident, and flip it to
   public later in one command.
@@ -185,7 +185,7 @@ npm version 0.1.0     # writes package.json + a git tag
 ### 3. Authenticate
 
 ```bash
-npm login             # interactive; needs an npm account with publish rights to the @open-agent-os scope
+npm login             # interactive; needs an npm account with publish rights to the @open-agent-loops scope
 ```
 
 For CI, use an **automation access token** (`NPM_TOKEN`) instead of interactive
@@ -201,25 +201,25 @@ npm publish           # restricted by `publishConfig.access`; prepublishOnly bui
 ### 5. Verify
 
 ```bash
-npm view @open-agent-os/core version      # the version you just shipped
+npm view @open-agent-loops/core version      # the version you just shipped
 ```
 
 While the package is restricted, only the publisher and anyone granted access to
-the `@open-agent-os` scope can install it — and they must be `npm login`'d first.
+the `@open-agent-loops` scope can install it — and they must be `npm login`'d first.
 
 ### When you're ready to go public
 
 Flip visibility in one command — no republish needed:
 
 ```bash
-npm access public @open-agent-os/core
+npm access public @open-agent-loops/core
 ```
 
 (Or change `publishConfig.access` to `"public"` so future versions publish public
 by default.) From then on, the install below works for **anyone**:
 
 ```bash
-npm install @open-agent-os/core
+npm install @open-agent-loops/core
 # Using the OpenAI-compatible provider? add the optional peer dep:
 npm install openai
 ```

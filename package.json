@@ -1,7 +1,25 @@
 {
-  "name": "@open-agent-os/core",
+  "name": "@open-agent-loops/core",
   "version": "0.0.1",
   "description": "A minimal, provider-agnostic agentic loop. Plug-and-play seams behind interfaces.",
+  "license": "MIT",
+  "author": "Michael Chung <michael.chung@databites.ca>",
+  "homepage": "https://github.com/ArEnSc/advance-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArEnSc/advance-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ArEnSc/advance-agent/issues"
+  },
+  "keywords": [
+    "agent",
+    "agentic",
+    "llm",
+    "openai",
+    "tool-calling",
+    "ai"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -57,5 +75,8 @@
   },
   "overrides": {
     "esbuild": "0.28.1"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
