@@ -9,24 +9,26 @@
  * | Family            | toggle key       | continuity (when on)        |
  * | ----------------- | ---------------- | --------------------------- |
  * | GLM (4.7/5/5.1)   | `enable_thinking`| `clear_thinking: false`     |
- * | Kimi K2 Thinking  | `thinking`       | `preserve_thinking: true`   |
+ * | Kimi K2.5 / K2.6  | `thinking`       | `preserve_thinking: true`   |
  * | DeepSeek V3.1/V4  | `thinking`       | (resend reasoning_content)  |
  * | Qwen3 (original)  | `enable_thinking`| interleaved; resend reasoning |
  * | Qwen3.5 / 3.6     | `enable_thinking`| `preserve_thinking: true`   |
  * | Gemma 4           | `enable_thinking`| —                           |
  *
- * Some families have no runtime toggle: DeepSeek R1 and StepFun Step-3.5 always
- * reason, and MiniMax-M2 does *interleaved* thinking (enabled server-side via
- * vLLM's `--reasoning-parser`, not a kwarg). For those, {@link reasoningKwargsFor}
- * injects nothing — the caller's job is only to RETAIN prior reasoning across
- * tool-call turns, which the loop's `prepareRequestMessages` already does.
+ * Some families have no runtime toggle: DeepSeek R1, StepFun Step-3.5, and the
+ * dedicated Kimi-K2-Thinking always reason, and MiniMax-M2 does *interleaved*
+ * thinking (enabled server-side via vLLM's `--reasoning-parser`, not a kwarg). For
+ * those, {@link reasoningKwargsFor} injects nothing — the caller's job is only to
+ * RETAIN prior reasoning across tool-call turns, which the loop's
+ * `prepareRequestMessages` already does.
  *
  * Interleaved and toggleable are independent: the whole Qwen3 series interleaves
  * by default (the chat template's `last_query_index` "rolling checkpoint" keeps
  * `<think>` only for turns after the last user message) yet still honors the
  * `enable_thinking` toggle, and Qwen3.5/3.6 add `preserve_thinking` to retain the
- * FULL history like Kimi. Retaining prior reasoning_content is the caller's job
- * either way.
+ * FULL history like Kimi. GLM (4.5+) likewise interleaves AND toggles — its
+ * `clear_thinking:false` ("Preserved Thinking") is the retention switch.
+ * Retaining prior reasoning_content is the caller's job either way.
  *
  * Matching is first-match-wins over the lowercased id; unknown and non-reasoning
  * models resolve to `undefined` (inject nothing) so this is always safe to apply.
@@ -120,12 +122,15 @@ const RULES: Rule[] = [
     test: (id) => id.includes("deepseek-v"),
     profile: { reasoning: true, toggleKey: "thinking", defaultOn: false, interleaved: false },
   },
-  // GLM 4.7 / 5 / 5.1 — enable_thinking + clear_thinking continuity, default on.
-  // verified — the GLM-4.7 card shows the exact agentic combo
-  // `{enable_thinking:true, clear_thinking:false}` and "thinking mode is enabled
-  // by default": https://huggingface.co/zai-org/GLM-4.7  (clear_thinking =
-  // "preserved thinking" also documented at
-  // https://docs.together.ai/docs/inference/chat/reasoning)
+  // GLM 4.7 / 5 / 5.1 — enable_thinking + clear_thinking continuity, default on,
+  // INTERLEAVED. verified — the GLM-4.7 card describes "Interleaved Thinking" (the
+  // model "thinks between tool calls and after receiving tool results"), a feature
+  // "introduced since GLM-4.5" and enhanced in 4.7 with "Preserved Thinking"
+  // (`clear_thinking:false` retains thinking across turns). It shows the exact
+  // agentic combo `{enable_thinking:true, clear_thinking:false}` and "thinking mode
+  // is enabled by default": https://huggingface.co/zai-org/GLM-4.7 — and Z.AI's
+  // thinking-mode guide: "allowing GLM to think between tool calls and after
+  // receiving tool results": https://docs.z.ai/guides/capabilities/thinking-mode
   {
     test: (id) => id.includes("glm-"),
     profile: {
@@ -133,17 +138,31 @@ const RULES: Rule[] = [
       toggleKey: "enable_thinking",
       defaultOn: true,
       whenOn: { clear_thinking: false },
-      interleaved: false,
+      interleaved: true,
     },
   },
   // Kimi K2 *-Instruct is the non-reasoning line. (Before the generic Kimi rule.)
   // verified — the card: "It is a reflex-grade model without long thinking":
   //   https://huggingface.co/moonshotai/Kimi-K2-Instruct
   { test: (id) => id.includes("kimi-k2-instruct"), profile: NON_REASONING },
-  // Kimi K2 Thinking / K2.5 / K2.6 — `thinking` toggle + preserve_thinking (only
-  // while on), interleaved. verified — the K2.6 card: think mode =
-  // `chat_template_kwargs {thinking:True, preserve_thinking:True}`, instant mode
-  // = `{thinking:False}`, "enable preserve_thinking only in think mode":
+  // Kimi-K2-Thinking — the dedicated thinking model: ALWAYS on (no instant mode,
+  // no `thinking:false` toggle), interleaved. It resends reasoning_content WITHIN a
+  // task but has no `preserve_thinking` kwarg — that full-history switch arrived with
+  // the hybrid K2.5/K2.6 line (cf. original Qwen3 vs 3.5), so this line is resend-only.
+  // (Before the generic Kimi rule.) verified — the card documents no disable kwarg
+  // and is "end-to-end trained to interleave chain-of-thought reasoning with function
+  // calls": https://huggingface.co/moonshotai/Kimi-K2-Thinking ; the Kimi platform
+  // thinking guide lists `thinking.type:"disabled"` only for k2.5/k2.6/k2.7-code, NOT
+  // k2-thinking: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model
+  {
+    test: (id) => id.includes("kimi-k2-thinking"),
+    profile: { reasoning: true, toggleKey: null, defaultOn: true, interleaved: true },
+  },
+  // Kimi K2.5 / K2.6 (hybrid) — `thinking` toggle + preserve_thinking (only while
+  // on), interleaved. verified — the K2.6 card: think mode = `chat_template_kwargs
+  // {thinking:True, preserve_thinking:True}`, instant mode = `{thinking:False}`,
+  // "enable preserve_thinking only in think mode", thinking on by default; the Kimi
+  // platform guide confirms k2.5/k2.6 accept `thinking.type:"disabled"`:
   //   https://huggingface.co/moonshotai/Kimi-K2.6
   {
     test: (id) => id.includes("kimi"),

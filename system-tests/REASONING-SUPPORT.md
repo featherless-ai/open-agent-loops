@@ -32,14 +32,14 @@ on, no kwarg toggle.  **Interleaved**: ✅ keep prior reasoning across tool call
 
 | Model | Family | Thinking-ON `chat_template_kwargs` | Disable thinking? | Default | Interleaved | Aux flags | Ref |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `zai-org/GLM-5.2` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ❌ | — | [GLM card][glm] |
-| `zai-org/GLM-5.1` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ❌ | — | [GLM card][glm] |
-| `zai-org/GLM-5` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ❌ | — | [GLM card][glm] |
-| `zai-org/GLM-4.7` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ❌ | — | [GLM card][glm] |
-| `zai-org/GLM-4.7-Flash` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ❌ | — | [GLM card][glm] |
-| `moonshotai/Kimi-K2.6` | Kimi | `thinking:true, preserve_thinking:true` | ✅ `thinking:false` | on | ✅ | — | [Kimi K2.6 card][kimi] |
-| `moonshotai/Kimi-K2.5` | Kimi | `thinking:true, preserve_thinking:true` | ✅ `thinking:false` | on | ✅ | — | [Kimi K2.6 card][kimi] |
-| `moonshotai/Kimi-K2-Thinking` | Kimi | `thinking:true, preserve_thinking:true` | ✅ `thinking:false` | on | ✅ | — | [Kimi K2.6 card][kimi] |
+| `zai-org/GLM-5.2` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ✅ | interleaved since GLM-4.5; `clear_thinking:false` = "Preserved Thinking" | [GLM card][glm] |
+| `zai-org/GLM-5.1` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ✅ | interleaved since GLM-4.5; `clear_thinking:false` = "Preserved Thinking" | [GLM card][glm] |
+| `zai-org/GLM-5` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ✅ | interleaved since GLM-4.5; `clear_thinking:false` = "Preserved Thinking" | [GLM card][glm] |
+| `zai-org/GLM-4.7` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ✅ | interleaved since GLM-4.5; `clear_thinking:false` = "Preserved Thinking" | [GLM card][glm] |
+| `zai-org/GLM-4.7-Flash` | GLM | `enable_thinking:true, clear_thinking:false` | ✅ `enable_thinking:false` | on | ✅ | interleaved since GLM-4.5; `clear_thinking:false` = "Preserved Thinking" | [GLM card][glm] |
+| `moonshotai/Kimi-K2.6` | Kimi | `thinking:true, preserve_thinking:true` | ✅ `thinking:false` | on | ✅ | parser `kimi_k2` | [Kimi K2.6 card][kimi] |
+| `moonshotai/Kimi-K2.5` | Kimi | `thinking:true, preserve_thinking:true` | ✅ `thinking:false` | on | ✅ | parser `kimi_k2` | [Kimi K2.6 card][kimi] |
+| `moonshotai/Kimi-K2-Thinking` | Kimi | — *(none; always on)* | ❌ always on | on | ✅ | dedicated reasoner; resend `reasoning_content` (no `preserve_thinking`); parser `kimi_k2` | [K2-Thinking card][kimi-think] |
 | `MiniMaxAI/MiniMax-M2.7` | MiniMax | — *(none; always on)* | ❌ always on | on | ✅ | parser `minimax_m2` (server-side) | [vLLM interleaved][vllm-il] |
 | `MiniMaxAI/MiniMax-M2.5` | MiniMax | — *(none; always on)* | ❌ always on | on | ✅ | parser `minimax_m2` (server-side) | [vLLM interleaved][vllm-il] |
 | `MiniMaxAI/MiniMax-M2.1` | MiniMax | — *(none; always on)* | ❌ always on | on | ✅ | parser `minimax_m2` (server-side) | [vLLM interleaved][vllm-il] |
@@ -87,18 +87,35 @@ on, no kwarg toggle.  **Interleaved**: ✅ keep prior reasoning across tool call
 Each block quotes the primary doc the rule is drawn from, so a row can be checked end-to-end.
 
 ### GLM (5.2 / 5.1 / 5 / 4.7 / 4.7-Flash)
-- **Toggle** `enable_thinking` · **continuity** `clear_thinking:false` · **default ON** · not interleaved.
+- **Toggle** `enable_thinking` · **continuity** `clear_thinking:false` · **default ON** · **interleaved**.
+- **Interleaved**: "Interleaved Thinking" was introduced **since GLM-4.5** — the model "thinks between
+  tool calls and after receiving tool results", so prior reasoning must be retained across tool-call
+  turns. GLM-4.7 enhanced it with **Preserved Thinking** (`clear_thinking:false`, retain thinking
+  across turns) and **Turn-level Thinking** (per-turn enable/disable).
 - The GLM-4.7 card shows the exact agentic combo `{enable_thinking:true, clear_thinking:false}` and
   "thinking mode is enabled by default". Newer GLM (5.1 / 5.2) **clear by default**, which is why the
   explicit `clear_thinking:false` is the load-bearing part — older GLM (5 / 4.7) preserve by default.
-- Sources: [GLM-4.7 card][glm] · [`clear_thinking` = "preserved thinking" (Together)][together]
+- Sources: [GLM-4.7 card][glm] · [Z.AI thinking-mode guide][zai] · [`clear_thinking` = "preserved thinking" (Together)][together]
 
-### Kimi (K2.6 / K2.5 / K2-Thinking)
-- **Toggle** `thinking` · **continuity** `preserve_thinking:true` · **default ON** · interleaved.
+### Kimi — hybrid line (K2.6 / K2.5)
+- **Toggle** `thinking` · **continuity** `preserve_thinking:true` · **default ON** · interleaved · parser `kimi_k2`.
 - K2.6 card: think mode = `{thinking:True, preserve_thinking:True}`, instant mode = `{thinking:False}`,
-  "enable `preserve_thinking` only in think mode". (Note: `Kimi-K2-Instruct` is the *non-reasoning*
-  line and is intentionally excluded from this list.)
-- Source: [Kimi-K2.6 card][kimi]
+  "enable `preserve_thinking` only in think mode"; thinking on by default. The Kimi platform guide
+  confirms k2.5 / k2.6 accept `thinking.type:"disabled"` (so they *can* be turned off).
+- Sources: [Kimi-K2.6 card][kimi] · [Kimi platform thinking guide][kimi-platform]
+
+### Kimi — dedicated reasoner (K2-Thinking)
+- **No toggle** (always on) · interleaved · parser `kimi_k2` · **resend-only** (no `preserve_thinking`).
+- K2-Thinking has no instant mode and no disable kwarg — it is "end-to-end trained to interleave
+  chain-of-thought reasoning with function calls". It shares the *interleaved / multi-step tool-call*
+  design with the hybrid line (resend `reasoning_content` within a task) but **not** the
+  `preserve_thinking` full-history switch, which the K2.5/K2.6 line added (cf. original Qwen3 vs 3.5).
+  The platform guide lists `thinking.type:"disabled"` only for k2.5/k2.6/k2.7-code — not k2-thinking.
+- ⚠️ The *always-on* classification is well-evidenced; the *no-`preserve_thinking`* part is inferred by
+  parallel to original Qwen3 — worth a live check if it matters.
+- Sources: [Kimi-K2-Thinking card][kimi-think] · [Kimi platform thinking guide][kimi-platform]
+
+(Note: `Kimi-K2-Instruct` is the *non-reasoning* line and is intentionally excluded from this list.)
 
 ### MiniMax (M2.7 / M2.5 / M2.1 / M2)
 - **No toggle** (always on) · interleaved · enabled server-side via `--reasoning-parser minimax_m2`.
@@ -154,8 +171,11 @@ Each block quotes the primary doc the rule is drawn from, so a row can be checke
 - **vLLM — Reasoning Outputs** (parser names + per-family defaults): <https://docs.vllm.ai/en/latest/features/reasoning_outputs/>
 - **vLLM — Interleaved Thinking**: <https://docs.vllm.ai/en/latest/features/interleaved_thinking/>
 - **GLM-4.7 model card**: <https://huggingface.co/zai-org/GLM-4.7>
+- **Z.AI — thinking-mode guide** (GLM interleaved/preserved thinking): <https://docs.z.ai/guides/capabilities/thinking-mode>
 - **Together — reasoning / `clear_thinking`**: <https://docs.together.ai/docs/inference/chat/reasoning>
 - **Kimi-K2.6 model card**: <https://huggingface.co/moonshotai/Kimi-K2.6>
+- **Kimi-K2-Thinking model card**: <https://huggingface.co/moonshotai/Kimi-K2-Thinking>
+- **Kimi platform — thinking-model guide**: <https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model>
 - **Qwen3.6-35B-A3B model card**: <https://huggingface.co/Qwen/Qwen3.6-35B-A3B>
 - **Unsloth — Qwen3.5 docs**: <https://unsloth.ai/docs/models/qwen3.5>
 - **DeepSeek — thinking mode (hosted API)**: <https://api-docs.deepseek.com/guides/thinking_mode>
@@ -165,8 +185,11 @@ Each block quotes the primary doc the rule is drawn from, so a row can be checke
 [vllm]: https://docs.vllm.ai/en/latest/features/reasoning_outputs/
 [vllm-il]: https://docs.vllm.ai/en/latest/features/interleaved_thinking/
 [glm]: https://huggingface.co/zai-org/GLM-4.7
+[zai]: https://docs.z.ai/guides/capabilities/thinking-mode
 [together]: https://docs.together.ai/docs/inference/chat/reasoning
 [kimi]: https://huggingface.co/moonshotai/Kimi-K2.6
+[kimi-think]: https://huggingface.co/moonshotai/Kimi-K2-Thinking
+[kimi-platform]: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model
 [qwen36]: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
 [unsloth]: https://unsloth.ai/docs/models/qwen3.5
 [ds-api]: https://api-docs.deepseek.com/guides/thinking_mode

@@ -23,9 +23,18 @@ describe("reasoningKwargsFor", () => {
     expect(reasoningKwargsFor("zai-org/GLM-5", "off")).toEqual({ enable_thinking: false });
   });
 
-  // Kimi thinking line: `thinking` toggle + preserve_thinking continuity.
-  test("Kimi thinking models use thinking + preserve_thinking", () => {
-    expect(reasoningKwargsFor("moonshotai/Kimi-K2-Thinking", "auto")).toEqual({
+  // GLM interleaves AND toggles (interleaved thinking introduced since GLM-4.5,
+  // enhanced in 4.7 with clear_thinking:false "Preserved Thinking"). It thinks
+  // between tool calls, so prior reasoning must be retained across tool-call turns.
+  test("GLM is interleaved with the clear_thinking continuity key", () => {
+    const profile = reasoningProfileFor("zai-org/GLM-4.7");
+    expect(profile?.interleaved).toBe(true);
+    expect(profile?.whenOn).toEqual({ clear_thinking: false });
+  });
+
+  // Kimi hybrid line (K2.5 / K2.6): `thinking` toggle + preserve_thinking continuity.
+  test("Kimi hybrid models use thinking + preserve_thinking", () => {
+    expect(reasoningKwargsFor("moonshotai/Kimi-K2.5", "auto")).toEqual({
       thinking: true,
       preserve_thinking: true,
     });
@@ -33,7 +42,19 @@ describe("reasoningKwargsFor", () => {
       thinking: true,
       preserve_thinking: true,
     });
-    expect(reasoningKwargsFor("moonshotai/Kimi-K2-Thinking", "off")).toEqual({ thinking: false });
+    expect(reasoningKwargsFor("moonshotai/Kimi-K2.6", "off")).toEqual({ thinking: false });
+  });
+
+  // Dedicated Kimi-K2-Thinking is always-on (no instant mode): no toggle, interleaved,
+  // resend-only (no preserve_thinking kwarg on this line), so inject nothing.
+  test("Kimi-K2-Thinking is always-on with no toggle", () => {
+    const profile = reasoningProfileFor("moonshotai/Kimi-K2-Thinking");
+    expect(profile?.toggleKey).toBeNull();
+    expect(profile?.interleaved).toBe(true);
+    expect(profile?.whenOn).toBeUndefined();
+    // No toggle + no continuity kwarg ⇒ nothing to inject, even when forced on/off.
+    expect(reasoningKwargsFor("moonshotai/Kimi-K2-Thinking", "on")).toBeUndefined();
+    expect(reasoningKwargsFor("moonshotai/Kimi-K2-Thinking", "off")).toBeUndefined();
   });
 
   // Kimi *-Instruct is a non-reasoning variant — inject nothing.
