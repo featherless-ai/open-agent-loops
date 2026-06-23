@@ -3,7 +3,7 @@
 A tiny knowledge base the `researcher` sub-agent greps in steps 3–4.
 
 ## The loop
-- The agent loop lives in `agent-core/primitives/loop.ts`.
+- The agent loop lives in `agent-loop-core/primitives/loop.ts`.
 - One run: load history → append prompt → [ stream assistant → run tools ]* → done.
 - It stops on a turn with no tool calls, a tool that sets `terminate`, a `stopWhen`
   condition, or the `maxSteps` safety cap.

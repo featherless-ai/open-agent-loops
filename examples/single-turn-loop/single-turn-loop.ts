@@ -13,9 +13,9 @@
  */
 
 // #region single-turn-loop
-import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "../../agent-core/index.ts";
-import type { AgentEvent } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "../../agent-loop-core/index.ts";
+import type { AgentEvent } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";

@@ -13,9 +13,9 @@
  *   you › what's the weather in Paris and Tokyo?
  */
 // #region step3
-import { AgentEventType, defineTool, runAgent, SessionMemoryStore, Tracer } from "../../agent-core/index.ts"; // [!code highlight]
-import type { AgentEvent } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+import { AgentEventType, defineTool, runAgent, SessionMemoryStore, Tracer } from "../../agent-loop-core/index.ts"; // [!code highlight]
+import type { AgentEvent } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";

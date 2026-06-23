@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { assistantMessage, StreamEventType, userMessage } from "../agent-core/index";
-import type { Message } from "../agent-core/index";
-import { OpenAICompatibleModel } from "../agent-core/providers/openai-compatible";
-import { reasoningProfileFor } from "../agent-core/providers/reasoning-kwargs";
+import { assistantMessage, StreamEventType, userMessage } from "../agent-loop-core/index";
+import type { Message } from "../agent-loop-core/index";
+import { OpenAICompatibleModel } from "../agent-loop-core/providers/openai-compatible";
+import { reasoningProfileFor } from "../agent-loop-core/providers/reasoning-kwargs";
 
 /**
  * LIVE assertion of the reasoning-field asymmetry (GLM / Featherless).

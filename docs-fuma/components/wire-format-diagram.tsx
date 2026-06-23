@@ -14,7 +14,7 @@
  *
  * The arrows between cards are the transitions; the two that **cross the wire**
  * (the POST to the model, which re-sends the whole growing array) are highlighted
- * yellow. Mirrors `agent-core/primitives/loop.ts`.
+ * yellow. Mirrors `agent-loop-core/primitives/loop.ts`.
  */
 
 import {

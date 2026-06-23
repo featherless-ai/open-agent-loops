@@ -20,9 +20,9 @@ import {
   SessionMemoryStore,
   SkillRegistry,
   skillTool,
-} from "../agent-core/index.ts";
-import type { AgentEvent, Skill } from "../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../agent-core/providers/openai-compatible.ts";
+} from "../agent-loop-core/index.ts";
+import type { AgentEvent, Skill } from "../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../agent-loop-core/providers/openai-compatible.ts";
 import { z } from "zod";
 
 // One trivial in-process tool the skill contributes.

@@ -12,8 +12,8 @@
     "skipLibCheck": true,
     "types": ["bun"],
     "paths": {
-      "~/agent-core": ["./agent-core/index.ts"]
+      "~/agent-loop-core": ["./agent-loop-core/index.ts"]
     }
   },
-  "include": ["agent-core"]
+  "include": ["agent-loop-core"]
 }

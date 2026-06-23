@@ -22,9 +22,9 @@ import {
   SessionMemoryStore,
   shellTool,
   ToolRegistry,
-} from "../../agent-core/index.ts";
-import type { AgentEvent, ApprovalPrompter } from "../../agent-core/index.ts"; // [!code highlight]
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent, ApprovalPrompter } from "../../agent-loop-core/index.ts"; // [!code highlight]
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { bunShellBackend } from "../../bun-backends.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";

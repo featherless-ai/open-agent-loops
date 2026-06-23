@@ -1,9 +1,9 @@
 /**
  * A real, sandboxed host backend for the `code_execution` built-in, implemented
  * against the Deno runtime. Like `bun-backends.ts`, it deliberately lives OUTSIDE
- * `agent-core/`: the core owns the tool's model-facing contract but refuses to
+ * `agent-loop-core/`: the core owns the tool's model-facing contract but refuses to
  * ship the dangerous part — actually running model-written code (see
- * `agent-core/tools/builtin/builtin.types.ts`). This file is the *consumer*
+ * `agent-loop-core/tools/builtin/builtin.types.ts`). This file is the *consumer*
  * filling the `CodeExecutionBackend` seam.
  *
  * Why Deno: it is deny-by-default. The spawned `deno run` gets NO file, network,
@@ -20,12 +20,12 @@
  *   - Requires the `deno` binary on PATH (https://deno.com).
  */
 
-import type { ToolContext } from "./agent-core/tools/tools.types.ts";
+import type { ToolContext } from "./agent-loop-core/tools/tools.types.ts";
 import type {
   CodeExecutionBackend,
   CodeExecutionRequest,
   CodeExecutionResult,
-} from "./agent-core/tools/builtin/builtin.types.ts";
+} from "./agent-loop-core/tools/builtin/builtin.types.ts";
 
 /**
  * Deno permission grants. Everything is denied unless listed here. `true` grants

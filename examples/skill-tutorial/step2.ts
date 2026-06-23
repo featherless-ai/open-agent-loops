@@ -17,9 +17,9 @@ import {
   SkillRegistry,
   skillResourceTool, // [!code highlight]
   skillTool,
-} from "../../agent-core/index.ts";
-import type { AgentEvent, Skill } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent, Skill } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { bunShellBackend } from "../../bun-backends.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";

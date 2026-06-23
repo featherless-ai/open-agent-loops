@@ -18,9 +18,9 @@
  * Run it (Bun auto-loads .env):
  *   bun run examples/trace-to-curl/trace-to-curl.ts
  */
-import { AgentEventType, runAgent, SessionMemoryStore, Tracer, defineTool } from "../../agent-core/index.ts";
-import type { AgentEvent } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+import { AgentEventType, runAgent, SessionMemoryStore, Tracer, defineTool } from "../../agent-loop-core/index.ts";
+import type { AgentEvent } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { color } from "../console-format.ts";
 import { z } from "zod";
 

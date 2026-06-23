@@ -11,7 +11,7 @@
  * optional Hooks are dashed: `transformContext`, `gateToolCalls`,
  * `afterToolCall`, and the two message-injection ones — `drainSteering`
  * (redirect mid-run) and `drainFollowUp` (continue past a final answer). The
- * order and placement mirror `agent-core/primitives/loop.ts`.
+ * order and placement mirror `agent-loop-core/primitives/loop.ts`.
  */
 
 import {

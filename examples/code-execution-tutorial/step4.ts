@@ -23,9 +23,9 @@ import {
   PermissionPolicy, // [!code highlight]
   runAgent,
   SessionMemoryStore,
-} from "../../agent-core/index.ts";
-import type { AgentEvent, ApprovalPrompter, CodeExecutionBackend } from "../../agent-core/index.ts"; // [!code highlight]
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent, ApprovalPrompter, CodeExecutionBackend } from "../../agent-loop-core/index.ts"; // [!code highlight]
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { tmpdir } from "node:os";

@@ -14,7 +14,7 @@
  * lands back in Memory (blue) and the next model turn reads it, closing the loop.
  *
  * The result is *measured* inside the sandbox — never produced by the model. The
- * order mirrors `agent-core/tools/builtin/code-execution.ts` and the deny-by-default
+ * order mirrors `agent-loop-core/tools/builtin/code-execution.ts` and the deny-by-default
  * `denoCodeExecutionBackend` in `deno-backends.ts`.
  */
 

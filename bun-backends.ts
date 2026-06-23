@@ -1,25 +1,25 @@
 /**
  * Real host backends for the built-in tools, implemented against the Bun
- * runtime. These deliberately live OUTSIDE `agent-core/`: the core owns each
+ * runtime. These deliberately live OUTSIDE `agent-loop-core/`: the core owns each
  * tool's model-facing contract but refuses to ship the dangerous part — actually
  * running a command or touching a filesystem (see
- * `agent-core/tools/builtin/builtin.types.ts`). This file is the *consumer*
+ * `agent-loop-core/tools/builtin/builtin.types.ts`). This file is the *consumer*
  * filling those seams, the same role the runnable examples (e.g.
  * `examples/running-product.ts`) play for the model.
  *
  * SECURITY: `bunShellBackend` runs arbitrary commands on this machine with no
  * sandbox. Only hand the resulting tool to a model you trust, or route it through
- * the permission gate in `agent-core/permissions`.
+ * the permission gate in `agent-loop-core/permissions`.
  */
 
-import type { ToolContext } from "./agent-core/tools/tools.types.ts";
+import type { ToolContext } from "./agent-loop-core/tools/tools.types.ts";
 import type {
   SearchBackend,
   SearchMatch,
   SearchQuery,
   ShellBackend,
   ShellResult,
-} from "./agent-core/tools/builtin/builtin.types.ts";
+} from "./agent-loop-core/tools/builtin/builtin.types.ts";
 
 /** Options shared by both backends — chiefly the working directory to run in. */
 interface BackendOptions {
