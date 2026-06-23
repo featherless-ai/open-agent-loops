@@ -53,7 +53,7 @@ on, no kwarg toggle.  **Interleaved**: ✅ keep prior reasoning across tool call
 | `deepseek-ai/DeepSeek-R1-0528` | DeepSeek | — *(none; always on)* | ❌ always on | on | ❌ | parser `deepseek_r1` | [vLLM][vllm] |
 | `Qwen/Qwen3.5-397B-A17B` | Qwen | `enable_thinking:true, preserve_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | `preserve_thinking` ⇒ full retention | [Qwen3.6 card][qwen36] |
 | `Qwen/Qwen3-235B-A22B` | Qwen | `enable_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | parser `qwen3`; `last_query_index`‡ | [vLLM][vllm] |
-| `Qwen/Qwen3-VL-235B-A22B-Thinking` | Qwen | `enable_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | parser `qwen3`; `last_query_index`‡ | [vLLM][vllm] |
+| `Qwen/Qwen3-VL-235B-A22B-Thinking` | Qwen | — *(none; always on)* | ❌ always on | on | ✅ | dedicated reasoner ("only thinking mode"); parser `deepseek_r1`; `</think>`-only output | [Qwen3-Thinking-2507 card][qwen-think] |
 | `Qwen/Qwen3.6-35B-A3B` | Qwen | `enable_thinking:true, preserve_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | `preserve_thinking` ⇒ full retention | [Qwen3.6 card][qwen36] |
 | `Qwen/Qwen3.6-27B` | Qwen | `enable_thinking:true, preserve_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | `preserve_thinking` ⇒ full retention | [Qwen3.6 card][qwen36] |
 | `Qwen/Qwen3.5-27B` | Qwen | `enable_thinking:true, preserve_thinking:true` | ✅ `enable_thinking:false` | on | ✅ | `preserve_thinking` ⇒ full retention | [Qwen3.6 card][qwen36] |
@@ -133,12 +133,23 @@ Each block quotes the primary doc the rule is drawn from, so a row can be checke
 - **No toggle** (always reasons) · not interleaved · parser `deepseek_r1` extracts reasoning automatically.
 - Source: [vLLM reasoning outputs][vllm]
 
-### Qwen3 — original (Qwen3-235B-A22B, Qwen3-VL-235B-A22B-Thinking)
+### Qwen3 — original hybrid (Qwen3-235B-A22B)
 - **Toggle** `enable_thinking` · **default ON** · interleaved via the template's `last_query_index`
   rolling checkpoint · **no** `preserve_thinking` on this line (see footnote ‡).
 - vLLM: "The reasoning feature for the Qwen3 series is enabled by default. To disable it, you must pass
-  `enable_thinking=False`" (parser `qwen3`).
-- Source: [vLLM reasoning outputs][vllm]
+  `enable_thinking=False`" (parser `qwen3`; the Qwen3-235B-A22B card example uses `deepseek_r1`). The
+  rolling-checkpoint retention is dissected in the Qwen-3 chat-template deep-dive.
+- Sources: [vLLM reasoning outputs][vllm] · [Qwen-3 chat-template deep-dive][qwen-tmpl]
+
+### Qwen3 — dedicated Thinking variants (Qwen3-VL-235B-A22B-Thinking)
+- **No toggle** (always on) · interleaved · parser `deepseek_r1` · **resend-only** (no `preserve_thinking`).
+- The 2507 split (and the multimodal `-Thinking` line) abandoned the hybrid toggle: these are
+  reasoning-only models. The 2507 card states **"This model supports only thinking mode"** and "it is
+  normal for the model's output to contain only `</think>` without an explicit opening `<think>` tag".
+  Same era as original Qwen3, so no `preserve_thinking` — resend `reasoning_content`.
+- ⚠️ The *always-on* classification follows the documented 2507 `-Thinking` pattern; the VL-Thinking
+  card itself is terse, so confirm with a live check if it matters.
+- Source: [Qwen3-235B-A22B-Thinking-2507 card][qwen-think]
 
 ### Qwen3.5 / 3.6 (Qwen3.5-397B-A17B, Qwen3.6-35B-A3B, Qwen3.6-27B, Qwen3.5-27B)
 - **Toggle** `enable_thinking` · **continuity** `preserve_thinking:true` · **default ON** · interleaved.
@@ -177,6 +188,8 @@ Each block quotes the primary doc the rule is drawn from, so a row can be checke
 - **Kimi-K2-Thinking model card**: <https://huggingface.co/moonshotai/Kimi-K2-Thinking>
 - **Kimi platform — thinking-model guide**: <https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model>
 - **Qwen3.6-35B-A3B model card**: <https://huggingface.co/Qwen/Qwen3.6-35B-A3B>
+- **Qwen3-235B-A22B-Thinking-2507 model card** (dedicated Thinking variant): <https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507>
+- **Qwen-3 chat-template deep-dive** (rolling checkpoint / `last_query_index`): <https://huggingface.co/blog/qwen-3-chat-template-deep-dive>
 - **Unsloth — Qwen3.5 docs**: <https://unsloth.ai/docs/models/qwen3.5>
 - **DeepSeek — thinking mode (hosted API)**: <https://api-docs.deepseek.com/guides/thinking_mode>
 - **Step-3.5-Flash — disable-thinking discussion**: <https://huggingface.co/stepfun-ai/Step-3.5-Flash/discussions/22>
@@ -191,6 +204,8 @@ Each block quotes the primary doc the rule is drawn from, so a row can be checke
 [kimi-think]: https://huggingface.co/moonshotai/Kimi-K2-Thinking
 [kimi-platform]: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model
 [qwen36]: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+[qwen-think]: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+[qwen-tmpl]: https://huggingface.co/blog/qwen-3-chat-template-deep-dive
 [unsloth]: https://unsloth.ai/docs/models/qwen3.5
 [ds-api]: https://api-docs.deepseek.com/guides/thinking_mode
 [step]: https://huggingface.co/stepfun-ai/Step-3.5-Flash/discussions/22

@@ -107,12 +107,28 @@ describe("reasoningKwargsFor", () => {
     expect(reasoningKwargsFor("openai/gpt-oss-120b", "auto")).toBeUndefined();
   });
 
-  // Original Qwen3: enable_thinking, default on, interleaved by the template's
+  // Original Qwen3 (hybrid): enable_thinking, default on, interleaved by the template's
   // last_query_index checkpoint — but NO preserve_thinking (arrived in 3.5).
   test("original Qwen3 is interleaved with no preserve_thinking", () => {
     expect(reasoningKwargsFor("Qwen/Qwen3-235B-A22B", "auto")).toEqual({ enable_thinking: true });
     expect(reasoningKwargsFor("Qwen/Qwen3-30B-A3B", "on")).toEqual({ enable_thinking: true });
     expect(reasoningProfileFor("Qwen/Qwen3-235B-A22B")?.interleaved).toBe(true);
+  });
+
+  // Qwen3 dedicated "-Thinking" variants (2507 split / VL-Thinking) are always-on:
+  // no enable_thinking toggle, interleaved, resend-only. Must beat the generic qwen3
+  // rule (which would otherwise mark them togglable).
+  test("Qwen3 -Thinking variants are always-on with no toggle", () => {
+    const vl = reasoningProfileFor("Qwen/Qwen3-VL-235B-A22B-Thinking");
+    expect(vl?.toggleKey).toBeNull();
+    expect(vl?.interleaved).toBe(true);
+    expect(vl?.whenOn).toBeUndefined();
+    expect(reasoningKwargsFor("Qwen/Qwen3-VL-235B-A22B-Thinking", "on")).toBeUndefined();
+    expect(reasoningKwargsFor("Qwen/Qwen3-VL-235B-A22B-Thinking", "off")).toBeUndefined();
+    // The 2507 text Thinking model takes the same path.
+    expect(reasoningProfileFor("Qwen/Qwen3-235B-A22B-Thinking-2507")?.toggleKey).toBeNull();
+    // ...but the plain hybrid (no "-Thinking") still toggles.
+    expect(reasoningProfileFor("Qwen/Qwen3-235B-A22B")?.toggleKey).toBe("enable_thinking");
   });
 
   // Qwen3.5 / 3.6: enable_thinking default on, interleaved, + preserve_thinking
@@ -148,11 +164,12 @@ describe("reasoningKwargsFor", () => {
     expect(reasoningKwargsFor("Qwen/Qwen3-VL-30B-A3B-Instruct", "on")).toBeUndefined();
   });
 
-  // The "-Thinking" VL variant still reasons.
-  test("Qwen3-VL Thinking still reasons", () => {
-    expect(reasoningKwargsFor("Qwen/Qwen3-VL-235B-A22B-Thinking", "auto")).toEqual({
-      enable_thinking: true,
-    });
+  // The "-Thinking" VL variant still reasons (unlike the -Instruct variants above) —
+  // but as an always-on reasoner, so it injects nothing. (Toggle/interleaved details
+  // are covered by "Qwen3 -Thinking variants are always-on with no toggle".)
+  test("Qwen3-VL Thinking still reasons (always-on, inject nothing)", () => {
+    expect(reasoningProfileFor("Qwen/Qwen3-VL-235B-A22B-Thinking")?.reasoning).toBe(true);
+    expect(reasoningKwargsFor("Qwen/Qwen3-VL-235B-A22B-Thinking", "auto")).toBeUndefined();
   });
 
   // Gemma 4: enable_thinking, default off.

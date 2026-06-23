@@ -235,15 +235,33 @@ const RULES: Rule[] = [
       interleaved: true,
     },
   },
-  // Original Qwen3 (8B / 30B-A3B / 235B-A22B, incl. VL-Thinking) — enable_thinking,
-  // default on, interleaved by the template's `last_query_index` "rolling
-  // checkpoint" (keeps `<think>` only for turns after the last user message). No
-  // `preserve_thinking` kwarg on this line — full-history retention arrived in 3.5;
-  // the caller must resend reasoning_content on tool-call turns or there's nothing
-  // to retain. verified — vLLM: "The reasoning feature for the Qwen3 series is
-  // enabled by default. To disable it, you must pass `enable_thinking=False`"
-  // (parser `qwen3`): https://docs.vllm.ai/en/latest/features/reasoning_outputs/ —
-  // and the `ns.last_query_index` logic in Qwen3-8B's tokenizer_config.json.
+  // Qwen3 dedicated "-Thinking" variants (the 2507 split + multimodal line: e.g.
+  // Qwen3-235B-A22B-Thinking-2507, Qwen3-30B-A3B-Thinking-2507, Qwen3-VL-235B-A22B-
+  // Thinking) — ALWAYS on, NO `enable_thinking` toggle. Qwen dropped the hybrid
+  // toggle for these and ships reasoning-only models that always emit a CoT (the
+  // output carries only a closing `</think>`, no opening tag), parsed with
+  // `deepseek_r1`. No `preserve_thinking` on this pre-3.5 line — resend
+  // reasoning_content. (Before the generic qwen3 rule, but AFTER qwen3.5/3.6 so a
+  // future 3.5+/-Thinking keeps the hybrid + preserve_thinking path.) verified — the
+  // 2507 Thinking card: "This model supports only thinking mode" and "it is normal
+  // for the model's output to contain only `</think>` without an explicit opening
+  // `<think>` tag", deploy with `--reasoning-parser deepseek_r1`:
+  //   https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+  {
+    test: (id) => id.includes("qwen3") && id.includes("-thinking"),
+    profile: { reasoning: true, toggleKey: null, defaultOn: true, interleaved: true },
+  },
+  // Original Qwen3 (8B / 30B-A3B / 235B-A22B) — enable_thinking, default on,
+  // interleaved by the template's `last_query_index` "rolling checkpoint" (keeps
+  // `<think>` only for turns after the last user message). No `preserve_thinking`
+  // kwarg on this line — full-history retention arrived in 3.5; the caller must
+  // resend reasoning_content on tool-call turns or there's nothing to retain.
+  // verified — vLLM: "The reasoning feature for the Qwen3 series is enabled by
+  // default. To disable it, you must pass `enable_thinking=False`" (parser `qwen3`;
+  // the Qwen3-235B-A22B card example uses `deepseek_r1`):
+  //   https://docs.vllm.ai/en/latest/features/reasoning_outputs/ — and the
+  //   `ns.last_query_index` logic analyzed in the Qwen-3 chat-template deep-dive:
+  //   https://huggingface.co/blog/qwen-3-chat-template-deep-dive
   {
     test: (id) => id.includes("qwen3"),
     profile: { reasoning: true, toggleKey: "enable_thinking", defaultOn: true, interleaved: true },
