@@ -164,7 +164,7 @@ export function SeamTour() {
   }
 
   return (
-    <section ref={sectionRef} className="relative mx-auto w-full max-w-6xl px-6" style={{ height: `${STAGES.length * 90}vh` }}>
+    <section ref={sectionRef} className="relative mx-auto w-full max-w-6xl px-6" style={{ height: `${STAGES.length * 55}vh` }}>
       <div className="sticky top-0 flex min-h-screen flex-col justify-center py-16">
         <TourHeading />
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center">

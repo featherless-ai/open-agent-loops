@@ -2,17 +2,21 @@
 
 /**
  * "Bring your own front end" — the loop is headless: it emits one typed
- * AgentEvent stream and you decide how to present it. Here the *same* scripted run
- * drives three renderers at once, in lockstep (one clock via `useScriptPlayer`):
- * a CLI/stdout view, a DOM timeline, and the raw JSONL wire. Same events, three
- * front ends, zero changes to the loop.
+ * AgentEvent stream and you decide how to present it. A trace is just data, so
+ * the *same* scripted run is scrubbable here: drag the slider (or press play) and
+ * three renderers rebuild in lockstep off one clock — a CLI/stdout view, a DOM
+ * timeline, and the raw JSONL wire. Same events, three front ends, zero changes
+ * to the loop. (Folds the old standalone "trace replay" in: render-anywhere and
+ * inspect-the-trace are one story, shown once.)
  */
 
+import { useEffect, useRef, useState } from "react";
 import { SEAM } from "../seams";
 import { LOOP_SCRIPT, type DemoEvent, type Station } from "./loop-script";
 import { foldEvents, LINE_CLASS } from "./board-lines";
-import { useScriptPlayer } from "./use-script-player";
 import { useReducedMotion } from "./use-reduced-motion";
+
+const N = LOOP_SCRIPT.length;
 
 // Which seam each event "belongs" to, for the DOM timeline's color dots.
 function eventSeam(e: DemoEvent): Station {
@@ -61,8 +65,30 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export function ByoFrontend() {
   const reduced = useReducedMotion();
-  const step = useScriptPlayer(!reduced);
-  const events = LOOP_SCRIPT.slice(0, step).map((s) => s.event);
+  const [step, setStep] = useState(N);
+  const [playing, setPlaying] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!playing) return;
+    if (step >= N) {
+      setPlaying(false);
+      return;
+    }
+    const hold = LOOP_SCRIPT[step]?.holdMs ?? 600;
+    timer.current = setTimeout(() => setStep((s) => Math.min(N, s + 1)), Math.min(hold, 900));
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [playing, step]);
+
+  function togglePlay() {
+    if (step >= N) setStep(0); // replay from the top
+    setPlaying((p) => !p);
+  }
+
+  const shown = reduced ? N : step;
+  const events = LOOP_SCRIPT.slice(0, shown).map((s) => s.event);
   const lines = foldEvents(events);
 
   return (
@@ -70,11 +96,39 @@ export function ByoFrontend() {
       <div className="mb-8 flex flex-col gap-3 text-center">
         <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Bring your own front end</h2>
         <p className="mx-auto max-w-2xl text-fd-muted-foreground">
-          The loop never writes to a screen. It emits one typed{" "}
-          <code className="rounded bg-fd-muted px-1 py-0.5">AgentEvent</code> stream — render it
-          anywhere. Here the same run drives three front ends at once.
+          The loop never writes to a screen — it emits one typed{" "}
+          <code className="rounded bg-fd-muted px-1 py-0.5">AgentEvent</code> stream, so a trace is
+          just data. Scrub the same run and watch three front ends rebuild in lockstep.
         </p>
       </div>
+
+      {/* one clock for all three renderers: scrub or play */}
+      {!reduced && (
+        <div className="mx-auto mb-6 flex max-w-2xl items-center gap-4 rounded-xl border border-fd-border bg-fd-card px-4 py-3">
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="shrink-0 rounded-md bg-fd-primary px-3 py-1.5 text-sm font-semibold text-fd-primary-foreground"
+          >
+            {playing ? "❚❚ pause" : step >= N ? "↻ replay" : "▶ play"}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={N}
+            value={step}
+            onChange={(e) => {
+              setPlaying(false);
+              setStep(Number(e.target.value));
+            }}
+            className="h-1 flex-1 cursor-pointer accent-fd-primary"
+            aria-label="Scrub the trace"
+          />
+          <span className="w-14 shrink-0 text-right font-mono text-xs text-fd-muted-foreground">
+            {shown}/{N}
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* CLI / stdout */}

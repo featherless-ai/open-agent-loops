@@ -8,26 +8,25 @@ import { TransitHero } from "@/components/landing/transit-hero";
 import { SeamSwap } from "@/components/landing/seam-swap";
 import { ByoFrontend } from "@/components/landing/byo-frontend";
 import { SeamTour } from "@/components/landing/seam-tour";
-import { TraceReplay } from "@/components/landing/trace-replay";
-import { LoopSource } from "@/components/landing/loop-source";
+import { WorksWith } from "@/components/landing/works-with";
 import { RunsAnywhere } from "@/components/landing/runs-anywhere";
 
 const GITHUB = "https://github.com/ArEnSc/advance-agent";
 const NPM = "https://www.npmjs.com/package/@open-agent-loops/core";
 
 export const metadata: Metadata = {
-  title: "Open Agent OS — a minimal, provider-agnostic agent loop",
+  title: "Open Agent Loops — a minimal, provider-agnostic agent loop",
   description:
     "A headless, provider-agnostic agentic loop. Every piece — memory, model, tools, stop conditions — sits behind a swappable interface. Streaming by default, one dependency, runs anywhere.",
   openGraph: {
-    title: "Open Agent OS",
+    title: "Open Agent Loops",
     description:
       "A minimal, provider-agnostic agent loop built on swappable seams. Bring your own front end; runs in Node, Bun, Deno, and the browser.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Open Agent OS",
+    title: "Open Agent Loops",
     description: "A minimal, provider-agnostic agent loop built on swappable seams.",
   },
 };
@@ -41,8 +40,7 @@ export default function HomePage() {
         <SeamSwap />
         <ByoFrontend />
         <SeamTour />
-        <LoopSource />
-        <TraceReplay />
+        <WorksWith />
         <RunsAnywhere />
         <FeatureGrid />
         <CallToAction />
@@ -105,16 +103,16 @@ async function Quickstart() {
   );
 }
 
-const FEATURES: { title: string; body: string; href: string; color: string }[] = [
-  { title: "Streaming by Default", href: "/docs/messages-and-the-wire-format", color: "#f59e0b", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
-  { title: "Skills", href: "/docs/skills", color: "#22c55e", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
-  { title: "Planning Tools", href: "/docs/planning-tools", color: "#3b82f6", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
-  { title: "Composable Agents", href: "/docs/agent-as-tool", color: "#a855f7", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
-  { title: "Channels & Steering", href: "/docs/channels", color: "#f97316", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
-  { title: "Goal Loops", href: "/docs/goal-loops", color: "#06b6d4", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
-  { title: "Tracing Built In", href: "/docs/tracing", color: "#ec4899", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
-  { title: "Permissioned Tool Calls", href: "/docs/gating-tool-calls", color: "#ef4444", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
-  { title: "Independently Testable", href: "/docs/getting-started", color: "#14b8a6", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
+const FEATURES: { title: string; body: string; href: string }[] = [
+  { title: "Streaming by Default", href: "/docs/messages-and-the-wire-format", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
+  { title: "Skills", href: "/docs/skills", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
+  { title: "Planning Tools", href: "/docs/planning-tools", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
+  { title: "Composable Agents", href: "/docs/agent-as-tool", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
+  { title: "Channels & Steering", href: "/docs/channels", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
+  { title: "Goal Loops", href: "/docs/goal-loops", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
+  { title: "Tracing Built In", href: "/docs/tracing", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
+  { title: "Permissioned Tool Calls", href: "/docs/gating-tool-calls", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
+  { title: "Independently Testable", href: "/docs/getting-started", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
 ];
 
 function FeatureGrid() {
@@ -133,15 +131,14 @@ function FeatureGrid() {
           <Link
             key={f.title}
             href={f.href}
-            className="group flex flex-col gap-2 rounded-xl border border-fd-border border-t-2 bg-fd-card p-5 transition-colors hover:bg-fd-accent"
-            style={{ borderTopColor: f.color }}
+            className="group flex flex-col gap-2 rounded-xl border border-fd-border border-t-2 border-t-fd-primary/70 bg-fd-card p-5 transition-colors hover:bg-fd-accent hover:border-t-fd-primary"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold" style={{ color: f.color }}>
+              <h3 className="font-semibold text-fd-foreground">
                 {f.title}
-                <span className="ml-1 inline-block transition-transform group-hover:translate-x-0.5">→</span>
+                <span className="ml-1 inline-block text-fd-primary transition-transform group-hover:translate-x-0.5">→</span>
               </h3>
-              <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: f.color }} />
+              <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-fd-primary" />
             </div>
             <p className="text-sm text-fd-muted-foreground">{f.body}</p>
           </Link>
@@ -197,51 +194,54 @@ function CallToAction() {
 
 function Hero() {
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-20 md:py-28">
-      <div className="flex flex-col gap-6 text-center">
-        <span className="mx-auto inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-card px-3 py-1 font-mono text-xs text-fd-muted-foreground">
-          <span className="size-1.5 rounded-full bg-fd-primary" />
-          headless · provider-agnostic · one dependency
-        </span>
+    <section className="mx-auto w-full max-w-6xl px-6 py-16 md:py-24">
+      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
+        {/* copy */}
+        <div className="flex flex-col items-center gap-6 text-center lg:items-start lg:text-left">
+          <span className="inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-card px-3 py-1 font-mono text-xs text-fd-muted-foreground">
+            <span className="size-1.5 rounded-full bg-fd-primary" />
+            headless · provider-agnostic · one dependency
+          </span>
 
-        <h1 className="text-balance text-4xl font-bold tracking-tight md:text-6xl">
-          Open Agent OS
-        </h1>
+          <div className="flex flex-col gap-4">
+            <h1 className="text-balance text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
+              Open Agent Loops
+            </h1>
+            <p className="text-balance text-xl font-medium text-fd-foreground md:text-2xl">
+              A minimal, provider-agnostic agent loop.
+            </p>
+          </div>
 
-        <p className="mx-auto max-w-2xl text-balance text-lg text-fd-muted-foreground md:text-xl">
-          The fundamental pieces to build and extend your own agent — your Jarvis,
-          your Cortana, your Samantha. A minimal agentic loop where every piece sits
-          behind a swappable interface.
-        </p>
+          <p className="max-w-xl text-pretty text-fd-muted-foreground">
+            Model, memory, tools, stop conditions — every piece sits behind a swappable
+            interface. Headless by default, so you bring your own front end. The pieces to
+            build your own agent: your Jarvis, your Cortana, your Samantha.
+          </p>
 
-        <div className="mx-auto flex flex-col items-center gap-4">
-          <InstallCommand />
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/docs/getting-started"
-              className="rounded-lg bg-fd-primary px-5 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-opacity hover:opacity-90"
-            >
-              Get started
-            </Link>
-            <Link
-              href="/docs"
-              className="rounded-lg border border-fd-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
-            >
-              Read the docs
-            </Link>
-            <a
-              href={GITHUB}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-fd-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
-            >
-              GitHub
-            </a>
+          <div className="flex flex-col items-center gap-4 lg:items-start">
+            <InstallCommand />
+            <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+              <Link
+                href="/docs/getting-started"
+                className="rounded-lg bg-fd-primary px-5 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Get started
+              </Link>
+              <a
+                href={GITHUB}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-fd-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
+              >
+                GitHub
+              </a>
+            </div>
           </div>
         </div>
-      </div>
 
-      <TransitHero />
+        {/* the signature map, immediately visible beside the copy */}
+        <TransitHero variant="map" />
+      </div>
     </section>
   );
 }

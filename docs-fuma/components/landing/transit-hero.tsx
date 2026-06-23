@@ -47,7 +47,14 @@ const STATIONS: Record<Station, StationDef> = {
 
 const FINAL_LINES: Line[] = foldEvents(LOOP_SCRIPT.map((s) => s.event));
 
-export function TransitHero() {
+/**
+ * `variant`:
+ *  - "full" — the map beside a live arrivals board (standalone section).
+ *  - "map"  — just the line + riding train, for the hero's right column. The
+ *    event-stream story lives in the "bring your own front end" section instead,
+ *    so the hero doesn't pre-duplicate it.
+ */
+export function TransitHero({ variant = "full" }: { variant?: "full" | "map" } = {}) {
   const reduced = useReducedMotion();
   const mapRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<SVGPathElement>(null);
@@ -185,10 +192,8 @@ export function TransitHero() {
     };
   }, [reduced]);
 
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-      {/* The map */}
-      <div ref={mapRef} className="rounded-2xl border border-fd-border bg-fd-card/40 p-4">
+  const map = (
+    <div ref={mapRef} className="rounded-2xl border border-fd-border bg-fd-card/40 p-4">
         <svg
           viewBox={`0 0 ${VB.w} ${VB.h}`}
           className="h-auto w-full"
@@ -288,6 +293,14 @@ export function TransitHero() {
           </g>
         </svg>
       </div>
+  );
+
+  // Hero usage: just the line riding, no board.
+  if (variant === "map") return map;
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+      {map}
 
       {/* The arrivals board */}
       <div className="flex h-full min-h-[300px] flex-col rounded-2xl border border-fd-border bg-fd-card font-mono text-sm">
