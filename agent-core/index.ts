@@ -104,6 +104,13 @@ export { ExecutionMode } from "./tools/tools.types";
 
 export { ToolRegistry } from "./tools/registry";
 
+// Multi-agent: wrap an agent as a tool another agent can call. Composition over
+// `runAgent` (like ToolRegistry / runGoal) — the loop is untouched. Context-
+// isolated by default: each call runs in a fresh session and returns only the
+// sub-agent's final answer, keeping the parent's thread clean.
+export { agentAsTool } from "./tools/agent-as-tool";
+export type { AgentAsToolOptions } from "./tools/agent-as-tool";
+
 // Skills: a named bundle of instructions + tools the model pulls in on demand.
 // Composition over the existing seams — the catalog goes in `system`, the tools
 // in `tools`, and disclosure rides the tool seam (`skillTool`). The loop is

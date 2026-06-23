@@ -1,0 +1,126 @@
+---
+title: Agent as a Tool
+description: A short tutorial — wrap an agent as a tool another agent can call, then build a single-chat orchestrator that routes between specialist sub-agents.
+---
+
+An **agent as a tool** is the smallest unit of multi-agent work: you take a whole
+`runAgent` — a model, a role, its own tools — and hand it to *another* agent as
+one callable tool. The parent (an "orchestrator" or "team lead") delegates a task,
+the sub-agent does the work in its **own isolated session**, and only its final
+answer comes back. The parent's conversation never fills up with the sub-agent's
+scratch work — that context isolation is the whole point.
+
+Nothing in the loop changes. `agentAsTool` is composition *over* `runAgent`, just
+like [skills](/docs/skills) and [goal loops](/docs/goal-loops): the orchestrator is
+an ordinary `runAgent` call, and each specialist is an ordinary `Tool` in its
+`tools` array.
+
+This tutorial starts from the [multi-turn chat
+loop](/docs/getting-started#multi-turn-chat-loop) and grows **one program** across
+four steps:
+
+1. **Wrap an agent as a tool** the orchestrator can call.
+2. **Add a second specialist** and route between them — one chat, many agents.
+3. **Give a sub-agent its own tools** so it does real work in isolation.
+4. **Watch the sub-agents** by rendering each one's event stream, attributed by name.
+
+Each step below shows the **whole program so far** — the lines it adds are
+**highlighted**.
+
+## Step 1 — Wrap an Agent as a Tool
+
+`agentAsTool` takes the same things `runAgent` does — a `model`, a `system` role,
+optional `tools` — plus a `name` and `description` the parent model sees. It
+returns a `Tool` whose argument is a single `task` string. When the orchestrator
+calls it, a *child* `runAgent` runs with that task as its prompt, and the child's
+final answer becomes the tool result.
+
+By default each call runs in a **fresh session** (a new in-memory store, keyed by
+the tool call), so the sub-agent starts clean every time and its work never leaks
+into the parent's thread. Here the lead has one specialist, a `researcher`:
+
+<include>../../snippets/agent-as-tool-step1.mdx</include>
+
+Run it and ask a question:
+
+```bash
+bun run examples/agent-as-tool-tutorial/step1.ts
+you › what does the agent loop stop on?
+```
+
+You'll see the lead call `→ researcher({ task: ... })`, the finding come back as
+`← researcher [ok]: ...`, and the lead fold that into its own reply. Because the
+lead reuses one `memory` and `sessionId`, the next message continues the same
+conversation — while each `researcher` call stays isolated.
+
+## Step 2 — Add a Second Specialist
+
+A multi-agent system is just more than one specialist behind one orchestrator. Add
+an `editor` sub-agent and the lead now **routes**: `researcher` gathers rough
+notes, `editor` turns them into a clean answer. Each is its own agent with its own
+role — you could even give each a different model. The highlighted lines add the
+editor and tell the lead the order to call them in:
+
+<include>../../snippets/agent-as-tool-step2.mdx</include>
+
+```bash
+bun run examples/agent-as-tool-tutorial/step2.ts
+you › explain how sub-agents stay isolated
+```
+
+This is the "single chat, many agents" shape: one user-facing thread (the lead's
+session), several specialists reached as tools. The lead decides who to call and
+in what order — the same way it would pick between any two tools.
+
+## Step 3 — Give a Sub-agent Its Own Tools
+
+Sub-agents earn their keep when they do real work you *don't* want cluttering the
+main thread. Give the `researcher` a [`shell`](/docs/tools) tool pointed at a local
+knowledge base (`team-notes.md`). It can now `grep` and `cat` across several turns
+— but all that churn happens inside its own session. The lead, and the transcript,
+only ever see the distilled finding:
+
+<include>../../snippets/agent-as-tool-step3.mdx</include>
+
+```bash
+bun run examples/agent-as-tool-tutorial/step3.ts
+you › where does the agent loop live and when does it stop?
+```
+
+The researcher might take three or four turns reading the file; the orchestrator
+sees one tool call and one answer. That's context isolation doing its job — a
+sub-agent can burn its whole context window on a messy task and hand back only the
+part that matters.
+
+## Step 4 — Watch the Sub-agents Work
+
+A sub-agent emits its own [event stream](/docs/bring-your-own-front-end), exactly
+like the top-level run. Pass it an `onEvent` and you can render it — here each
+specialist's thinking and tool calls show indented under its name, while the lead's
+stream stays at the top level:
+
+<include>../../snippets/agent-as-tool-step4.mdx</include>
+
+```bash
+bun run examples/agent-as-tool-tutorial/step4.ts
+you › where does the agent loop live and when does it stop?
+```
+
+One detail to notice: the events themselves don't yet carry an agent identity —
+the `[researcher]` / `[editor]` label comes from the *closure* that wrapped each
+one. Giving the event a first-class `agentId`/`agentName` is the next step toward a
+single-chat UI (e.g. [assistant-ui](https://www.assistant-ui.com/)) that renders
+distinct sub-agent turns in one thread.
+
+## Recap
+
+Starting from a plain chat loop, a few lines at a time you turned one agent into a
+tool, added a second specialist and routed between them, gave a sub-agent its own
+tools so it works in isolation, and made each sub-agent's stream observable. The
+orchestrator is still just a `runAgent` call; each specialist is still just a
+`Tool`. The loop never had to learn what a "sub-agent" is.
+
+From here, the same specialists can be driven by a [goal loop](/docs/goal-loops)
+(retry until an answer passes a grader) or fed by a live [channel](/docs/channels)
+(one orchestrator per Slack thread, with backpressure). The finished program is at
+`examples/agent-as-tool-tutorial/step4.ts`.

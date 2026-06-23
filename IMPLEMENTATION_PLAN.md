@@ -650,3 +650,78 @@ adaptive-controller note (AIMD on concurrency, coalesce-window on `highWater`).
 vs adaptive); overflow policy per channel; supersede vs finish on a mid-run
 message; session granularity (thread/channel/user); whether the global semaphore
 needs per-tenant quotas for v1, or defers entirely to the Featherless gate.
+
+---
+
+# Plan: agent-as-tool (single-chat multi-agent, step 1)
+
+**Goal**: Make one agent callable by another. `agentAsTool({ name, description,
+model, ... })` returns an ordinary `Tool` whose `execute` runs a child `runAgent`
+with the model-supplied `task` as the prompt and hands the child's final answer
+back as the tool result. This is the foundation for a single-chat multi-agent
+orchestrator: a parent loop holds several specialist sub-agents as tools and routes
+to them, all over one conversation.
+
+**Why a tool (not a kernel change)**: identical posture to `ToolRegistry`,
+`SkillRegistry`, and `runGoal` — composition *over* `runAgent`, never a loop
+dependency. The loop still takes a plain `Tool[]` and never learns about
+sub-agents. The factory wraps `runAgent` exactly as `runGoal` does, with the run
+function injectable (`RunFn`, default `runAgent`) so tests drive it with a fake.
+
+**Design — context isolation by default.** The whole value of agent-as-tool is that
+the sub-agent burns *its own* context window and returns only a distilled result,
+so the parent's thread stays clean. Therefore each call runs in a fresh, empty
+session by default (a new `SessionMemoryStore`, `sessionId = name:toolCallId` — keyed
+by the call so each invocation is isolated and traceable). Pass `memory` +
+`sessionId` to opt into continuity across calls. `ctx.signal` is forwarded to the
+child so a parent abort cancels the child. Child events forward through the child's
+own `onEvent` (the caller's closure attributes them by `name`) — deliberately **no**
+event-schema change yet; the `agentId` attribution decision is Stage 3 of the arc.
+
+Options reuse the run contract: `Omit<RunAgentOptions, "prompt" | "sessionId" |
+"memory" | "signal">` (model required; system/tools/maxSteps/stopWhen/hooks/
+toolExecution/onEvent optional) + `{ name, description, memory?, sessionId?,
+inputDescription?, resultFrom?, run? }`. Result text defaults to the last assistant
+message's text (via `contentToText`/`isAssistantMessage`); `resultFrom` overrides it.
+The full child `RunResult` rides `ToolResult.details` (never sent to the model).
+
+## Stage 1: `agentAsTool` factory + tests
+**Files**: `agent-core/tools/agent-as-tool.ts` (factory + `AgentAsToolOptions`),
+`agent-core/__tests__/agent-as-tool.test.ts`, `agent-core/index.ts` (export).
+**Success Criteria**: returns a `Tool` with the given snake_case `name`/`description`
+and a `{ task }` schema; calling it runs the child with `task` as the prompt and
+returns the child's final assistant text as `content`; isolation by default (no
+parent history visible to the child, fresh session per call); `ctx.signal` forwarded;
+custom `resultFrom` honored; empty/no-text result yields a clear placeholder, not "";
+`details` carries the child `RunResult`; child `onEvent` receives the child's events.
+**Tests** (`MockModelClient` + injected `RunFn`): task→prompt; result text returned;
+isolation (fresh memory, unique sessionId per call); signal forwarding; resultFrom
+override; events forwarded; details carries the result.
+**Status**: Complete (9 tests; full suite 366 green, typecheck clean). Options reuse
+`Omit<RunAgentOptions, "prompt" | "sessionId" | "memory" | "signal">` + the tool's
+extras, mirroring `RunGoalRunBase`/`DispatcherRunBase`. Default `resultFrom` scans
+`newMessages` from the end via `isAssistantMessage`/`contentToText`, falling back to a
+named placeholder. Lives at `agent-core/tools/agent-as-tool.ts` beside `registry.ts`
+(both compose over `runAgent` and are exported next to each other). No event-schema
+change — `agentId` attribution stays Stage 3.
+
+## Stage 2: router / orchestrator example + stepped guide
+**Goal**: Wire N `agentAsTool` specialists into one parent loop over a single
+session — the "single chat, many agents" demo — as a stepped tutorial mirroring
+skills.
+**Files**: `examples/agent-as-tool-tutorial/step1..4.ts` + `team-notes.md` fixture,
+`docs-fuma/snippets/agent-as-tool-step1..4.mdx`,
+`docs-fuma/content/docs/agent-as-tool.mdx`, `docs-fuma/content/docs/meta.json`.
+**Status**: Complete. One growing program: a "team lead" orchestrator that routes
+to a `researcher` and an `editor` over one session. Step 1 wraps one agent as a
+tool; step 2 adds the second specialist + routing; step 3 gives the researcher a
+`shell` tool over a local `team-notes.md` (the context-isolation payoff); step 4
+renders each sub-agent's event stream attributed by name (motivating the Stage 3
+`agentId`). Examples typecheck under project settings; docs site builds clean
+(`/docs/agent-as-tool` in the route list); snippets verified byte-identical to the
+examples (only the file docstring omitted, per convention).
+
+## Stage 3: event attribution (`agentId`) + assistant-ui adapter (NOT this turn)
+**Goal**: Decide the `agentId`/`agentName` event-schema change so a UI renders
+distinct sub-agent turns in one thread; then build the assistant-ui adapter.
+**Status**: Not Started
