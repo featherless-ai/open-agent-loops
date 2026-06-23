@@ -172,6 +172,12 @@ const SNIPPETS = [
     out: "snippets/goal-step4.mdx",
     title: "examples/goal-tutorial/step4.ts",
   },
+  {
+    src: "examples/channels-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/channels-step1.mdx",
+    title: "examples/channels-tutorial/step1.ts",
+  },
 ];
 
 // Example dev imports (relative, to TS source) → published package specifiers.
