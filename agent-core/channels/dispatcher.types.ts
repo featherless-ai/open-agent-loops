@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { Message } from "../types";
+import type { AgentEvent, Message } from "../types";
 import type { RunAgentOptions, RunResult } from "../primitives/loop";
 import type { OverflowPolicy } from "../primitives/bounded-buffer";
 
@@ -59,6 +59,13 @@ export interface DispatcherOptions {
   supersede?: boolean;
   /** Override how runs execute (for tests). Default {@link runAgent}. */
   run?: RunFn;
+  /**
+   * Per-run event sink that *also* receives the run's `sessionId` — the hook a
+   * channel bridge needs to route a run's outbound events (e.g. `TextDelta`)
+   * back to the right channel/thread. The session-blind `base.onEvent` still
+   * fires too. Additive: unset, the dispatcher behaves exactly as before.
+   */
+  onSessionEvent?: (sessionId: string, event: AgentEvent) => void;
   /**
    * Called when a run rejects for a reason *other* than a supersede abort.
    * Without it, such an error is swallowed (a single bad run must not kill the

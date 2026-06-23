@@ -26,8 +26,22 @@
 
 import { runAgent } from "../primitives/loop";
 import { BoundedBuffer } from "../primitives/bounded-buffer";
-import type { Message } from "../types";
+import type { EventSink, Message } from "../types";
 import type { DispatcherOptions, RunFn } from "./dispatcher.types";
+
+/** Aggregate backpressure readings across all of a {@link Dispatcher}'s sessions. */
+export interface DispatcherStats {
+  /** Number of sessions the dispatcher is tracking. */
+  sessions: number;
+  /** Runs currently in flight across all sessions. */
+  inFlight: number;
+  /** Messages currently queued across all sessions, awaiting a run. */
+  queued: number;
+  /** Total messages dropped (overflow) across all sessions, lifetime. */
+  dropped: number;
+  /** Largest single-session queue depth ever reached — the backpressure peak. */
+  highWater: number;
+}
 
 /**
  * A counting semaphore that hands a freed slot *directly* to the next waiter
@@ -96,6 +110,19 @@ export class Dispatcher {
     return this.semaphore.inFlight;
   }
 
+  /** Aggregate backpressure readings — what an adaptive controller acts on. */
+  stats(): DispatcherStats {
+    let queued = 0;
+    let dropped = 0;
+    let highWater = 0;
+    for (const session of this.sessions.values()) {
+      queued += session.buffer.size;
+      dropped += session.buffer.dropped;
+      highWater = Math.max(highWater, session.buffer.highWater);
+    }
+    return { sessions: this.sessions.size, inFlight: this.inFlight, queued, dropped, highWater };
+  }
+
   /**
    * Enqueue one or more messages for a session and ensure it is being pumped.
    * Non-blocking: always returns immediately so the caller (a socket handler)
@@ -114,6 +141,22 @@ export class Dispatcher {
       session.controller.abort();
     }
     void this.pump(sessionId);
+  }
+
+  /**
+   * The `onEvent` for a run: forwards to the session-blind `base.onEvent` and,
+   * if set, the session-aware `onSessionEvent` (tagged with `sessionId`). Returns
+   * `base.onEvent` unchanged when no session sink is set, so behavior is
+   * identical for non-channel callers.
+   */
+  private onEventFor(sessionId: string): EventSink | undefined {
+    const baseOnEvent = this.options.base.onEvent;
+    const onSessionEvent = this.options.onSessionEvent;
+    if (!onSessionEvent) return baseOnEvent;
+    return async (event) => {
+      await baseOnEvent?.(event);
+      onSessionEvent(sessionId, event);
+    };
   }
 
   /** Get or lazily create a session's state. */
@@ -154,6 +197,7 @@ export class Dispatcher {
             sessionId,
             prompt: batch,
             signal: controller.signal,
+            onEvent: this.onEventFor(sessionId),
           });
         } catch (error) {
           // A supersede abort is expected — swallow it; the newer messages are

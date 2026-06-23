@@ -620,7 +620,13 @@ back coalesced; liveness concerns never touch the model path.
 **Tests** (`__tests__/channel-source.test.ts`): fake source → dispatcher →
 `runAgent` (mock) → reply deltas captured; thread→session mapping reuses `Memory`
 across messages on the same thread.
-**Status**: Not Started
+**Status**: Complete (6 tests; full suite 354 green, typecheck clean). Added a
+`ChannelBridge` (the wiring layer, beyond the planned files) that owns its
+dispatcher and routes outbound. Two small additive `Dispatcher` changes: an
+`onSessionEvent(sessionId, event)` hook (events carry `sessionId` only on
+`AgentStart`, so concurrent runs need per-run tagging to route replies) and a
+`stats()` readout. Outbound `TextDelta`s coalesce through a `capacity:1`
+`BoundedBuffer` (one accumulating slot) and flush one reply per assistant turn.
 
 ## Stage 4: runnable example + adaptive note
 **Goal**: An `examples/channels/` end-to-end using `InMemoryChannelSource`
@@ -633,7 +639,12 @@ on `highWater`) would add, without building it yet.
 **Success Criteria**: example runs against `MockModelClient`, shows coalescing and
 shedding under a burst; docs note captures the layering and the open questions
 from `channels.md`.
-**Status**: Not Started
+**Status**: Complete (`examples/channels/channels.ts` + README; runs with zero
+setup via a latency-injecting echo model — `bun run examples/channels/channels.ts`).
+A 20-message burst sheds 16, coalesces the 4 survivors into one run/reply; a paced
+thread adds zero drops (isolation). Prints `stats()` so backpressure is observable;
+README shows the two swaps (real model + real `ChannelSource`) and the
+adaptive-controller note (AIMD on concurrency, coalesce-window on `highWater`).
 
 **Open questions** (from `channels.md`): coalescing window (fixed vs quiet-period
 vs adaptive); overflow policy per channel; supersede vs finish on a mid-run

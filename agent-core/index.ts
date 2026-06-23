@@ -203,11 +203,25 @@ export type {
 } from "./primitives/bounded-buffer";
 
 export { Dispatcher } from "./channels/dispatcher";
+export type { DispatcherStats } from "./channels/dispatcher";
 export type {
   DispatcherOptions,
   DispatcherRunBase,
   RunFn,
 } from "./channels/dispatcher.types";
+
+// Channels: connect a live transport (Slack/Discord) to the dispatcher. The
+// ChannelSource seam owns liveness; the ChannelBridge wires it to runAgent and
+// streams replies back, coalesced. InMemoryChannelSource is the test/example fake.
+export { ChannelBridge, defaultSessionId } from "./channels/channel-bridge";
+export type { ChannelBridgeOptions } from "./channels/channel-bridge";
+export { InMemoryChannelSource } from "./channels/in-memory-channel-source";
+export type { SentReply } from "./channels/in-memory-channel-source";
+export type {
+  ChannelSource,
+  InboundMessage,
+  OutboundTarget,
+} from "./channels/channel-source.types";
 
 // The outer loop ("loop engineering"): runGoal drives runAgent across rounds,
 // grading each against a goal until met or a round cap. The grader is a seam
