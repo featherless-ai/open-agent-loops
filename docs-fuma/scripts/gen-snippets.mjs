@@ -148,6 +148,30 @@ const SNIPPETS = [
     out: "snippets/code-exec-step4.mdx",
     title: "examples/code-execution-tutorial/step4.ts",
   },
+  {
+    src: "examples/goal-tutorial/step1.ts",
+    region: "step1",
+    out: "snippets/goal-step1.mdx",
+    title: "examples/goal-tutorial/step1.ts",
+  },
+  {
+    src: "examples/goal-tutorial/step2.ts",
+    region: "step2",
+    out: "snippets/goal-step2.mdx",
+    title: "examples/goal-tutorial/step2.ts",
+  },
+  {
+    src: "examples/goal-tutorial/step3.ts",
+    region: "step3",
+    out: "snippets/goal-step3.mdx",
+    title: "examples/goal-tutorial/step3.ts",
+  },
+  {
+    src: "examples/goal-tutorial/step4.ts",
+    region: "step4",
+    out: "snippets/goal-step4.mdx",
+    title: "examples/goal-tutorial/step4.ts",
+  },
 ];
 
 // Example dev imports (relative, to TS source) → published package specifiers.

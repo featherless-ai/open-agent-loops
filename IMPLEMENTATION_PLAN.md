@@ -1,3 +1,69 @@
+# Plan: runGoal — the outer loop (loop engineering)
+
+**Goal**: A second loop *above* `runAgent` that pursues a goal across rounds. Each
+round is a full inner `runAgent` run; after it settles a **grader** judges whether
+the goal is met, and if not its feedback becomes the next round's prompt — same
+`sessionId`, so every round loads the prior rounds' history from `Memory`. This is
+the "loop engineering" primitive: you stop hand-prompting the agent and instead
+design a loop that prompts it until a condition you wrote is true (cf. Claude
+Code's `/goal`, which runs across turns with a separate fast model grading each
+round).
+
+**Why a new layer (not a kernel change)**: the inner loop (`primitives/loop.ts`)
+already stops at a natural final answer; `runGoal` is the *driver* that decides
+"good enough?" and re-prompts. It sits beside the `Dispatcher` — same pattern: a
+thin layer over `runAgent` with the run function injectable (`RunFn`) so tests
+drive it with a fake instead of a model. The kernel stays untouched.
+
+**Design**: the grader is a seam, exactly parallel to the stop-condition seam.
+`Grader = (ctx: GradeContext) => Grade | Promise<Grade>` where `Grade = { done,
+feedback?, score? }`. BYO grader (a plain function) is the pure core; `modelGrader`
+is the shipped battery that turns a `ModelClient` (the fast grader model) into a
+`Grader` by asking it for a JSON verdict. `runGoal` owns `prompt` (re-prompts each
+round) and `signal` (forwarded + checked at round boundaries); `sessionId` and the
+rest of the run config live in a shared `base` (`Omit<RunAgentOptions, "prompt" |
+"signal">`), mirroring `DispatcherRunBase`.
+
+## Stage 1: Grader seam + runGoal outer loop (pure, BYO grader)
+**Files**: `agent-core/goal/goal.types.ts` (`Grader`, `GradeContext`, `Grade`,
+`RunGoalOptions`, `RunGoalRunBase`, `GoalResult`), `agent-core/goal/goal.ts`
+(`runGoal`).
+**Success Criteria**: round 1 prompt defaults to the goal; a `done` grade stops
+immediately; a not-done grade re-prompts the *next* round with `feedback`; the
+`maxRounds` cap stops with `done: false`; `signal` is forwarded to each round and
+re-checked at the top of each round (abort between rounds rejects); `onRound`
+observes every round's grade.
+**Tests** (`__tests__/goal.test.ts`, injected `RunFn` harness — no real model):
+done-on-round-1; feedback re-prompts to round 2; maxRounds caps without success;
+prompt defaults to goal; abort between rounds; onRound sequence.
+**Status**: Complete (6 tests; grader is a seam parallel to `StopCondition`,
+`RunGoalRunBase = Omit<RunAgentOptions, "prompt" | "signal">` mirrors
+`DispatcherRunBase`; rounds reuse one `sessionId` so history accrues via `Memory`)
+
+## Stage 2: modelGrader battery
+**Files**: `agent-core/goal/model-grader.ts` (`modelGrader`, `ModelGraderOptions`).
+**Success Criteria**: builds a `Grader` from a `ModelClient`; feeds the goal + the
+round's latest assistant output into one grading call; parses a `{done, score,
+feedback}` JSON verdict (tolerating markdown fences / surrounding prose); throws a
+descriptive error when no JSON verdict is present; forwards `ctx.signal`.
+**Tests** (`__tests__/goal.test.ts`, `MockModelClient`): parses done; parses
+not-done+feedback; tolerates fenced JSON; the grading request carries the agent's
+output; end-to-end `runGoal` + real `runAgent` + `modelGrader` (round 1 feedback →
+round 2 done).
+**Status**: Complete (6 tests incl. the end-to-end; lenient JSON parse tolerates
+markdown fences / prose, throws descriptively when no verdict is present;
+forwards `ctx.signal`)
+
+## Stage 3: public surface
+**Files**: `agent-core/index.ts`.
+**Success Criteria**: `runGoal`, `modelGrader`, and the goal types are importable
+from the published surface; `bun test agent-core` + `bun run typecheck` green.
+**Status**: Complete (exported beside `Dispatcher`; goal's internal `RunFn` is not
+re-exported, avoiding collision with the dispatcher's; full suite 348 green,
+typecheck clean)
+
+---
+
 # Plan: in-loop steering + follow-up (kernel pull-seams)
 
 **Goal**: Let a caller inject messages into a *live* run — **steering** (redirect

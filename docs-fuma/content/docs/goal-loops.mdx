@@ -1,0 +1,130 @@
+---
+title: Goal Loops
+description: A short tutorial — drive runAgent across rounds with a grader that re-prompts until a goal is met, then compose a deterministic check with a model's judgment.
+---
+
+`runAgent` is the **inner loop**: a model uses tools in a loop until it produces a
+final answer. A **goal loop** is the loop *around* it. `runGoal` runs the inner
+loop, hands the result to a **grader**, and when the grader isn't satisfied its
+feedback becomes the next round's prompt — so the agent keeps refining until the
+goal is met or a round cap is hit. You stop hand-prompting the agent and instead
+write the loop that prompts it.
+
+The grader is a seam, exactly like a [stop
+condition](/docs/getting-started#the-core-agentic-loop): a plain function you
+supply. `runGoal` reuses one `sessionId` for every round, so each round loads the
+prior rounds' history and continues the same conversation.
+
+This tutorial grows **one program** across four steps:
+
+1. **Grade a run yourself** — a hand-written grader checks a spec and re-prompts.
+2. **Watch each round** — an `onRound` hook shows the loop redirecting itself.
+3. **Bound the spend** — a `maxRounds` cap and a best-effort result.
+4. **Add a model's taste** — compose the strict check with a fast model's judgment.
+
+Each step below shows the **whole program so far** — the lines it adds are
+**highlighted**.
+
+## Step 1 — Grade a Run Yourself
+
+A grader is just a function `({ goal, round, result }) => { done, feedback? }`.
+Return `done: true` to stop with success; return `done: false` with `feedback`
+and that text becomes the next round's prompt. Here the goal is a blurb with hard
+formatting rules, and the grader checks them in plain code — so you can watch the
+loop work without a second model in the mix:
+
+<include>../../snippets/goal-step1.mdx</include>
+
+```bash
+bun run examples/goal-tutorial/step1.ts
+```
+
+The first draft usually breaks a rule — a line runs past 60 characters, or
+"security" is missing. The grader returns that as feedback, `runGoal` re-prompts
+the same session with it, and the next draft fixes it. The final line —
+`done=true after N round(s)` — is the loop reporting how many rounds the goal
+took.
+
+<Callout title="Why the same session">
+  Every round reuses one `memory` and `sessionId`, so round two already sees round
+  one's draft and your feedback — it edits, it doesn't start over. Nothing in
+  `runAgent` is special-cased for this; the goal loop just calls it again.
+</Callout>
+
+## Step 2 — Watch Each Round
+
+`runGoal` takes an `onRound` hook that fires as each round settles, with the round
+number and its grade. It's the window into the loop — wire it to a log, a
+dashboard, or just stdout. The highlighted lines print each verdict and the
+feedback that will steer the next round:
+
+<include>../../snippets/goal-step2.mdx</include>
+
+```bash
+bun run examples/goal-tutorial/step2.ts
+```
+
+Now you see the trajectory: `round 1 ✗ needs work` with the exact problems, then
+`round 2` improving, until a round passes. `onRound` only observes — it never
+changes the verdict; the grader alone decides `done`.
+
+## Step 3 — Bound the Spend
+
+Every round is a full inner run, so an ungated goal that the agent can't satisfy
+would loop until the default cap. Set `maxRounds` explicitly to match what the
+task is worth, and check `outcome.done` to tell "met the goal" from "ran out of
+rounds" — `runGoal` always returns the last round's result, so a capped run still
+hands you the best effort:
+
+<include>../../snippets/goal-step3.mdx</include>
+
+```bash
+bun run examples/goal-tutorial/step3.ts
+```
+
+`outcome.done` is the contract: `true` means the grader was satisfied within the
+cap; `false` means the cap stopped it. Either way `outcome.result` holds the
+latest draft and `outcome.rounds` the count, so you decide what to do with a
+near-miss.
+
+## Step 4 — Add a Model's Taste
+
+The spec grader is strict but literal — it can count characters, but it can't tell
+"punchy" from "generic". For that you want a model. `modelGrader` turns any
+`ModelClient` into a grader: it shows the round's output to a (smaller, faster)
+model and parses a JSON verdict. And because a grader is just a function, you
+**compose** the two — run the cheap deterministic check first, and only spend a
+model call on taste once the structure is already correct:
+
+<include>../../snippets/goal-step4.mdx</include>
+
+```bash
+bun run examples/goal-tutorial/step4.ts
+```
+
+Now a round passes only when the structure is valid **and** the model approves the
+copy. The short-circuit matters: a structurally broken draft never reaches the
+grader model, so you don't pay for taste on something that fails the rules
+outright. This is the whole shape of grading — deterministic where you can be,
+a model where you must be, composed into one seam.
+
+<Callout title="Point the grader at a cheaper model">
+  The grader only emits a short JSON verdict and never calls tools, so it's the
+  natural place to drop to a smaller, cheaper model than the agent — set
+  `GRADER_MODEL` to try one. `modelGrader` runs the grader with thinking off and
+  tolerates fenced or prose-wrapped JSON; if it can't find a verdict at all it
+  throws, rather than silently looping.
+</Callout>
+
+## Recap
+
+Starting from a single `runAgent` call, a few lines at a time you wrapped it in an
+outer loop that grades its own output and re-prompts until a goal is met: a
+hand-written check first, then observability, a spend cap, and finally a model's
+judgment composed with the strict check. The agent never had to know it was in a
+loop — `runGoal` drove it, and the grader decided when it was done.
+
+For the inner loop the goal loop drives, see **[The Core Agentic
+Loop](/docs/getting-started#the-core-agentic-loop)**. The finished program is at
+`examples/goal-tutorial/step4.ts`; the `runGoal`, `Grader`, and `modelGrader`
+APIs are in the **[reference](/docs/api)**.

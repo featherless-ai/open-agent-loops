@@ -202,6 +202,21 @@ export type {
   PushResult,
 } from "./primitives/bounded-buffer";
 
+// The outer loop ("loop engineering"): runGoal drives runAgent across rounds,
+// grading each against a goal until met or a round cap. The grader is a seam
+// (BYO function); `modelGrader` is the battery that builds one from a fast model.
+export { runGoal } from "./goal/goal";
+export { modelGrader } from "./goal/model-grader";
+export type { ModelGraderOptions } from "./goal/model-grader";
+export type {
+  Grade,
+  GradeContext,
+  Grader,
+  GoalResult,
+  RunGoalOptions,
+  RunGoalRunBase,
+} from "./goal/goal.types";
+
 export { withCredentials } from "./credentials/with-credentials";
 export { InMemoryCredentialStore } from "./credentials/in-memory-credential-store";
 export type { InMemoryCredentialStoreOptions } from "./credentials/in-memory-credential-store";
