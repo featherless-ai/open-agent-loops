@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
+import { highlight } from "fumadocs-core/highlight";
 import { baseOptions } from "./layout.config";
 import { InstallCommand } from "@/components/landing/install-command";
 import { TransitHero } from "@/components/landing/transit-hero";
@@ -73,7 +74,19 @@ const result = await runAgent({
 
 console.log(result.messages.at(-1)?.content); // "It's sunny in Paris."`;
 
-function Quickstart() {
+async function Quickstart() {
+  const highlighted = await highlight(QUICKSTART, {
+    lang: "ts",
+    theme: "github-dark-default",
+    components: {
+      pre: ({ className, ...props }) => (
+        <pre
+          {...props}
+          className={`overflow-x-auto rounded-2xl border border-fd-border p-5 text-[12.5px] leading-relaxed ${className ?? ""}`}
+        />
+      ),
+    },
+  });
   return (
     <section className="mx-auto w-full max-w-4xl px-6 py-16">
       <div className="mb-6 flex flex-col gap-3 text-center">
@@ -82,11 +95,7 @@ function Quickstart() {
           Define a tool, hand it to the loop, render the stream. That's the whole API surface.
         </p>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-fd-border bg-fd-card p-5">
-        <pre className="font-mono text-[12.5px] leading-relaxed text-fd-foreground">
-          <code>{QUICKSTART}</code>
-        </pre>
-      </div>
+      {highlighted}
       <div className="mt-4 text-center">
         <Link href="/docs/getting-started" className="text-sm text-fd-primary underline-offset-4 hover:underline">
           Full walkthrough in Getting Started →
@@ -96,23 +105,23 @@ function Quickstart() {
   );
 }
 
-const FEATURES: { title: string; body: string; href: string }[] = [
-  { title: "Streaming by default", href: "/docs/messages-and-the-wire-format", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
-  { title: "Skills", href: "/docs/skills", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
-  { title: "Planning tools", href: "/docs/planning-tools", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
-  { title: "Composable agents", href: "/docs/agent-as-tool", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
-  { title: "Channels & steering", href: "/docs/channels", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
-  { title: "Goal loops", href: "/docs/goal-loops", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
-  { title: "Tracing built in", href: "/docs/tracing", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
-  { title: "Permissioned tool calls", href: "/docs/gating-tool-calls", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
-  { title: "Independently testable", href: "/docs/getting-started", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
+const FEATURES: { title: string; body: string; href: string; color: string }[] = [
+  { title: "Streaming by Default", href: "/docs/messages-and-the-wire-format", color: "#f59e0b", body: "stream() returns an async iterable of StreamEvents — reasoning, text, and tool calls arrive incrementally." },
+  { title: "Skills", href: "/docs/skills", color: "#22c55e", body: "Bundle instructions, tools, and reference material the model loads on demand — then guard the bundle with a secret and an approval." },
+  { title: "Planning Tools", href: "/docs/planning-tools", color: "#3b82f6", body: "Give the model durable working memory: a to-do list and a scratchpad it keeps across turns, freezable into a replayable workflow." },
+  { title: "Composable Agents", href: "/docs/agent-as-tool", color: "#a855f7", body: "Wrap an agent as a tool another agent calls — a multi-agent orchestrator over one chat, each sub-agent context-isolated." },
+  { title: "Channels & Steering", href: "/docs/channels", color: "#f97316", body: "Feed a live, bursty transport (Slack, Discord) through one bounded, coalescing queue, and inject messages mid-run." },
+  { title: "Goal Loops", href: "/docs/goal-loops", color: "#06b6d4", body: "An outer runGoal loop with a grader seam drives the inner loop until the goal is met." },
+  { title: "Tracing Built In", href: "/docs/tracing", color: "#ec4899", body: "A passive Tracer records the run as a timestamped timeline and per-turn trajectory, off the hot path." },
+  { title: "Permissioned Tool Calls", href: "/docs/gating-tool-calls", color: "#ef4444", body: "Gate the whole turn's tool calls up front with an allow / deny / ask policy — no race with parallel execution." },
+  { title: "Independently Testable", href: "/docs/getting-started", color: "#14b8a6", body: "Every seam is verified in isolation with deterministic test doubles — zero network." },
 ];
 
 function FeatureGrid() {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-16">
       <div className="mb-8 flex flex-col gap-3 text-center">
-        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Composable building blocks</h2>
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Composable Building Blocks</h2>
         <p className="mx-auto max-w-2xl text-fd-muted-foreground">
           Skills, planning, sub-agents, channels — each built <em>over</em>{" "}
           <code className="rounded bg-fd-muted px-1 py-0.5">runAgent()</code>, never into it. Add
@@ -124,14 +133,16 @@ function FeatureGrid() {
           <Link
             key={f.title}
             href={f.href}
-            className="group flex flex-col gap-2 rounded-xl border border-fd-border bg-fd-card p-5 transition-colors hover:border-fd-primary/60"
+            className="group flex flex-col gap-2 rounded-xl border border-fd-border border-t-2 bg-fd-card p-5 transition-colors hover:bg-fd-accent"
+            style={{ borderTopColor: f.color }}
           >
-            <h3 className="font-semibold">
-              {f.title}
-              <span className="ml-1 text-fd-muted-foreground transition-transform group-hover:translate-x-0.5 inline-block">
-                →
-              </span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold" style={{ color: f.color }}>
+                {f.title}
+                <span className="ml-1 inline-block transition-transform group-hover:translate-x-0.5">→</span>
+              </h3>
+              <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: f.color }} />
+            </div>
             <p className="text-sm text-fd-muted-foreground">{f.body}</p>
           </Link>
         ))}
