@@ -593,11 +593,16 @@ message can cancel a stale in-flight run instead of queueing behind it.
 with the coalesced prompt; two sessions never interleave a session's runs; no more
 than `maxConcurrency` runs in flight at once (excess waits); supersede cancels the
 prior run's `signal`; per-session overflow follows the buffer policy.
-**Tests** (`__tests__/dispatcher.test.ts`, `MockModelClient` + a fake clock):
-burst coalesces to one run; per-session serialization holds under interleaved
-pushes; semaphore caps global in-flight; supersede aborts the stale run; overflow
-drops/coalesces per policy.
-**Status**: Not Started
+**Tests** (`__tests__/dispatcher.test.ts`, injected run harness — controllable,
+no real model): burst coalesces to one run; per-session serialization holds under
+interleaved pushes; semaphore caps global in-flight; supersede aborts the stale
+run (and the next run carries the newer message); overflow drops per policy under
+an over-capacity flood; a failed run surfaces via `onError` without wedging.
+**Status**: Complete (7 tests; full suite 336 green, typecheck clean). Dependency-
+free — only the standard `AbortController` global; no timer (the in-flight run is
+the debounce window). Supersede safely drops the stale batch because `runAgent`
+persists the prompt to memory (loop.ts:315) before its first abort check
+(loop.ts:327), so the next run reloads it.
 
 ## Stage 3: `ChannelSource` seam + in-memory fake
 **Goal**: The transport seam (analogous to `ModelClient`) that owns liveness only

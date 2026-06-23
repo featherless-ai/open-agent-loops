@@ -202,6 +202,13 @@ export type {
   PushResult,
 } from "./primitives/bounded-buffer";
 
+export { Dispatcher } from "./channels/dispatcher";
+export type {
+  DispatcherOptions,
+  DispatcherRunBase,
+  RunFn,
+} from "./channels/dispatcher.types";
+
 // The outer loop ("loop engineering"): runGoal drives runAgent across rounds,
 // grading each against a goal until met or a round cap. The grader is a seam
 // (BYO function); `modelGrader` is the battery that builds one from a fast model.
