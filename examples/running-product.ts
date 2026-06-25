@@ -16,8 +16,8 @@ import {
   searchTool,
   SessionMemoryStore,
   shellTool,
-} from "../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../agent-core/providers/openai-compatible.ts";
+} from "../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../agent-loop-core/providers/openai-compatible.ts";
 import { bunSearchBackend, bunShellBackend } from "../bun-backends.ts";
 import { ANSI, color } from "./console-format.ts";
 
@@ -56,7 +56,7 @@ const result = await runAgent({
     // chat_template_kwargs from the model id — GLM gets
     // `enable_thinking`+`clear_thinking`, DeepSeek gets `thinking`, etc. — so
     // prior-turn reasoning resent on tool-call turns actually round-trips.
-    // (See agent-core/providers/reasoning-kwargs.ts.)
+    // (See agent-loop-core/providers/reasoning-kwargs.ts.)
     thinking: "on",
   }),
   memory: new SessionMemoryStore(),

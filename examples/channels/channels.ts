@@ -23,8 +23,8 @@ import {
   Role,
   SessionMemoryStore,
   StreamEventType,
-} from "../../agent-core/index.ts";
-import type { ModelClient, ModelRequest } from "../../agent-core/index.ts";
+} from "../../agent-loop-core/index.ts";
+import type { ModelClient, ModelRequest } from "../../agent-loop-core/index.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

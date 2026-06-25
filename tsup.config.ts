@@ -11,13 +11,13 @@ import { defineConfig } from "tsup";
 // bundle entirely unless the provider is actually imported.
 export default defineConfig({
   entry: {
-    index: "agent-core/index.ts",
+    index: "agent-loop-core/index.ts",
     // Streaming test double — handy client-side for building UI with no backend.
-    "mocks/mock-model": "agent-core/mocks/mock-model.ts",
+    "mocks/mock-model": "agent-loop-core/mocks/mock-model.ts",
     // Server-side opt-in: the OpenAI-compatible ModelClient. Kept out of the
-    // core entry so importing `agent-core` never pulls `openai` into a browser
-    // bundle — consumers reach for it explicitly via `@open-agent-loops/core/providers/openai`.
-    "providers/openai": "agent-core/providers/openai-compatible.ts",
+    // core entry so importing `agent-loop-core` never pulls `openai` into a browser
+    // bundle — consumers reach for it explicitly via `@open-agent-loops/agent-loop-core/providers/openai`.
+    "providers/openai": "agent-loop-core/providers/openai-compatible.ts",
   },
   format: ["esm"],
   target: "es2022",

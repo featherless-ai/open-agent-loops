@@ -9,7 +9,7 @@
  * dropped. (A random 10-digit number makes a coincidental guess ~1e-10.)
  *
  * Four knobs per model, mapped to each family's real dialect via the reasoning
- * profile (agent-core/providers/reasoning-kwargs.ts):
+ * profile (agent-loop-core/providers/reasoning-kwargs.ts):
  *
  *   off      — toggle thinking OFF; drop the planted reasoning.   expect: NO recall
  *   on       — toggle ON, NO continuity kwarg, reasoning resent.  expect: family-dependent
@@ -29,11 +29,11 @@
  *   MODELS="zai-org/GLM-5.2" REPS=5 CONC=4 bun run system-tests/reasoning-number-test.ts
  */
 
-import { assistantMessage, StreamEventType, userMessage } from "../agent-core/index.ts";
-import type { Message } from "../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../agent-core/providers/openai-compatible.ts";
-import { reasoningProfileFor } from "../agent-core/providers/reasoning-kwargs.ts";
-import type { ReasoningProfile } from "../agent-core/providers/reasoning-kwargs.ts";
+import { assistantMessage, StreamEventType, userMessage } from "../agent-loop-core/index.ts";
+import type { Message } from "../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../agent-loop-core/providers/openai-compatible.ts";
+import { reasoningProfileFor } from "../agent-loop-core/providers/reasoning-kwargs.ts";
+import type { ReasoningProfile } from "../agent-loop-core/providers/reasoning-kwargs.ts";
 import agenticModels from "./agentic-models.json";
 
 // Minimal ANSI helpers (kept local so system-tests stay independent of examples/).

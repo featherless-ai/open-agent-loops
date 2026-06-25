@@ -1,7 +1,7 @@
 # system-tests
 
 **Live** tests that hit real models on Featherless (`LLM_API_KEY` required). These
-are deliberately kept out of `agent-core/__tests__` (the offline, mocked unit
+are deliberately kept out of `agent-loop-core/__tests__` (the offline, mocked unit
 suite) and out of the shipped package — `package.json` ships `files: ["dist"]`
 only, and the `tsup` build bundles just the library entry points, so nothing here
 is published.

@@ -23,9 +23,9 @@ import {
   scratchpadTools, // [!code highlight]
   SessionMemoryStore,
   todoListTools,
-} from "../../agent-core/index.ts";
-import type { AgentEvent } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { z } from "zod";
 
 const apiKey = process.env.LLM_API_KEY;

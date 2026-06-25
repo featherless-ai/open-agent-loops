@@ -6,7 +6,7 @@ description: Host the docs site on a Cloudflare subdomain via a cloudflared tunn
 There are two things to ship:
 
 1. **The docs site** (this site) — onto a Cloudflare `*.featherless.ai` subdomain.
-2. **The package** (`@open-agent-loops/core`) — onto npm, so anyone can `npm install` it.
+2. **The package** (`@open-agent-loops/agent-loop-core`) — onto npm, so anyone can `npm install` it.
 
 The Cloudflare half follows the same shape the Featherless **guarded-api Cloudflare
 pilot** uses: a containerized Node service bound to localhost, reached from the
@@ -36,7 +36,7 @@ browser ──https://docs.featherless.ai──▶ Cloudflare DNS
   create the tunnel and route the `docs` hostname.
 - The build is **not** self-contained inside `docs-fuma/`: the codegen reads
   `../examples/**` (snippet materialization) and runs TypeDoc over
-  `../agent-core/index.ts` (API reference). So the Docker **build context must be
+  `../agent-loop-core/index.ts` (API reference). So the Docker **build context must be
   the repo root**, not `docs-fuma/`.
 
 > **⚠️ Warning** — Steps 4–5 (the tunnel + DNS route) must be run by whoever holds
@@ -51,7 +51,7 @@ so it runs as a container with `next start` rather than a static export.
 Add a `Dockerfile` at the **repo root**:
 
 ```dockerfile
-# Build context = repo root: the docs codegen reads ../examples and ../agent-core.
+# Build context = repo root: the docs codegen reads ../examples and ../agent-loop-core.
 FROM node:20-slim AS build
 WORKDIR /app
 RUN npm i -g bun
@@ -142,12 +142,12 @@ cloudflared tunnel delete open-agent-loops-docs   # also removes the DNS route
 
 ## Part 2 — Publish the package to npm
 
-This publishes `@open-agent-loops/core` to npm — **private (restricted) at first**,
+This publishes `@open-agent-loops/agent-loop-core` to npm — **private (restricted) at first**,
 then public when you're ready.
 
 ### Pre-flight
 
-- It's a **scoped** package (`@open-agent-loops/core`), and scoped packages publish
+- It's a **scoped** package (`@open-agent-loops/agent-loop-core`), and scoped packages publish
   as **restricted (private)** by default — exactly what we want initially. We set
   it explicitly below so it can't be made public by accident, and flip it to
   public later in one command.
@@ -201,7 +201,7 @@ npm publish           # restricted by `publishConfig.access`; prepublishOnly bui
 ### 5. Verify
 
 ```bash
-npm view @open-agent-loops/core version      # the version you just shipped
+npm view @open-agent-loops/agent-loop-core version      # the version you just shipped
 ```
 
 While the package is restricted, only the publisher and anyone granted access to
@@ -212,14 +212,14 @@ the `@open-agent-loops` scope can install it — and they must be `npm login`'d 
 Flip visibility in one command — no republish needed:
 
 ```bash
-npm access public @open-agent-loops/core
+npm access public @open-agent-loops/agent-loop-core
 ```
 
 (Or change `publishConfig.access` to `"public"` so future versions publish public
 by default.) From then on, the install below works for **anyone**:
 
 ```bash
-npm install @open-agent-loops/core
+npm install @open-agent-loops/agent-loop-core
 # Using the OpenAI-compatible provider? add the optional peer dep:
 npm install openai
 ```

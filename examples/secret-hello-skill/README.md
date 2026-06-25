@@ -1,6 +1,6 @@
 # secret-hello-skill — a credential-gated binary skill
 
-A worked example of the [skills design](../../agent-core/docs/skills.md): a skill
+A worked example of the [skills design](../../agent-loop-core/docs/skills.md): a skill
 that is **pure instructions** driving the shared `shell` tool to run a real
 binary that **refuses to work without a credential**.
 
@@ -36,5 +36,5 @@ in from the placeholder) and greets. Drop the placeholder and the binary refuses
 The end-to-end credential gating is also covered by a network-free test:
 
 ```sh
-bun test agent-core/__tests__/skills-binary.test.ts
+bun test agent-loop-core/__tests__/skills-binary.test.ts
 ```

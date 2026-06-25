@@ -16,7 +16,7 @@
       "type": "bun",
       "request": "launch",
       "name": "Debug all tests",
-      "program": "agent-core",
+      "program": "agent-loop-core",
       "runtime": "bun",
       "runtimeArgs": ["test"],
       "cwd": "${workspaceFolder}",

@@ -1,4 +1,4 @@
-# agent-core — architecture
+# agent-loop-core — architecture
 
 A **lightweight agent SDK**. The design is one thin core engine (`runAgent`)
 that depends only on a small set of **extension seams** (interfaces). Built-in
@@ -17,7 +17,7 @@ flowchart TB
         APP["your code (Nuxt route, service, CLI...)"]
     end
 
-    subgraph SDK["agent-core · lightweight SDK"]
+    subgraph SDK["agent-loop-core · lightweight SDK"]
         direction TB
 
         subgraph API["Public API — index.ts"]

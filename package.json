@@ -1,5 +1,5 @@
 {
-  "name": "@open-agent-loops/core",
+  "name": "@open-agent-loops/agent-loop-core",
   "version": "0.0.1",
   "description": "A minimal, provider-agnostic agentic loop. Plug-and-play seams behind interfaces.",
   "license": "MIT",
@@ -49,7 +49,7 @@
     "build": "tsup",
     "prepublishOnly": "bun run build",
     "demo": "bun run examples/running-product.ts",
-    "test": "bun test agent-core",
+    "test": "bun test agent-loop-core",
     "test:system": "bun test system-tests",
     "number-test": "bun run system-tests/reasoning-number-test.ts",
     "typecheck": "tsc --noEmit",

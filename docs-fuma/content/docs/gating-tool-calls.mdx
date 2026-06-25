@@ -27,8 +27,8 @@ import {
   InMemoryPermissionStore,
   PermissionPolicy,
   ApprovalChoice,
-} from "@open-agent-loops/core";
-import type { ApprovalPrompter } from "@open-agent-loops/core";
+} from "@open-agent-loops/agent-loop-core";
+import type { ApprovalPrompter } from "@open-agent-loops/agent-loop-core";
 import { z } from "zod";
 // ...same `model`, `weather` tool, and `render` renderer as the multi-turn chat
 // loop, plus its Node `readline` imports (`createInterface`, `input`, `output`).
@@ -104,7 +104,7 @@ with the gate without either knowing about the other — the credential wraps th
 tool, the permission gates the batch:
 
 ```ts
-import { withCredentials, InMemoryCredentialStore } from "@open-agent-loops/core";
+import { withCredentials, InMemoryCredentialStore } from "@open-agent-loops/agent-loop-core";
 
 // deploy now authenticates with a token it never sees in the clear: the model
 // passes the placeholder `{{deploy_token}}`, resolved only inside execute.
@@ -171,5 +171,5 @@ against a real binary that refuses to run without the credential. Because the
 gate runs *before* `execute` and the credential swap happens *inside* it, the
 approval prompt shows you `{{secret_hello_token}}` — **never the real secret**.
 
-See `agent-core/docs/skills.md` for the skill seam itself, and
+See `agent-loop-core/docs/skills.md` for the skill seam itself, and
 `examples/secret-hello-skill/` for the same skill without the permission gate.

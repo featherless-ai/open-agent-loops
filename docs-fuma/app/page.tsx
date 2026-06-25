@@ -12,7 +12,7 @@ import { WorksWith } from "@/components/landing/works-with";
 import { RunsAnywhere } from "@/components/landing/runs-anywhere";
 
 const GITHUB = "https://github.com/ArEnSc/advance-agent";
-const NPM = "https://www.npmjs.com/package/@open-agent-loops/core";
+const NPM = "https://www.npmjs.com/package/@open-agent-loops/agent-loop-core";
 
 export const metadata: Metadata = {
   title: "Open Agent Loops — a minimal, provider-agnostic agent loop",
@@ -49,8 +49,8 @@ export default function HomePage() {
   );
 }
 
-const QUICKSTART = `import { runAgent, SessionMemoryStore, defineTool } from "@open-agent-loops/core";
-import { OpenAICompatibleModel } from "@open-agent-loops/core/providers/openai";
+const QUICKSTART = `import { runAgent, SessionMemoryStore, defineTool } from "@open-agent-loops/agent-loop-core";
+import { OpenAICompatibleModel } from "@open-agent-loops/agent-loop-core/providers/openai";
 import { z } from "zod";
 
 // A tool is a name, a schema, and a function.

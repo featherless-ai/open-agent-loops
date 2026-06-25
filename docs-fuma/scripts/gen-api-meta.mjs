@@ -62,7 +62,7 @@ const bin = (args, opts = {}) =>
 bin(["typedoc"]);
 
 // 2. Authoritative group → member mapping from TypeDoc's JSON model.
-bin(["typedoc", "--entryPoints", "../agent-core/index.ts", "--tsconfig", "../tsconfig.json", "--excludeInternal", "--json", jsonFile], {
+bin(["typedoc", "--entryPoints", "../agent-loop-core/index.ts", "--tsconfig", "../tsconfig.json", "--excludeInternal", "--json", jsonFile], {
   stdio: ["ignore", "ignore", "inherit"],
 });
 const project = JSON.parse(readFileSync(jsonFile, "utf8"));

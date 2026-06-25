@@ -21,9 +21,9 @@ import {
   modelGrader, // [!code highlight]
   runGoal,
   SessionMemoryStore,
-} from "../../agent-core/index.ts";
-import type { Grader, RunResult } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { Grader, RunResult } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 
 const apiKey = process.env.LLM_API_KEY;
 if (!apiKey) {
