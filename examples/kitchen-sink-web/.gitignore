@@ -13,10 +13,10 @@ next-env.d.ts
 # Dependencies (also covered by the repo-root .gitignore)
 /node_modules
 
+# npm lockfile — this example runs on Deno; deno.lock is the lockfile
+/package-lock.json
+
 # Local env + logs
 .env*.local
 *.log
 .DS_Store
-
-# deno desktop generated entry file (random suffix, regenerated each run)
-.deno_desktop_entry-*.ts

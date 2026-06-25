@@ -1,10 +1,9 @@
-# Kitchen-sink assistant — Deno Desktop + assistant-ui
+# Kitchen-sink assistant — Deno + Next.js + assistant-ui
 
 One agent, wired with every `@open-agent-loops/core` battery that composes
 cleanly, fronted by an [assistant-ui](https://www.assistant-ui.com/) chat UI in a
 **Next.js** app, all run on **Deno**. It's the capstone example: a tour of how the
-seams stack on top of `runAgent` without the loop ever changing — and it
-packages to a native desktop app via `deno desktop`.
+seams stack on top of `runAgent` without the loop ever changing.
 
 ## Architecture — one app, one runtime
 
@@ -19,7 +18,6 @@ agent lives in a same-origin route handler:
 │      └── Backend   → app/api/assistant/route.ts  (TypeScript)   │
 │                       └── runAgent + every battery (lib/agent)  │
 └──────────────────────────────────────────────────────────────────┘
-        (later) `deno desktop` wraps this in a native webview window
 ```
 
 A message round-trip: the UI POSTs an assistant-transport *command* to
@@ -110,20 +108,6 @@ rename/archive. `useAssistantTransportRuntime` is built on a thread-list adapter
 so **each thread is its own server `sessionId`** — the agent's per-session memory
 never bleeds across threads.
 
-## Desktop (`deno desktop`)
-
-The native-window build is one command, but the `desktop` subcommand ships in
-**Deno 2.9+** (currently canary). Once on 2.9:
-
-```bash
-deno task desktop      # = deno desktop --hmr .  → native webview + the app
-deno desktop --output ./dist/KitchenSink.dmg .   # compile a standalone binary
-```
-
-`deno.json` already carries the `desktop` block + the Next.js compat `unstable`
-flags. On Deno 2.6.x the rest of the app runs fine via `deno task dev`; only the
-webview wrapper waits on 2.9.
-
 ## What's verified
 
 - ✅ **Runs on Deno** (2.6.7): `deno task dev` boots Next.js 16 / React 19 /
@@ -131,7 +115,6 @@ webview wrapper waits on 2.9.
 - ✅ **Agent round-trip on Deno**: `POST /api/assistant` streams reasoning, a
   **real tool execution** (the `shell` tool runs via `node:child_process`), and the
   answer, as assistant-transport `update-state` frames. Works with zero API key.
-- ⏳ **`deno desktop` native window**: deferred — needs Deno 2.9 canary.
 
 ## Notes
 

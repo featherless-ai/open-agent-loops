@@ -43,6 +43,5 @@ do not modify code.
 - [ ] E5. `next build` (production) compiles — esp. the core's bare `import "openai"` in `dist/providers/openai.js`.
 
 ## F. Known limitations (confirm as documented, not regressions)
-- [ ] F1. `deno desktop --hmr` window renders blank (embedded Next dev server doesn't serve).
-- [ ] F2. Threads untitled / not persisted (in-memory adapter hardcoded by `useAssistantTransportRuntime`).
-- [ ] F3. Permissions auto-approve in v1 (no human-in-the-loop modal).
+- [ ] F1. Threads untitled / not persisted (in-memory adapter hardcoded by `useAssistantTransportRuntime`).
+- [ ] F2. Permissions auto-approve in v1 (no human-in-the-loop modal).
