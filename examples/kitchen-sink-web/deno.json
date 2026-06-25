@@ -1,0 +1,23 @@
+{
+  "//": "Deno host config for the kitchen-sink: Deno runs the whole Next.js app via its node-compat layer. The `unstable` flags below are what Next 16 needs under Deno (bare node builtins, CJS detection, node globals, etc.).",
+  "unstable": [
+    "bare-node-builtins",
+    "detect-cjs",
+    "node-globals",
+    "unsafe-proto",
+    "sloppy-imports"
+  ],
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "imports": {
+    "@open-agent-loops/core": "../../dist/index.js",
+    "@open-agent-loops/core/mocks/mock-model": "../../dist/mocks/mock-model.js",
+    "@open-agent-loops/core/providers/openai": "../../dist/providers/openai.js",
+    "zod": "npm:zod@^4",
+    "openai": "npm:openai@^6"
+  }
+}

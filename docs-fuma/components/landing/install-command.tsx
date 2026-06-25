@@ -3,10 +3,10 @@
 import { useState } from "react";
 
 /**
- * A copy-to-clipboard install pill: `npm i @open-agent-loops/core`. Mono, bordered,
+ * A copy-to-clipboard install pill: `npm i @open-agent-loops/agent-loop-core`. Mono, bordered,
  * with a tiny check confirmation. Client-only because it touches the clipboard.
  */
-export function InstallCommand({ command = "npm i @open-agent-loops/core" }: { command?: string }) {
+export function InstallCommand({ command = "npm i @open-agent-loops/agent-loop-core" }: { command?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {

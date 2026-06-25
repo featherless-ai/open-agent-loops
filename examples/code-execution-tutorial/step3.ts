@@ -21,9 +21,9 @@ import {
   codeExecutionTool,
   runAgent,
   SessionMemoryStore,
-} from "../../agent-core/index.ts";
-import type { AgentEvent, CodeExecutionBackend } from "../../agent-core/index.ts"; // [!code highlight]
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent, CodeExecutionBackend } from "../../agent-loop-core/index.ts"; // [!code highlight]
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { tmpdir } from "node:os"; // [!code highlight:3]

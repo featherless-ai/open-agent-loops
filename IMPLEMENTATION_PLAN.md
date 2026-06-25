@@ -25,8 +25,8 @@ rest of the run config live in a shared `base` (`Omit<RunAgentOptions, "prompt" 
 "signal">`), mirroring `DispatcherRunBase`.
 
 ## Stage 1: Grader seam + runGoal outer loop (pure, BYO grader)
-**Files**: `agent-core/goal/goal.types.ts` (`Grader`, `GradeContext`, `Grade`,
-`RunGoalOptions`, `RunGoalRunBase`, `GoalResult`), `agent-core/goal/goal.ts`
+**Files**: `agent-loop-core/goal/goal.types.ts` (`Grader`, `GradeContext`, `Grade`,
+`RunGoalOptions`, `RunGoalRunBase`, `GoalResult`), `agent-loop-core/goal/goal.ts`
 (`runGoal`).
 **Success Criteria**: round 1 prompt defaults to the goal; a `done` grade stops
 immediately; a not-done grade re-prompts the *next* round with `feedback`; the
@@ -41,7 +41,7 @@ prompt defaults to goal; abort between rounds; onRound sequence.
 `DispatcherRunBase`; rounds reuse one `sessionId` so history accrues via `Memory`)
 
 ## Stage 2: modelGrader battery
-**Files**: `agent-core/goal/model-grader.ts` (`modelGrader`, `ModelGraderOptions`).
+**Files**: `agent-loop-core/goal/model-grader.ts` (`modelGrader`, `ModelGraderOptions`).
 **Success Criteria**: builds a `Grader` from a `ModelClient`; feeds the goal + the
 round's latest assistant output into one grading call; parses a `{done, score,
 feedback}` JSON verdict (tolerating markdown fences / surrounding prose); throws a
@@ -55,9 +55,9 @@ markdown fences / prose, throws descriptively when no verdict is present;
 forwards `ctx.signal`)
 
 ## Stage 3: public surface
-**Files**: `agent-core/index.ts`.
+**Files**: `agent-loop-core/index.ts`.
 **Success Criteria**: `runGoal`, `modelGrader`, and the goal types are importable
-from the published surface; `bun test agent-core` + `bun run typecheck` green.
+from the published surface; `bun test agent-loop-core` + `bun run typecheck` green.
 **Status**: Complete (exported beside `Dispatcher`; goal's internal `RunFn` is not
 re-exported, avoiding collision with the dispatcher's; full suite 348 green,
 typecheck clean)
@@ -90,8 +90,8 @@ turns emit a labeled `message_injected` event so they're visible in telemetry an
 distinguishable from a normal prompt.
 
 ## Stage 1: loop pull-seams + injection event
-**Files**: `agent-core/types/events.ts` (`AgentEventType.MessageInjected` +
-`InjectedMessageOrigin` + union arm), `agent-core/primitives/loop.ts`
+**Files**: `agent-loop-core/types/events.ts` (`AgentEventType.MessageInjected` +
+`InjectedMessageOrigin` + union arm), `agent-loop-core/primitives/loop.ts`
 (`Hooks.drainSteering`/`drainFollowUp`, an `injectMessages` helper, drain at the
 two boundaries with the precedence above).
 **Success**: hooks drain at the right boundaries; steering overrides
@@ -104,17 +104,17 @@ terminating tool; maxSteps caps and the queue is *not* drained at the cap.
 **Status**: Complete (4 tests; full suite green, typecheck clean)
 
 ## Stage 2: tracer folds `message_injected`
-**Files**: `agent-core/observability/tracer.ts` (fold the event onto the current
+**Files**: `agent-loop-core/observability/tracer.ts` (fold the event onto the current
 `TrajectoryStep`, origin-labeled; render in `describe()`),
-`agent-core/observability/tracer.types.ts` (`TrajectoryStep.injected?`).
+`agent-loop-core/observability/tracer.types.ts` (`TrajectoryStep.injected?`).
 **Success**: an injected turn shows in `trajectory()`/`formatTrajectory()` with
 its origin, not just the raw `format()` timeline; steps stay monotonic.
 **Tests** (`__tests__/tracer.test.ts`): a steering injection appears on the step.
 **Status**: Complete (folds onto the step, origin-labeled; rendered as `↪`)
 
 ## Stage 3: MessageQueue battery (pure)
-**Files**: `agent-core/primitives/message-queue.ts` (or `concurrency/`-style
-sibling), `agent-core/index.ts` export.
+**Files**: `agent-loop-core/primitives/message-queue.ts` (or `concurrency/`-style
+sibling), `agent-loop-core/index.ts` export.
 **Success**: `push` / `drain` / `size` / `clear` with `mode: "one-at-a-time" |
 "all"`; `drain` returns one or all queued messages per the mode; this is pi's
 whole `steeringMode`/`followUpMode`/`clear*Queue` surface, caller-owned.
@@ -143,7 +143,7 @@ only `UserMessage.content` widens; system/assistant/tool stay `string`, keeping
 "an assistant can't carry an image" a compile error.
 
 ## Stage 1: the ContentPart union + factories (pure)
-**Files**: `agent-core/types/content-part.ts`, `agent-core/types/index.ts`.
+**Files**: `agent-loop-core/types/content-part.ts`, `agent-loop-core/types/index.ts`.
 **Success**: `ContentPart = TextPart | ImagePart | AudioPart | FilePart`, each
 shape identical to OpenAI's `ChatCompletionContentPart` member; `textPart` /
 `imagePart` / `audioPart` / `filePart` factories; `contentToText` flattens a
@@ -154,11 +154,11 @@ string passthrough + mixed-parts flatten.
 **Status**: Complete
 
 ## Stage 2: widen UserMessage.content + wire egress/tracer
-**Files**: `agent-core/types/message-base.ts` (base `content: string |
+**Files**: `agent-loop-core/types/message-base.ts` (base `content: string |
 ContentPart[]`), `system-message.ts` / `assistant-message.ts` / `tool-message.ts`
 (pin `content: string`), `user-message.ts` (explicit wide override + doc),
 `providers/openai-compatible.ts` (user egress passes parts through),
-`observability/tracer.ts` (flatten via contentToText), `agent-core/index.ts`
+`observability/tracer.ts` (flatten via contentToText), `agent-loop-core/index.ts`
 (export the parts + factories).
 **Success**: `tsc --noEmit` clean; egress emits `content: ContentPart[]` for a
 multimodal user turn; string turns unchanged; assistant/system/tool still
@@ -171,7 +171,7 @@ parts round-trips through `toChatMessages` verbatim.
 
 # Plan: Port Tracer / observability onto the modern types
 
-Bring `agent-core/observability` (Tracer, AsyncWriter) + its tests over from
+Bring `agent-loop-core/observability` (Tracer, AsyncWriter) + its tests over from
 `origin/claude/session-DemlF`. That branch predates the refactors, so it's a
 **port**: string-literal roles/event-types → enums, wide `Message` → the
 discriminated union, single `types.ts` → the `types/` barrel.
@@ -198,8 +198,8 @@ discriminated union, single `types.ts` → the `types/` barrel.
 - `__tests__/tracer.test.ts`: `FakeModelClient`→`MockModelClient`; enum `type` + `timestamp` on manual `sink()` calls
 - `__tests__/async-writer.test.ts`: unchanged
 - `__tests__/openai-compatible.test.ts`: add `onRequest` test (modern message style)
-- `agent-core/README.md`: add the tracing section
-**Success**: `bun test agent-core` all green; typecheck clean.
+- `agent-loop-core/README.md`: add the tracing section
+**Success**: `bun test agent-loop-core` all green; typecheck clean.
 **Status**: Complete (241 pass / 0 fail, typecheck clean; 15 tracer+writer tests)
 
 ---
@@ -215,7 +215,7 @@ can fail (assistant stream-error + tool). Construction tells you which fields
 apply; reads narrow via `isAssistantMessage` / `isToolMessage`.
 
 ## Stage 1: the union + guards
-**Files**: `agent-core/types/message.ts`
+**Files**: `agent-loop-core/types/message.ts`
 **Success**: `Message = UserMessage | SystemMessage | AssistantMessage |
 ToolMessage`; `tool_call_id` required on `ToolMessage`; `isAssistantMessage` /
 `isToolMessage` type guards exported. Reasoning resend docs preserved.
@@ -234,7 +234,7 @@ because AssistantMessage carries `isError`.
 
 ## Stage 3: update call sites that read role fields off `Message[]`
 **Files**: affected `__tests__/*` (filter/find via guards instead of `role ===`).
-**Success**: `bun test agent-core` green (whole suite).
+**Success**: `bun test agent-loop-core` green (whole suite).
 **Status**: Complete
 
 ---
@@ -254,7 +254,7 @@ Boring + explicit: first-match ordered rules on the lowercased id, default to
 **Goal**: `reasoning-kwargs.ts` exports `reasoningProfileFor(id)` (capabilities)
 and `reasoningKwargsFor(id, mode)` → the kwargs object or `undefined`. `mode` is
 `"on" | "off" | "auto"` ("auto" = the family's documented default).
-**Files**: `agent-core/providers/reasoning-kwargs.ts`
+**Files**: `agent-loop-core/providers/reasoning-kwargs.ts`
 **Success Criteria**: Every id in the catalog resolves to the right dialect;
 unknown/non-reasoning → `undefined`; always-on/interleaved models (MiniMax-M2)
 report `interleaved:true` and ignore "off".
@@ -266,7 +266,7 @@ the catalog ids; on/off/auto; unknown → undefined; Coder/Instruct exclusions.
 **Goal**: Add `thinking?: "on" | "off" | "auto"` option. Explicit
 `chatTemplateKwargs` still wins (escape hatch); otherwise derive from the model
 id via the table. `thinking` unset → today's behavior (inject nothing).
-**Files**: `agent-core/providers/openai-compatible.ts`, `agent-core/index.ts`,
+**Files**: `agent-loop-core/providers/openai-compatible.ts`, `agent-loop-core/index.ts`,
 `examples/running-product.ts` (drop the hardcoded GLM literal, use `thinking`).
 **Success Criteria**: existing tests stay green; new tests assert per-model
 derivation + escape hatch + opt-out.
@@ -282,7 +282,7 @@ placeholders (`{{name}}`); at tool-execution time we look the name up in a
 credential store and splice the real value in. On the way out we scrub any
 resolved secret value back to its placeholder so an echoing command can't leak it.
 
-**Design**: A sibling of `agent-core/permissions/` — a `CredentialStore` interface
+**Design**: A sibling of `agent-loop-core/permissions/` — a `CredentialStore` interface
 + `InMemoryCredentialStore` + a `withCredentials(tool, store)` decorator matching
 the `with*` convention in `compose.ts`. Substitution happens at the generic tool
 seam (`Tool.execute`), so it covers shell, search, and any future credentialed
@@ -291,8 +291,8 @@ scrubbing: on (scrub the values resolved during this call).
 
 ## Stage 1: CredentialStore seam + in-memory implementation
 **Goal**: The lookup table behind an interface.
-**Files**: `agent-core/credentials/credentials.types.ts`,
-`agent-core/credentials/in-memory-credential-store.ts`
+**Files**: `agent-loop-core/credentials/credentials.types.ts`,
+`agent-loop-core/credentials/in-memory-credential-store.ts`
 **Success Criteria**: `InMemoryCredentialStore` resolves known names, returns
 undefined for unknown ones; seedable from a `Record` (env at startup).
 **Tests** (`__tests__/credentials.test.ts`): resolve known → value; resolve
@@ -302,7 +302,7 @@ unknown → undefined; seeded from record.
 ## Stage 2: substitution + scrub primitives (pure)
 **Goal**: Pure functions: deep-walk args replacing `{{name}}`, and scrub a string
 of resolved secret values. No tool/loop coupling — directly testable.
-**Files**: `agent-core/credentials/substitute.ts`
+**Files**: `agent-loop-core/credentials/substitute.ts`
 **Success Criteria**: substitutes inside nested strings/objects/arrays; records
 resolved (value→name) pairs; unknown placeholder throws a descriptive error;
 scrub replaces every occurrence of each resolved value with its `{{name}}`;
@@ -314,7 +314,7 @@ partial-string; unknown → throws; scrub round-trips value back to placeholder.
 ## Stage 3: withCredentials decorator
 **Goal**: Wrap a `Tool` so inbound args are substituted before `execute` and the
 result content (and any thrown error) is scrubbed after.
-**Files**: `agent-core/credentials/with-credentials.ts`
+**Files**: `agent-loop-core/credentials/with-credentials.ts`
 **Success Criteria**: decorated tool preserves name/description/schema; real value
 reaches `execute`; `ToolResult.content` and thrown-error messages are scrubbed;
 transparent when args carry no placeholders.
@@ -323,8 +323,8 @@ scrubbed; error message scrubbed; no-placeholder passthrough identical.
 **Status**: Complete
 
 ## Stage 4: public surface + demo
-**Goal**: Export from `agent-core/index.ts`; show a credentialed tool in `examples/running-product.ts`.
-**Files**: `agent-core/index.ts`, `examples/running-product.ts`
+**Goal**: Export from `agent-loop-core/index.ts`; show a credentialed tool in `examples/running-product.ts`.
+**Files**: `agent-loop-core/index.ts`, `examples/running-product.ts`
 **Success Criteria**: importable from the public surface; demo passes a `{{...}}`
 placeholder that resolves at exec time; `bun test` + `bun run typecheck` green.
 **Status**: Exports done (typecheck + 132 tests green). example demo deferred —
@@ -377,7 +377,7 @@ each `AgentEvent` to N subscribers and keeps a ring buffer for late joiners.
 ## Stage 1: multicast event broker (pure)
 **Goal**: The pure primitive the supervisor needs for late-joining observers — no
 model, no time. (Concurrency is its own plan — the Featherless gate.)
-**Files**: `agent-core/supervisor/event-broker.ts` (`EventBroker`: `publish`,
+**Files**: `agent-loop-core/supervisor/event-broker.ts` (`EventBroker`: `publish`,
 `subscribe → unsubscribe`, `recent()`).
 **Success Criteria**: `EventBroker` fans one event to every live subscriber, drops
 one on unsubscribe, keeps the last K events for a late joiner, and never awaits a
@@ -390,12 +390,12 @@ block publish.
 ## Stage 2: BackgroundAgent handle + Supervisor
 **Goal**: A detached `runAgent` behind a handle, owned by a registry that caps
 concurrency and survives child failure.
-**Files**: `agent-core/supervisor/supervisor.types.ts` (`BackgroundAgent`,
+**Files**: `agent-loop-core/supervisor/supervisor.types.ts` (`BackgroundAgent`,
 `AgentTaskSpec`, `TaskStatus`, `SupervisorEvent`),
-`agent-core/supervisor/background-agent.ts` (handle: tees the run's `onEvent` into
+`agent-loop-core/supervisor/background-agent.ts` (handle: tees the run's `onEvent` into
 an `EventBroker`, owns an `AbortController`),
-`agent-core/supervisor/supervisor.ts` (`Supervisor`:
-`spawn`/`get`/`list`/`running`/`cancel`), `agent-core/index.ts` (exports).
+`agent-loop-core/supervisor/supervisor.ts` (`Supervisor`:
+`spawn`/`get`/`list`/`running`/`cancel`), `agent-loop-core/index.ts` (exports).
 **Success Criteria**: `spawn(spec)` returns immediately with a `BackgroundAgent`
 (`status` `pending`→`running`); `result` resolves to the run's `RunResult`;
 `subscribe` streams live `AgentEvent`s and `recentEvents()` replays; `cancel()`
@@ -411,9 +411,9 @@ escape; queueing past the limit; `running()` ↔ `active` invariant.
 ## Stage 3: Follow-ups (reactive)
 **Goal**: A settled (or running) agent can enqueue more work — same-session
 `continue` or dependent `spawn` — decided at settle time, no DAG.
-**Files**: `agent-core/supervisor/supervisor.ts` (`followUp(id, FollowUp)`,
-settle-time enqueue), `agent-core/supervisor/supervisor.types.ts` (`FollowUp`
-union), `agent-core/tools/builtin/follow-up.ts` (`request_follow_up` tool:
+**Files**: `agent-loop-core/supervisor/supervisor.ts` (`followUp(id, FollowUp)`,
+settle-time enqueue), `agent-loop-core/supervisor/supervisor.types.ts` (`FollowUp`
+union), `agent-loop-core/tools/builtin/follow-up.ts` (`request_follow_up` tool:
 `terminate: true` + records a spec the supervisor reads on settle).
 **Success Criteria**: `{ kind: "continue", message }` appends a `UserMessage` to
 the child's session (`Memory`) and re-runs it, preserving context;
@@ -429,12 +429,12 @@ settle; `onSettle` enqueue; a follow-up that spawns a follow-up still respects N
 ## Stage 4: schedule() trigger (Clock + Schedule)
 **Goal**: Time-triggered spawns — the *scheduled task* special case — as a thin
 trigger over the supervisor, with time injected for testability.
-**Files**: `agent-core/supervisor/clock.ts` (`Clock` interface; `SystemClock`
-default over `setTimeout`), `agent-core/supervisor/schedule.ts` (`Schedule`
+**Files**: `agent-loop-core/supervisor/clock.ts` (`Clock` interface; `SystemClock`
+default over `setTimeout`), `agent-loop-core/supervisor/schedule.ts` (`Schedule`
 interface `nextFireAt(after) → number | null`; `at`/`after`/`every`),
-`agent-core/supervisor/scheduler.ts` (`schedule(spec, Schedule)` arms a `Clock`
+`agent-loop-core/supervisor/scheduler.ts` (`schedule(spec, Schedule)` arms a `Clock`
 timer that calls `Supervisor.spawn` when due; recurring re-arms),
-`agent-core/mocks/manual-clock.ts` (`ManualClock` test double).
+`agent-loop-core/mocks/manual-clock.ts` (`ManualClock` test double).
 **Success Criteria**: `every(ms)` fires repeatedly; `at`/`after` fire once; a due
 firing with no free slot defers per policy (skip vs queue), never silently
 dropped; `stop()` cancels pending timers; all driven by `ManualClock` with zero
@@ -447,11 +447,11 @@ firings; pure `Schedule.nextFireAt` table per constructor.
 ## Stage 5: ProfileStore + poolTools → a working ParentAgent
 **Goal**: The "learn about you" seam and the bridge tools that turn a `runAgent`
 into a `ParentAgent`, assembled into one runnable demo.
-**Files**: `agent-core/profile/profile.types.ts` (`ProfileStore`
+**Files**: `agent-loop-core/profile/profile.types.ts` (`ProfileStore`
 `load(scope)`/`save(scope)`; `Profile = Record<string, unknown>`),
-`agent-core/profile/in-memory-profile-store.ts` (`InMemoryProfileStore` default),
-`agent-core/tools/builtin/pool-tools.ts` (`poolTools(supervisor)` → `spawn_agent`
-/ `list_agents` / `follow_up` / `cancel_agent`), `agent-core/index.ts`,
+`agent-loop-core/profile/in-memory-profile-store.ts` (`InMemoryProfileStore` default),
+`agent-loop-core/tools/builtin/pool-tools.ts` (`poolTools(supervisor)` → `spawn_agent`
+/ `list_agents` / `follow_up` / `cancel_agent`), `agent-loop-core/index.ts`,
 `examples/parent-agent.ts`.
 **Success Criteria**: a profile loads by `scope`, renders into the parent's system
 prompt (ambient, not a tool), and is snapshotted into each child's context pack at
@@ -497,14 +497,14 @@ budget consumed by *other* clients/keys — the whole point of "live". A server 
 
 ## Stage 1: withModelGate decorator (abort-aware)
 **Goal**: The pre-call seam — await admission before each stream, cancel-aware.
-**Files**: `agent-core/compose.ts` (`ModelGate` type + `withModelGate`),
-`agent-core/index.ts` (exports).
+**Files**: `agent-loop-core/compose.ts` (`ModelGate` type + `withModelGate`),
+`agent-loop-core/index.ts` (exports).
 **Success Criteria**: `withModelGate(model, gate)` awaits `gate(request)` before
 `model.stream` is called; on resolve the call proceeds and every `StreamEvent` is
 forwarded unchanged; on reject (e.g. the gate honoring `request.signal` on abort)
 the stream rejects and the inner model is never invoked; transparent for a no-op
 gate; stacks with `withModelObserver`.
-**Tests** (`agent-core/__tests__/compose.test.ts`): the model isn't called until the
+**Tests** (`agent-loop-core/__tests__/compose.test.ts`): the model isn't called until the
 gate resolves; an abort while parked rejects and never calls the model; a no-op gate
 is transparent.
 **Status**: Complete (3 tests; compose suite 16 green, typecheck clean)
@@ -512,8 +512,8 @@ is transparent.
 ## Stage 2: Featherless concurrency meter (live battery)
 **Goal**: A live `{ limit, used }` view of the account budget the gate waits on,
 plus the gate function itself.
-**Files**: `agent-core/concurrency/parse-frame.ts` (pure `data: {…}` SSE frame →
-`{ limit, used_cost, request_count }` snapshot), `agent-core/concurrency/featherless-meter.ts`
+**Files**: `agent-loop-core/concurrency/parse-frame.ts` (pure `data: {…}` SSE frame →
+`{ limit, used_cost, request_count }` snapshot), `agent-loop-core/concurrency/featherless-meter.ts`
 (subscribe to `/account/concurrency/stream`; expose `limit` / `used` / `nextFrame()`;
 a `gate` that waits until `used < limit`, abort-aware; `/account/concurrency` one-shot
 fallback; reconnect on drop; a 429 from the call re-enters the wait).
@@ -521,7 +521,7 @@ fallback; reconnect on drop; a 429 from the call re-enters the wait).
 → gate never waits); the gate resolves immediately when there's room and parks until
 the next frame shows room when full; honors `request.signal`; survives a dropped
 stream by reconnecting.
-**Tests** (`agent-core/__tests__/featherless-meter.test.ts`, fake event source):
+**Tests** (`agent-loop-core/__tests__/featherless-meter.test.ts`, fake event source):
 parse the sample frame; gate passes when `used < limit`; gate parks then resolves
 when a frame frees room; abort while parked rejects; `null` limit never parks.
 **Status**: Not Started
@@ -543,7 +543,7 @@ cleanly via an `AbortController`; `bun test` + `bun run typecheck` green.
 continuously (stall it and you get disconnected) while the model is slow and
 rate-limited. The fix is a bounded queue between them as an impedance matcher,
 plus a session-keyed dispatcher that owns throttling. See
-[`agent-core/docs/channels.md`](agent-core/docs/channels.md) for the design.
+[`agent-loop-core/docs/channels.md`](agent-loop-core/docs/channels.md) for the design.
 
 **Load-bearing constraint**: `runAgent` does not change. Everything new is a seam
 (`ChannelSource`, multiple impls) plus caller-owned policy (the buffer + the
@@ -568,8 +568,8 @@ dispatcher's coarse semaphore can defer to.
 **Goal**: A pure, host-agnostic bounded FIFO with a pluggable overflow policy —
 the impedance matcher, usable inbound and outbound. `MessageQueue` becomes its
 `capacity: Infinity` specialization so steering/follow-up are unaffected.
-**Files**: `agent-core/primitives/bounded-buffer.ts`,
-`agent-core/primitives/message-queue.ts` (re-based on it), `agent-core/index.ts`.
+**Files**: `agent-loop-core/primitives/bounded-buffer.ts`,
+`agent-loop-core/primitives/message-queue.ts` (re-based on it), `agent-loop-core/index.ts`.
 **Success Criteria**: `drop-oldest`/`drop-newest`/`block`/`coalesce` each behave
 per spec; `block` reports blocked items without dropping them (caller owns
 upstream backpressure); `size`/`dropped`/`highWater` expose the load readings;
@@ -587,8 +587,8 @@ ordering); a per-session `BoundedBuffer` that debounces/coalesces a burst into a
 single `Message[]` prompt; a global concurrency semaphore across all sessions
 (protects the provider rate limit); and supersede-via-`AbortSignal` so a newer
 message can cancel a stale in-flight run instead of queueing behind it.
-**Files**: `agent-core/channels/dispatcher.ts`,
-`agent-core/channels/dispatcher.types.ts`, `agent-core/index.ts`.
+**Files**: `agent-loop-core/channels/dispatcher.ts`,
+`agent-loop-core/channels/dispatcher.types.ts`, `agent-loop-core/index.ts`.
 **Success Criteria**: N messages to one session in a burst → one `runAgent` call
 with the coalesced prompt; two sessions never interleave a session's runs; no more
 than `maxConcurrency` runs in flight at once (excess waits); supersede cancels the
@@ -612,8 +612,8 @@ userId, text }`, maps `thread → sessionId`, and sends replies out by consuming
 `EventSink` (`TextDelta`). Ship an `InMemoryChannelSource` fake so the whole path
 is unit-testable without a real socket; coalesce outbound deltas through a
 `BoundedBuffer` before `send`.
-**Files**: `agent-core/channels/channel-source.types.ts`,
-`agent-core/channels/in-memory-channel-source.ts`, `agent-core/index.ts`.
+**Files**: `agent-loop-core/channels/channel-source.types.ts`,
+`agent-loop-core/channels/in-memory-channel-source.ts`, `agent-loop-core/index.ts`.
 **Success Criteria**: `InMemoryChannelSource` drives the dispatcher end-to-end;
 inbound events become runs keyed by the mapped `sessionId`; `TextDelta`s stream
 back coalesced; liveness concerns never touch the model path.
@@ -686,8 +686,8 @@ message's text (via `contentToText`/`isAssistantMessage`); `resultFrom` override
 The full child `RunResult` rides `ToolResult.details` (never sent to the model).
 
 ## Stage 1: `agentAsTool` factory + tests
-**Files**: `agent-core/tools/agent-as-tool.ts` (factory + `AgentAsToolOptions`),
-`agent-core/__tests__/agent-as-tool.test.ts`, `agent-core/index.ts` (export).
+**Files**: `agent-loop-core/tools/agent-as-tool.ts` (factory + `AgentAsToolOptions`),
+`agent-loop-core/__tests__/agent-as-tool.test.ts`, `agent-loop-core/index.ts` (export).
 **Success Criteria**: returns a `Tool` with the given snake_case `name`/`description`
 and a `{ task }` schema; calling it runs the child with `task` as the prompt and
 returns the child's final assistant text as `content`; isolation by default (no
@@ -701,7 +701,7 @@ override; events forwarded; details carries the result.
 `Omit<RunAgentOptions, "prompt" | "sessionId" | "memory" | "signal">` + the tool's
 extras, mirroring `RunGoalRunBase`/`DispatcherRunBase`. Default `resultFrom` scans
 `newMessages` from the end via `isAssistantMessage`/`contentToText`, falling back to a
-named placeholder. Lives at `agent-core/tools/agent-as-tool.ts` beside `registry.ts`
+named placeholder. Lives at `agent-loop-core/tools/agent-as-tool.ts` beside `registry.ts`
 (both compose over `runAgent` and are exported next to each other). No event-schema
 change — `agentId` attribution stays Stage 3.
 

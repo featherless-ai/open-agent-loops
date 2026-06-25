@@ -1,7 +1,7 @@
 # Skills (bundled instructions + tools, with progressive disclosure)
 
 > Status: the seam (`Skill`, `SkillRegistry`, `skillTool`) is **built and
-> tested** — see [`agent-core/skills/`](../skills/) plus the runnable
+> tested** — see [`agent-loop-core/skills/`](../skills/) plus the runnable
 > [`hello-skill`](../../examples/hello-skill.ts) and
 > [`secret-hello-skill`](../../examples/secret-hello-skill/secret-hello-skill.ts).
 > Credentials for binary skills work **today** via placeholder-swap; the `env`
@@ -304,7 +304,7 @@ await runAgent({
 ## Staging
 
 1. **Skill + SkillRegistry + skillTool** — ✅ **done**. Module in
-   [`agent-core/skills/`](../skills/), exported from `index.ts` beside the
+   [`agent-loop-core/skills/`](../skills/), exported from `index.ts` beside the
    registry exports, covered by
    [`skills.test.ts`](../__tests__/skills.test.ts). Tools always registered.
 2. **Credentials via placeholder-swap** — ✅ **done**, with the existing

@@ -3,7 +3,7 @@
 Per-model thinking flags for the 32 agentic reasoners in [`agentic-models.json`](agentic-models.json).
 Use this to hand-verify each model's dialect against its primary doc.
 
-**Source of truth:** [`agent-core/providers/reasoning-kwargs.ts`](../agent-core/providers/reasoning-kwargs.ts)
+**Source of truth:** [`agent-loop-core/providers/reasoning-kwargs.ts`](../agent-loop-core/providers/reasoning-kwargs.ts)
 (`reasoningProfileFor()`). The JSON snapshot is asserted equal to it entry-by-entry
 (toggle key, default, interleaved, continuity kwarg), so the table below is a faithful
 projection of the source, and the source in turn carries a `verified:` link per rule.

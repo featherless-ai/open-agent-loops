@@ -95,5 +95,5 @@ The Deno sandbox is *why* this example runs model-written code without a permiss
 gate: deny-by-default means the snippet can compute but can't touch your disk,
 network, or environment. If you swap in an **unsandboxed** backend (or a powerful
 cloud one), gate it — route `code_execution` through the permission gate in
-`agent-core/permissions` (see the Tools tutorial, Step 5) so a human signs off
+`agent-loop-core/permissions` (see the Tools tutorial, Step 5) so a human signs off
 before risky code runs.

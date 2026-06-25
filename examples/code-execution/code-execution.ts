@@ -21,9 +21,9 @@ import {
   codeExecutionTool,
   runAgent,
   SessionMemoryStore,
-} from "../../agent-core/index.ts";
-import type { AgentEvent } from "../../agent-core/index.ts";
-import { OpenAICompatibleModel } from "../../agent-core/providers/openai-compatible.ts";
+} from "../../agent-loop-core/index.ts";
+import type { AgentEvent } from "../../agent-loop-core/index.ts";
+import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
 import { denoCodeExecutionBackend } from "../../deno-backends.ts";
 
 // DeepSeek V4 for the demo: it tool-calls cleanly. (GLM emits broken empty-key

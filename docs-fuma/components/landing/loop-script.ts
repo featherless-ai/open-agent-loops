@@ -3,7 +3,7 @@
  * animations (the transit hero, the bring-your-own-front-end panels, and the
  * trace replay all consume it).
  *
- * The event shapes mirror `agent-core/types/events.ts` **by their wire values**
+ * The event shapes mirror `agent-loop-core/types/events.ts` **by their wire values**
  * (`"text_delta"`, `"tool_start"`, …) so the demo reads like a real trace — but
  * the types are declared locally so the docs site stays fully decoupled from the
  * core build (no dep link, no `dist/` import). If the real `AgentEvent` union
@@ -16,7 +16,7 @@
 /** A station on the transit map — the seam a given event lights up. */
 export type Station = "memory" | "model" | "tool" | "stop";
 
-/** Faithful subset of agent-core's AgentEvent, by wire value. */
+/** Faithful subset of agent-loop-core's AgentEvent, by wire value. */
 export type DemoEvent =
   | { type: "agent_start"; sessionId: string }
   | { type: "turn_start"; step: number }
