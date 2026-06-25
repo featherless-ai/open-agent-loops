@@ -83,11 +83,32 @@ writing them.
 | `message` | a committed message (the runtime usually owns the thread) |
 | `agent_start` / `turn_start` / `agent_end` | run/turn lifecycle → `isRunning`, step indicators |
 
-## Styling
+## Styling — headless by default
 
-assistant-ui ships styles you must import (path varies by version — check the
-styling page if `<Thread />` renders unstyled). The example imports
-`@assistant-ui/react/styles/index.css`; confirm that path for your version.
+`@assistant-ui/react@0.14` is **headless**: the primitives (`ThreadPrimitive` /
+`MessagePrimitive` / `ComposerPrimitive`) ship **no CSS**, and there is **no styled
+`<Thread/>`** in this package. (Docs that `import "@assistant-ui/react/styles/index.css"`
+or render `<Thread/>` from the core predate the headless split.) The bundled example
+composes the primitives and styles them with a plain CSS file — guaranteed to match
+the installed runtime, zero extra deps.
+
+### Opt-in: the polished "assistant-ui.com" look
+Two routes, both extra setup — so keep them **out of a shipped library/example** and
+offer them as an opt-in:
+
+1. **shadcn registry (current, recommended).** Add Tailwind to the app, then pull
+   assistant-ui's styled component source from its registry —
+   `npx shadcn@latest add "https://r.assistant-ui.com/thread"` — plus
+   `@assistant-ui/react-markdown` for rendered markdown. This is what the homepage
+   uses: Tailwind-based source lands in your repo and you render `<Thread/>`. Match
+   the component version to your core.
+2. **Prebuilt `@assistant-ui/react-ui`.** One styled package + a CSS import, but it
+   versions on a **separate, lower line** (0.2.x) than the core (0.14.x) and can lag
+   the current primitives — verify it actually resolves a `Thread` against your
+   installed core before relying on it (as of June 2026, 0.2.1 did **not** cleanly
+   pair with core 0.14). It also pulls Tailwind + radix + lucide + markdown.
+
+Ship headless; document the styled layer as the opt-in above.
 
 ## Version pin
 
