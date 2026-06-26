@@ -32,8 +32,9 @@ swapped without touching the loop.
 
 ## Quickstart
 
-Prerequisites: [Node 20.6+](https://nodejs.org) (for `--env-file`) and an
-OpenAI-compatible endpoint (Featherless, vLLM, Together, Groq, …).
+Prerequisites: a JavaScript runtime ([Node 20.6+](https://nodejs.org),
+[Bun](https://bun.sh), or [Deno](https://deno.com)) and an OpenAI-compatible
+endpoint (Featherless, vLLM, Together, Groq, …).
 
 Install the package, its peer (`openai`), and `zod`. `tsx` runs the `.ts` files
 below without a build step:
@@ -56,6 +57,20 @@ LLM_API_KEY=sk-...            # API key for the endpoint
 LLM_MODEL=zai-org/GLM-5.2     # model id to call
 # LLM_BASE_URL defaults to https://api.featherless.ai/v1 — point it at any OpenAI-compatible endpoint
 ```
+
+**Prefer Bun or Deno?** The example code is the same — only install and run
+differ from the `npx tsx ...` lines below:
+
+- **Bun** — native TypeScript, auto-loads `.env`:
+  ```sh
+  bun install @open-agent-loops/agent-loop-core openai zod
+  bun run single-turn-loop.ts
+  ```
+- **Deno** — sandboxed, so grant network + env access. Resolve the bare imports
+  via a `package.json` (`deno install`) or prefix them with `npm:`:
+  ```sh
+  deno run --env-file --allow-net --allow-env single-turn-loop.ts
+  ```
 
 ### Single-turn loop — one prompt, one answer
 
