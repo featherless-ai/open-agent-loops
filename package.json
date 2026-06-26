@@ -1,16 +1,16 @@
 {
   "name": "@open-agent-loops/agent-loop-core",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A minimal, provider-agnostic agentic loop. Plug-and-play seams behind interfaces.",
   "license": "MIT",
   "author": "Michael Chung <michael.chung@databites.ca>",
-  "homepage": "https://github.com/ArEnSc/advance-agent#readme",
+  "homepage": "https://github.com/featherless/agentloops#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArEnSc/advance-agent.git"
+    "url": "git+https://github.com/featherless/agentloops.git"
   },
   "bugs": {
-    "url": "https://github.com/ArEnSc/advance-agent/issues"
+    "url": "https://github.com/featherless/agentloops/issues"
   },
   "keywords": [
     "agent",

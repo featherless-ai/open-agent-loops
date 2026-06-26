@@ -1,4 +1,38 @@
-# Kitchen-sink assistant — Deno + Next.js + assistant-ui
+<a href="../../README.md">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/banner-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/banner.svg" />
+    <img src="./assets/banner.svg" alt="Open Agent Loops — Kitchen-Sink Assistant example on assistant-ui" width="100%" />
+  </picture>
+</a>
+
+<p align="center">
+  <a href="../../README.md">Open Agent Loops</a> ·
+  <a href="#architecture--one-app-one-runtime">Architecture</a> ·
+  <a href="#batteries-on-the-menu">Batteries</a> ·
+  <a href="#run-it">Run it</a> ·
+  <a href="https://www.assistant-ui.com/">assistant-ui</a> ·
+  <a href="https://deno.com/">Deno</a> ·
+  <a href="https://discord.gg/7gybCMPjVA">Discord</a>
+</p>
+
+<p align="center">
+  <!-- npm badges — enable once @open-agent-loops/agent-loop-core is published to npm:
+  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm version" src="https://img.shields.io/npm/v/@open-agent-loops/agent-loop-core?logo=npm&color=facc15" /></a>
+  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm downloads" src="https://img.shields.io/npm/dw/@open-agent-loops/agent-loop-core?logo=npm" /></a>
+  -->
+  <img alt="Deno" src="https://img.shields.io/badge/Deno-2.6-000?logo=deno&logoColor=fff" />
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000?logo=next.js&logoColor=fff" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-087ea4?logo=react&logoColor=fff" />
+  <img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-4-0b1120?logo=tailwindcss&logoColor=38bdf8" />
+  <img alt="assistant-ui" src="https://img.shields.io/badge/assistant--ui-0.14-1a1a1a" />
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-facc15" />
+  <a href="https://discord.gg/7gybCMPjVA"><img alt="Discord — Featherless AI" src="https://img.shields.io/badge/Discord-Featherless%20AI-5865F2?logo=discord&logoColor=fff" /></a>
+</p>
+
+<p align="center">
+  <b>From 0 to a prototype agent in a few lines of code — every <code>@open-agent-loops/core</code> battery, on an assistant-ui chat UI, run on Deno. 🧰⚡</b>
+</p>
 
 One agent, wired with every `@open-agent-loops/core` battery that composes
 cleanly, fronted by an [assistant-ui](https://www.assistant-ui.com/) chat UI in a
@@ -129,3 +163,8 @@ never bleeds across threads.
 - **Permissions in a web UI.** v1 auto-approves "ask" calls and logs the decision.
   The real human-in-the-loop flow surfaces the pending call as a `requires-action`
   tool UI and round-trips an `add-tool-result` command — a good next exercise.
+
+## License
+
+MIT — see [`LICENSE`](../../LICENSE). Part of the
+[Open Agent Loops](../../README.md) project.
