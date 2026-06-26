@@ -1,6 +1,9 @@
 import { ImageResponse } from "next/og";
 
 // Social-share card. Next.js serves this for og:image and twitter:image.
+// Rendered once at build time (no per-request data) so it works under
+// `output: export` — without this the static export aborts on this route.
+export const dynamic = "force-static";
 export const alt = "Open Agent Loops — a minimal, provider-agnostic agent loop";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

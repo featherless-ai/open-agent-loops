@@ -1,0 +1,80 @@
+name: Deploy docs to GitHub Pages
+
+# Builds the Fumadocs site (docs-fuma) as a static export and publishes it to
+# GitHub Pages at https://featherless-ai.github.io/open-agent-loops/.
+#
+# One-time setup: repo Settings → Pages → "Build and deployment" → Source =
+# "GitHub Actions". Without that, the deploy job has nowhere to publish.
+
+on:
+  push:
+    branches: [main]
+    # The site embeds generated content: the API reference is built from the
+    # library source, and code snippets are pulled from the examples. Rebuild
+    # when any of those change — not just the docs app itself.
+    paths:
+      - "docs-fuma/**"
+      - "agent-loop-core/**"
+      - "examples/**"
+      - ".github/workflows/deploy-docs.yml"
+  workflow_dispatch: {}
+
+# Least-privilege token + the OIDC claim deploy-pages needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live deployment at a time; let an in-flight deploy finish rather than
+# cancelling it (cancelling mid-publish can leave Pages in a bad state).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Project Pages serve under /<repo>; these two feed next.config.mjs
+      # (basePath/asset prefix) and the OG-image metadataBase respectively.
+      NEXT_PUBLIC_BASE_PATH: /open-agent-loops
+      NEXT_PUBLIC_SITE_URL: https://featherless-ai.github.io/open-agent-loops
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      # Root deps are needed too: TypeDoc reads ../agent-loop-core/index.ts with
+      # the root tsconfig, so it must resolve the library's own imports. Not
+      # --frozen-lockfile: the root bun.lock isn't kept in lockstep with
+      # package.json, and these deps are only used to type-resolve the API docs.
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Install docs dependencies
+        working-directory: docs-fuma
+        run: bun install --frozen-lockfile
+
+      - uses: actions/configure-pages@v5
+
+      # `bun run build` runs the prebuild chain (API reference via TypeDoc +
+      # example snippets) and then `next build`, which emits docs-fuma/out.
+      - name: Build static site
+        working-directory: docs-fuma
+        run: bun run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-fuma/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
