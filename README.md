@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
-  <a href="https://featherless-ai.github.io/open-agent-loops/docs/">Documentation</a> ·
+  <a href="https://openagentloops.featherless.ai/docs/">Documentation</a> ·
   <a href="./examples">Examples</a> ·
   <a href="./examples/kitchen-sink-web">Kitchen-sink demo</a> ·
   <a href="https://discord.gg/7gybCMPjVA">Discord</a>
@@ -237,7 +237,7 @@ More examples (steering, console formatting) live in [`examples/`](./examples).
 ## Documentation
 
 📖 **Read the docs online:**
-<https://featherless-ai.github.io/open-agent-loops/docs/>
+<https://openagentloops.featherless.ai/docs/>
 
 The full documentation is a [fumadocs](https://fumadocs.dev) site under
 [`docs-fuma/`](./docs-fuma), published to GitHub Pages on every push to `main`

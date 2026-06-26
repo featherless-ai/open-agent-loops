@@ -9,6 +9,7 @@
     "prebuild": "bun run sidebar && bun run snippets",
     "build": "next build",
     "start": "next start",
+    "deploy": "NEXT_PUBLIC_SITE_URL=https://openagentloops.featherless.ai bun run build && bunx wrangler@3 deploy",
     "sidebar": "node scripts/gen-api-meta.mjs",
     "snippets": "node scripts/gen-snippets.mjs",
     "postinstall": "fumadocs-mdx"

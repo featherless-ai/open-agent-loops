@@ -2,11 +2,11 @@ import { createMDX } from "fumadocs-mdx/next";
 
 const withMDX = createMDX();
 
-// GitHub Pages serves this project repo under a sub-path
-// (https://featherless-ai.github.io/open-agent-loops/), so the build needs a
-// matching basePath. It's env-driven so local `bun run dev` serves at `/` with
-// no prefix, while CI sets NEXT_PUBLIC_BASE_PATH=/open-agent-loops. The same var
-// is read client-side in app/layout.tsx to prefix the static search fetch.
+// The site is served from a custom domain root (openagentloops.featherless.ai),
+// so there's no basePath: NEXT_PUBLIC_BASE_PATH is unset for both local
+// `bun run dev` and CI, giving `/`. Set it to `/<repo>` only if you fall back to
+// project Pages (featherless-ai.github.io/<repo>). The same var is read
+// client-side in app/layout.tsx to prefix the static search fetch.
 // Next requires basePath to be a non-empty path or absent — never "".
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || undefined;
 
