@@ -1,0 +1,24 @@
+{
+  // Static-assets-only Worker: serves the Next.js static export in ./out from
+  // Cloudflare's edge (no `main` script — static hits never invoke a Worker).
+  // Deploy with the account's CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in
+  // the env (the token needs Workers Scripts: Edit, and Workers Routes: Edit to
+  // attach the custom domain). Build first: `bun run build` emits ./out.
+  "name": "open-agent-loops-docs",
+  "compatibility_date": "2025-05-01",
+  "assets": {
+    "directory": "./out",
+    // Next export uses trailingSlash, so pages live at <route>/index.html.
+    // "auto-trailing-slash" (the default) resolves both /docs and /docs/.
+    "html_handling": "auto-trailing-slash",
+    // Serve the exported 404.html on a miss instead of an empty body.
+    "not_found_handling": "404-page"
+  },
+  // Keep the *.workers.dev URL for previewing before/independent of the domain.
+  "workers_dev": true,
+  // Workers Custom Domain — Cloudflare provisions the proxied DNS record + edge
+  // cert in the featherless.ai zone on deploy (no DNS:Edit token needed).
+  "routes": [
+    { "pattern": "openagentloops.featherless.ai", "custom_domain": true }
+  ]
+}
