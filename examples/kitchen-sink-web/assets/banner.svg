@@ -24,5 +24,5 @@
   <text class="tag"   x="600" y="248" text-anchor="middle" fill="#a1a1aa">From 0 to a prototype agent in a few lines of code.</text>
 
   <line x1="360" y1="288" x2="840" y2="288" stroke="#27272a" stroke-width="1.5" />
-  <text class="stack" x="600" y="322" text-anchor="middle" fill="#d4d4d8">Deno<tspan fill="#facc15">  ·  </tspan>Next.js<tspan fill="#facc15">  ·  </tspan>assistant-ui<tspan fill="#facc15">  ·  </tspan>@open-agent-loops/core</text>
+  <text class="stack" x="600" y="322" text-anchor="middle" fill="#d4d4d8">Deno<tspan fill="#facc15">  ·  </tspan>Bun<tspan fill="#facc15">  ·  </tspan>Node<tspan fill="#facc15">  ·  </tspan>Browser</text>
 </svg>
