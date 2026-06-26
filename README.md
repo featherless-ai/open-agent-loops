@@ -1,9 +1,5 @@
 <a href="https://featherless.ai">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/banner-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/banner.svg" />
-    <img src="./assets/banner.svg" alt="Open Agent Loops — from 0 to a prototype agent in a few lines of code" width="100%" />
-  </picture>
+  <img src="./assets/banner.svg" alt="Open Agent Loops — from 0 to a prototype agent in a few lines of code" width="100%" />
 </a>
 
 <p align="center">

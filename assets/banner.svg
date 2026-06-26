@@ -1,19 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" fill="none" role="img" aria-label="Open Agent Loops">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" fill="none" role="img" aria-label="Open Agent Loops — from 0 to a prototype agent in a few lines of code">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16161a" />
+      <stop offset="1" stop-color="#0a0a0c" />
+    </linearGradient>
+  </defs>
   <style>
     .title { font: 700 56px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
     .tag   { font: 400 25px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
     .stack { font: 600 19px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .04em; }
   </style>
 
+  <!-- self-contained dark panel so text reads on any page background -->
+  <rect x="1" y="1" width="1198" height="358" rx="22" fill="url(#bg)" stroke="#26262b" stroke-width="1.5" />
+
   <!-- Loop mark (Open Agent Loops): rounded-square loop + brand-yellow station dot -->
   <g transform="translate(552 44) scale(4)">
-    <rect x="4" y="4" width="16" height="16" rx="6" fill="none" stroke="#18181b" stroke-width="2.4"/>
-    <circle cx="12" cy="4" r="2.7" fill="#facc15"/>
+    <rect x="4" y="4" width="16" height="16" rx="6" fill="none" stroke="#fafafa" stroke-width="2.4" />
+    <circle cx="12" cy="4" r="2.7" fill="#facc15" />
   </g>
 
-  <text class="title" x="600" y="200" text-anchor="middle" fill="#18181b">Open Agent Loops</text>
-  <text class="tag"   x="600" y="248" text-anchor="middle" fill="#71717a">From 0 to a prototype agent in a few lines of code.</text>
+  <text class="title" x="600" y="200" text-anchor="middle" fill="#fafafa">Open Agent Loops</text>
+  <text class="tag"   x="600" y="248" text-anchor="middle" fill="#a1a1aa">From 0 to a prototype agent in a few lines of code.</text>
 
-  <line x1="360" y1="288" x2="840" y2="288" stroke="#e4e4e7" stroke-width="1.5"/>
-  <text class="stack" x="600" y="322" text-anchor="middle" fill="#52525b">Deno<tspan fill="#facc15">  ·  </tspan>Next.js<tspan fill="#facc15">  ·  </tspan>assistant-ui<tspan fill="#facc15">  ·  </tspan>@open-agent-loops/core</text>
+  <line x1="360" y1="288" x2="840" y2="288" stroke="#27272a" stroke-width="1.5" />
+  <text class="stack" x="600" y="322" text-anchor="middle" fill="#d4d4d8">Deno<tspan fill="#facc15">  ·  </tspan>Next.js<tspan fill="#facc15">  ·  </tspan>assistant-ui<tspan fill="#facc15">  ·  </tspan>@open-agent-loops/core</text>
 </svg>
