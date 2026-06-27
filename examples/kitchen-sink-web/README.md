@@ -9,7 +9,7 @@
   <a href="#run-it">Run it</a> ·
   <a href="https://www.assistant-ui.com/">assistant-ui</a> ·
   <a href="https://deno.com/">Deno</a> ·
-  <a href="https://discord.gg/7gybCMPjVA">Discord</a>
+  <a href="https://discord.gg/NF77tmxcyR">Discord</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
   <img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-4-0b1120?logo=tailwindcss&logoColor=38bdf8" />
   <img alt="assistant-ui" src="https://img.shields.io/badge/assistant--ui-0.14-1a1a1a" />
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-facc15" />
-  <a href="https://discord.gg/7gybCMPjVA"><img alt="Discord — Featherless AI" src="https://img.shields.io/badge/Discord-Featherless%20AI-5865F2?logo=discord&logoColor=fff" /></a>
+  <a href="https://discord.gg/NF77tmxcyR"><img alt="Discord — Featherless AI" src="https://img.shields.io/badge/Discord-Featherless%20AI-5865F2?logo=discord&logoColor=fff" /></a>
 </p>
 
 <p align="center">

@@ -7,7 +7,7 @@
   <a href="https://openagentloops.featherless.ai/docs/">Documentation</a> ·
   <a href="./examples">Examples</a> ·
   <a href="./examples/kitchen-sink-web">Kitchen-sink demo</a> ·
-  <a href="https://discord.gg/7gybCMPjVA">Discord</a>
+  <a href="https://discord.gg/NF77tmxcyR">Discord</a>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=fff" />
   <img alt="OpenAI-compatible" src="https://img.shields.io/badge/API-OpenAI--compatible-412991?logo=openai&logoColor=fff" />
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-facc15" />
-  <a href="https://discord.gg/7gybCMPjVA"><img alt="Discord — Featherless AI" src="https://img.shields.io/badge/Discord-Featherless%20AI-5865F2?logo=discord&logoColor=fff" /></a>
+  <a href="https://discord.gg/NF77tmxcyR"><img alt="Discord — Featherless AI" src="https://img.shields.io/badge/Discord-Featherless%20AI-5865F2?logo=discord&logoColor=fff" /></a>
 </p>
 
 <p align="center">
