@@ -39,6 +39,19 @@ done
 
 say() { printf '\033[1;36m▶ %s\033[0m\n' "$*"; }
 
+# --- credentials -------------------------------------------------------------
+# The featherless.ai zone (needed to bind the custom domain) lives in the
+# Recursal PROD account; its scoped token + account id live in a gitignored
+# deploy-env file OUTSIDE this repo. If no Cloudflare token is already in the
+# env, source that file (override its path with DOCS_DEPLOY_ENV).
+if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  DOCS_DEPLOY_ENV="${DOCS_DEPLOY_ENV:-$ROOT_DIR/../guarded-api-cloudflare/worker/.deploy.env}"
+  if [[ -f "$DOCS_DEPLOY_ENV" ]]; then
+    say "Sourcing Cloudflare creds from $DOCS_DEPLOY_ENV"
+    set -a; . "$DOCS_DEPLOY_ENV"; set +a
+  fi
+fi
+
 cd "$DOCS_DIR"
 
 # --- confirm (production push) ----------------------------------------------

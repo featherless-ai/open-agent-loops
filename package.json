@@ -49,6 +49,7 @@
     "build": "tsup",
     "prepublishOnly": "bun run build",
     "release": "bash scripts/release.sh",
+    "ship": "bash scripts/ship.sh",
     "demo": "bun run examples/running-product.ts",
     "test": "bun test agent-loop-core",
     "test:system": "bun test system-tests",
