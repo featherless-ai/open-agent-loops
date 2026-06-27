@@ -16,8 +16,8 @@ and present each one however you like — stdout here, but swap it for DOM nodes
 the browser, React state, a TUI, or a log sink without touching the loop:
 
 ```ts
-import { runAgent, AgentEventType } from "@open-agent-loops/agent-loop-core";
-import type { AgentEvent } from "@open-agent-loops/agent-loop-core";
+import { runAgent, AgentEventType } from "@open-agent-loops/core";
+import type { AgentEvent } from "@open-agent-loops/core";
 
 // A renderer is a function over the event stream — pass it as `onEvent`.
 function render(e: AgentEvent) {
@@ -45,7 +45,7 @@ Don't want to hand-write a renderer? Point a `Tracer` at the same events for a
 timestamped timeline and a per-turn trajectory view:
 
 ```ts
-import { runAgent, Tracer } from "@open-agent-loops/agent-loop-core";
+import { runAgent, Tracer } from "@open-agent-loops/core";
 
 const tracer = new Tracer();
 await runAgent({ model, memory, sessionId, prompt, tools, onEvent: tracer.sink });

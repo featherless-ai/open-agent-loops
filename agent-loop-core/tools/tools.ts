@@ -31,7 +31,7 @@ import type { Tool } from "./tools.types";
  * @example
  * ```ts
  * import { z } from "zod";
- * import { defineTool } from "@open-agent-loops/agent-loop-core/tools/tools";
+ * import { defineTool } from "@open-agent-loops/core/tools/tools";
  *
  * const addTool = defineTool({
  *   name: "add",
@@ -60,7 +60,7 @@ export function defineTool<S extends z.ZodType>(tool: Tool<S>): Tool<S> {
  * @see {@link defineTool}
  * @example
  * ```ts
- * import { toToolSpec } from "@open-agent-loops/agent-loop-core/tools/tools";
+ * import { toToolSpec } from "@open-agent-loops/core/tools/tools";
  *
  * const spec = toToolSpec(addTool);
  * // spec.parameters is a JSON Schema object describing { a, b }

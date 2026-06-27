@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <!-- npm badges — enable once @open-agent-loops/agent-loop-core is published to npm:
-  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm version" src="https://img.shields.io/npm/v/@open-agent-loops/agent-loop-core?logo=npm&color=facc15" /></a>
-  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm downloads" src="https://img.shields.io/npm/dw/@open-agent-loops/agent-loop-core?logo=npm" /></a>
+  <!-- npm badges — enable once @open-agent-loops/core is published to npm:
+  <a href="https://www.npmjs.com/package/@open-agent-loops/core"><img alt="npm version" src="https://img.shields.io/npm/v/@open-agent-loops/core?logo=npm&color=facc15" /></a>
+  <a href="https://www.npmjs.com/package/@open-agent-loops/core"><img alt="npm downloads" src="https://img.shields.io/npm/dw/@open-agent-loops/core?logo=npm" /></a>
   -->
   <img alt="Built with Bun" src="https://img.shields.io/badge/Built%20with-Bun-000?logo=bun&logoColor=fff" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=fff" />
@@ -39,12 +39,12 @@ Install the package, its peer (`openai`), and `zod`. `tsx` runs the `.ts` files
 below without a build step:
 
 ```sh
-npm install @open-agent-loops/agent-loop-core openai zod
+npm install @open-agent-loops/core openai zod
 npm install -D tsx
 ```
 
 > [!NOTE]
-> `@open-agent-loops/agent-loop-core` isn't published to npm yet. Until it is,
+> `@open-agent-loops/core` isn't published to npm yet. Until it is,
 > clone this repo and run the examples with [Bun](https://bun.sh)
 > (`bun run examples/<name>/<name>.ts`, which auto-loads `.env`) — the source
 > below is identical apart from the import paths.
@@ -63,9 +63,9 @@ A local `weather` tool, a typed `render` over every `AgentEvent`, and the prompt
 read from the terminal. Save as `single-turn-loop.ts`:
 
 ```ts
-import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "@open-agent-loops/agent-loop-core";
-import type { AgentEvent } from "@open-agent-loops/agent-loop-core";
-import { OpenAICompatibleModel } from "@open-agent-loops/agent-loop-core/providers/openai";
+import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "@open-agent-loops/core";
+import type { AgentEvent } from "@open-agent-loops/core";
+import { OpenAICompatibleModel } from "@open-agent-loops/core/providers/openai";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";
@@ -149,9 +149,9 @@ The same `runAgent` call, wrapped in a read-input loop that reuses one `memory`
 + `sessionId`, so every turn sees the ones before it. Save as `multi-turn-chat.ts`:
 
 ```ts
-import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "@open-agent-loops/agent-loop-core";
-import type { AgentEvent } from "@open-agent-loops/agent-loop-core";
-import { OpenAICompatibleModel } from "@open-agent-loops/agent-loop-core/providers/openai";
+import { AgentEventType, defineTool, runAgent, SessionMemoryStore } from "@open-agent-loops/core";
+import type { AgentEvent } from "@open-agent-loops/core";
+import { OpenAICompatibleModel } from "@open-agent-loops/core/providers/openai";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";

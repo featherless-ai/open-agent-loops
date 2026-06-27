@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <!-- npm badges — enable once @open-agent-loops/agent-loop-core is published to npm:
-  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm version" src="https://img.shields.io/npm/v/@open-agent-loops/agent-loop-core?logo=npm&color=facc15" /></a>
-  <a href="https://www.npmjs.com/package/@open-agent-loops/agent-loop-core"><img alt="npm downloads" src="https://img.shields.io/npm/dw/@open-agent-loops/agent-loop-core?logo=npm" /></a>
+  <!-- npm badges — enable once @open-agent-loops/core is published to npm:
+  <a href="https://www.npmjs.com/package/@open-agent-loops/core"><img alt="npm version" src="https://img.shields.io/npm/v/@open-agent-loops/core?logo=npm&color=facc15" /></a>
+  <a href="https://www.npmjs.com/package/@open-agent-loops/core"><img alt="npm downloads" src="https://img.shields.io/npm/dw/@open-agent-loops/core?logo=npm" /></a>
   -->
   <img alt="Deno" src="https://img.shields.io/badge/Deno-2.6-000?logo=deno&logoColor=fff" />
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000?logo=next.js&logoColor=fff" />

@@ -206,8 +206,8 @@ const SNIPPETS = [
 
 // Example dev imports (relative, to TS source) → published package specifiers.
 const IMPORT_REWRITES = [
-  [/(["'])(?:\.\.\/)+agent-loop-core\/providers\/openai-compatible\.ts\1/g, '"@open-agent-loops/agent-loop-core/providers/openai"'],
-  [/(["'])(?:\.\.\/)+agent-loop-core\/index\.ts\1/g, '"@open-agent-loops/agent-loop-core"'],
+  [/(["'])(?:\.\.\/)+agent-loop-core\/providers\/openai-compatible\.ts\1/g, '"@open-agent-loops/core/providers/openai"'],
+  [/(["'])(?:\.\.\/)+agent-loop-core\/index\.ts\1/g, '"@open-agent-loops/core"'],
   // bunShellBackend is host glue (you bring your own ShellBackend), not a package
   // export — present it as a local module the reader provides.
   [/(["'])(?:\.\.\/)+bun-backends\.ts\1/g, '"./bun-backends"'],
