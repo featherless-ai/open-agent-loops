@@ -55,7 +55,8 @@
     "number-test": "bun run system-tests/reasoning-number-test.ts",
     "typecheck": "tsc --noEmit",
     "docs:site": "cd docs-fuma && bun run dev",
-    "docs:site:build": "cd docs-fuma && bun run build"
+    "docs:site:build": "cd docs-fuma && bun run build",
+    "docs:deploy": "bash scripts/deploy-docs.sh"
   },
   "dependencies": {
     "zod": "^4"
