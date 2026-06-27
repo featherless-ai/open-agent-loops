@@ -1,0 +1,68 @@
+---
+title: Releasing
+description: Publish the npm package and deploy the docs — one command, or each half on its own.
+---
+
+This repo ships **two artifacts**: the npm package
+[`@open-agent-loops/core`](https://www.npmjs.com/package/@open-agent-loops/core)
+and this documentation site. Three scripts cover them, and you rarely need more
+than the first.
+
+## Ship both
+
+```sh
+bun run ship              # patch bump → npm publish → docs deploy
+bun run ship minor --yes  # choose the bump, skip the confirmation
+```
+
+`ship` runs the npm release and then — only if it succeeds — the docs deploy,
+behind a single confirmation. Flags:
+
+- `patch` · `minor` · `major` — the version bump (default `patch`)
+- `--yes` — skip the prompt
+- `--npm-only` — publish the package, skip the docs
+- `--docs-only` — deploy the docs, skip the publish
+
+## Each half on its own
+
+```sh
+bun run release [patch|minor|major]   # npm only:  typecheck + tests → bump → publish → push tag
+bun run docs:deploy                   # docs only: build → Cloudflare deploy
+```
+
+`release` refuses to run on a dirty tree or off `main`, runs the type check and
+unit tests, then bumps the version, publishes with `--access public`, and pushes
+the commit + tag. `docs:deploy` rebuilds the static site — regenerating the
+TypeDoc API reference and the example snippets so the docs always match the
+source — and deploys it to the edge. Add `--dry-run` to either to validate
+without publishing or uploading.
+
+## Credentials
+
+Both halves run unattended when a gitignored creds file is present. Copy the
+template and fill it in (it's already in `.gitignore` — never commit real
+tokens):
+
+```sh
+cp scripts/.deploy.env.example scripts/.deploy.env
+```
+
+| Variable | What it is |
+| --- | --- |
+| `NPM_TOKEN` | An **Automation** npm token (npmjs.com → *Access Tokens → Classic → Automation*). The Automation type bypasses the 2FA-on-publish requirement — a "Publish" token does **not**, and the publish will fail. |
+| `DOCS_DEPLOY_ENV` | Path to a file defining `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` for the account that owns the docs domain's zone. |
+
+Anything already exported in your shell wins, so CI can inject these as secrets
+instead of a file.
+
+<Callout type="warn">
+The docs deploy is **manual** — merging to `main` does **not** refresh the live
+site. Run `bun run docs:deploy` (or `bun run ship`) to publish doc changes.
+</Callout>
+
+<Callout type="info">
+The Cloudflare **custom domain** must be bound from the account that owns its
+DNS zone. If a deploy fails with `Can't infer zone from route [code 10082]`,
+your token/account is for the wrong account — point `CLOUDFLARE_ACCOUNT_ID` at
+the one holding the zone.
+</Callout>
