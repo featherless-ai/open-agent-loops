@@ -11,7 +11,7 @@ import { SeamTour } from "@/components/landing/seam-tour";
 import { WorksWith } from "@/components/landing/works-with";
 import { RunsAnywhere } from "@/components/landing/runs-anywhere";
 
-const GITHUB = "https://github.com/ArEnSc/advance-agent";
+const GITHUB = "https://github.com/featherless-ai/open-agent-loops";
 const NPM = "https://www.npmjs.com/package/@open-agent-loops/core";
 
 export const metadata: Metadata = {
