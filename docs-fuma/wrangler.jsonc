@@ -5,6 +5,11 @@
   // the env (the token needs Workers Scripts: Edit, and Workers Routes: Edit to
   // attach the custom domain). Build first: `bun run build` emits ./out.
   "name": "open-agent-loops-docs",
+  // Pinned to the Recursal PROD account — the only one that holds the
+  // `featherless.ai` zone, so the custom-domain bind resolves. Without this,
+  // a multi-account login can't infer the zone and deploy fails (code 10082).
+  // The deploy token (CLOUDFLARE_API_TOKEN) must be for this same account.
+  "account_id": "11a1edfd3dc0624feacbfa1db3a6760a",
   "compatibility_date": "2025-05-01",
   "assets": {
     "directory": "./out",
