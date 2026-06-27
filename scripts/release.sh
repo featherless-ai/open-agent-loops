@@ -54,6 +54,18 @@ fail() { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 PKG_NAME="$(node -p "require('./package.json').name")"
 PKG_VERSION="$(node -p "require('./package.json').version")"
 
+# --- non-interactive auth (CI / ship.sh) -------------------------------------
+# If an automation token is provided, authenticate via a throwaway userconfig so
+# both `npm whoami` and `npm publish` read it — and an *automation* token
+# bypasses the 2FA-on-publish requirement (a "Publish" token does not).
+if [[ -n "${NPM_TOKEN:-}" ]]; then
+  _RELEASE_NPMRC="$(mktemp)"
+  printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$_RELEASE_NPMRC"
+  export NPM_CONFIG_USERCONFIG="$_RELEASE_NPMRC"
+  trap 'rm -f "$_RELEASE_NPMRC"' EXIT
+  say "Using NPM_TOKEN for non-interactive publish"
+fi
+
 # --- preflight ---------------------------------------------------------------
 say "Preflight checks for $PKG_NAME@$PKG_VERSION"
 
