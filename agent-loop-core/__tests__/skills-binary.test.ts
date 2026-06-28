@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { shellTool } from "../tools/builtin/shell";
 import { withCredentials } from "../credentials/with-credentials";
 import { InMemoryCredentialStore } from "../credentials/in-memory-credential-store";
-import { bunShellBackend } from "../../bun-backends";
+import { bunShellBackend } from "../../backends/bun-backends";
 
 // Run the real `secret-hello` binary that ships with the examples.
 const HERE = dirname(fileURLToPath(import.meta.url));

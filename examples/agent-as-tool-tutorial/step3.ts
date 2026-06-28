@@ -21,7 +21,7 @@ import {
 } from "../../agent-loop-core/index.ts";
 import type { AgentEvent } from "../../agent-loop-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
-import { bunShellBackend } from "../../bun-backends.ts"; // [!code highlight]
+import { bunShellBackend } from "../../backends/bun-backends.ts"; // [!code highlight]
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { dirname } from "node:path"; // [!code highlight:2]

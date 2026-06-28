@@ -18,7 +18,7 @@ import {
   shellTool,
 } from "../agent-loop-core/index.ts";
 import { OpenAICompatibleModel } from "../agent-loop-core/providers/openai-compatible.ts";
-import { bunSearchBackend, bunShellBackend } from "../bun-backends.ts";
+import { bunSearchBackend, bunShellBackend } from "../backends/bun-backends.ts";
 import { ANSI, color } from "./console-format.ts";
 
 const FACTOR_COUNT = 12;

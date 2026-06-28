@@ -1,6 +1,6 @@
 /**
  * Host backends for the built-in `shell` + `search` tools, implemented against
- * Node's `node:child_process`. Unlike `bun-backends.ts` (Bun-only) these run on
+ * Node's `node:child_process`. Unlike `backends/bun-backends.ts` (Bun-only) these run on
  * **both** runtimes the kitchen-sink targets: Node (`next dev`) and Deno (`deno
  * task dev`, via Deno's `node:` compatibility). The core owns each
  * tool's model-facing contract but refuses to ship the dangerous part — actually

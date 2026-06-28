@@ -21,7 +21,7 @@ import {
 } from "../../agent-loop-core/index.ts";
 import type { AgentEvent } from "../../agent-loop-core/index.ts";
 import { OpenAICompatibleModel } from "../../agent-loop-core/providers/openai-compatible.ts";
-import { denoCodeExecutionBackend } from "../../deno-backends.ts";
+import { denoCodeExecutionBackend } from "../../backends/deno-backends.ts";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 

@@ -111,7 +111,7 @@ export interface CodeExecutionRequest {
  * @remarks
  * The richer sibling of {@link ShellBackend}: instead of one shell command it
  * runs a snippet in a named language, but the danger and the boundary are the
- * same. Wire it to e.g. a Deno permission sandbox (`deno-backends.ts`), a
+ * same. Wire it to e.g. a Deno permission sandbox (`backends/deno-backends.ts`), a
  * container, or a hosted execution service.
  *
  * SECURITY: this runs arbitrary, model-written code. Unlike {@link ShellBackend},

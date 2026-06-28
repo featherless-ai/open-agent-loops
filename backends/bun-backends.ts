@@ -12,14 +12,14 @@
  * the permission gate in `agent-loop-core/permissions`.
  */
 
-import type { ToolContext } from "./agent-loop-core/tools/tools.types.ts";
+import type { ToolContext } from "../agent-loop-core/tools/tools.types.ts";
 import type {
   SearchBackend,
   SearchMatch,
   SearchQuery,
   ShellBackend,
   ShellResult,
-} from "./agent-loop-core/tools/builtin/builtin.types.ts";
+} from "../agent-loop-core/tools/builtin/builtin.types.ts";
 
 /** Options shared by both backends — chiefly the working directory to run in. */
 interface BackendOptions {
