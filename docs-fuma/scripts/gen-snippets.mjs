@@ -210,10 +210,10 @@ const IMPORT_REWRITES = [
   [/(["'])(?:\.\.\/)+agent-loop-core\/index\.ts\1/g, '"@open-agent-loops/core"'],
   // bunShellBackend is host glue (you bring your own ShellBackend), not a package
   // export — present it as a local module the reader provides.
-  [/(["'])(?:\.\.\/)+bun-backends\.ts\1/g, '"./bun-backends"'],
+  [/(["'])(?:\.\.\/)+(?:backends\/)?bun-backends\.ts\1/g, '"./bun-backends"'],
   // denoCodeExecutionBackend is the same: host glue you bring (the reference
   // CodeExecutionBackend), not a package export — present it as a local module.
-  [/(["'])(?:\.\.\/)+deno-backends\.ts\1/g, '"./deno-backends"'],
+  [/(["'])(?:\.\.\/)+(?:backends\/)?deno-backends\.ts\1/g, '"./deno-backends"'],
 ];
 
 /** Extract a `// #region name` … `// #endregion` block and dedent it. */
